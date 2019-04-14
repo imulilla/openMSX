@@ -146,7 +146,6 @@ void TsxImage::writePulse(uint32_t tstates)
 	writeSample(tstates, currentValue);
 	currentValue = -currentValue;
 }
-
 void TsxImage::write0()
 {
 	for (uint8_t t=0; t<numZeroPulses4B; t++)
@@ -396,13 +395,14 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 	bool issueWarning = false;
 	bool headerFound = false;
 	bool firstFile = true;
+	size = buf.size();
 	uint8_t bid = 0;       //BlockId
 	size_t pos = 0;
 
 	if (!memcmp(&buf[pos], TSX_HEADER, 8)) {
 		headerFound = true;
 		pos += 10;         //Skip TZX header (8 bytes) + major/minor version (2 bytes)
-		while (pos < size) {
+ 		while (pos < size) {
 			acumBytes = 0.f;
 			bid = buf[pos];
 			if (bid == B10_STD_BLOCK) {

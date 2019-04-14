@@ -827,6 +827,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\SVIPrinterPort.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\SVIPPI.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\MSXCielTurbo.cc" />
+    <ClCompile Include="..\..\src\cassette\TsxImage.cc" />
   </ItemGroup>
   <ItemGroup>
     <None Include="$(OpenMSXSrcDir)\cassette\CasImage.hh" />
@@ -1565,6 +1566,7 @@ popd</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenMSXSrcDir)\sound\fake_windows.h" />
+    <ClInclude Include="..\..\src\cassette\TsxImage.hh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

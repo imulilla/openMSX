@@ -15,3 +15,12 @@ core
 /.vs/ProjectSettings.json
 /.vs/slnx.sqlite
 /.vs/VSWorkspaceState.json
+/build/3rdparty/glew.vcxproj.user
+/build/msvc/.vs/openmsx/v16/Browse.VC.opendb
+/build/msvc/.vs/openmsx/v16/ipch/AutoPCH/5e13fe03520c5c4d/CASSETTEPLAYER.ipch
+/build/msvc/.vs/openmsx/v16/ipch/AutoPCH/d20fa761a33d9013/CASSETTEPLAYERCLI.ipch
+/build/3rdparty/.vs/3rdparty/v16/Browse.VC.opendb
+/build/3rdparty/.vs/3rdparty/v16
+/build/msvc/.vs/openmsx/v16/ipch/AutoPCH/3102ae54e340676c/TSXIMAGE.ipch
+/build/msvc/.vs/openmsx/v16/ipch/AutoPCH/77983200d218080c/TSXIMAGE.ipch
+/build/msvc/openmsx.vcxproj.user
