@@ -12,3 +12,6 @@ core
 .project
 *.VC.db
 *.VC.VC.opendb
+/.vs/ProjectSettings.json
+/.vs/slnx.sqlite
+/.vs/VSWorkspaceState.json
