@@ -24,3 +24,5 @@ core
 /build/msvc/.vs/openmsx/v16/ipch/AutoPCH/3102ae54e340676c/TSXIMAGE.ipch
 /build/msvc/.vs/openmsx/v16/ipch/AutoPCH/77983200d218080c/TSXIMAGE.ipch
 /build/msvc/openmsx.vcxproj.user
+/src/cassette/TsxImage.cc.bak
+/build/msvc/.vs/openmsx/v16/ipch/AutoPCH

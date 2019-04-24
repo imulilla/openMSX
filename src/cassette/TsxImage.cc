@@ -1,5 +1,6 @@
 /*
 	(2017) NataliaPC aka @ishwin74
+	(2019) Israel Mula aka @imulilla (IPS Patch)
 	Under GPL License
 */
 #include "TsxImage.hh"
@@ -88,6 +89,10 @@ static const byte TSX_HEADER   [ 8] = { 'Z','X','T','a','p','e','!', 0x1a};
 static const byte ASCII_HEADER [10] = { 0xEA,0xEA,0xEA,0xEA,0xEA,0xEA,0xEA,0xEA,0xEA,0xEA };
 static const byte BINARY_HEADER[10] = { 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0 };
 static const byte BASIC_HEADER [10] = { 0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3 };
+
+bool parchear=false;//[IPS Patch] Establezco que no se parchee por defecto
+byte matriz[0xffff];//[IPS Patch] Creo la matriz donde se vuelca el parche a aplicar
+byte ipslist[10, 2];//[IPS Patch] Creo la matriz donde se guardara el listado de parches
 
 inline uint16_t tstates2bytes(uint32_t tstates)
 {
@@ -246,6 +251,29 @@ size_t TsxImage::writeBlock10(Block10 *b)   //Standard Speed Block
 		currentValue = -127;
 	phaseChanged = false;
 	
+	if (matriz[0] << 0) { //[IPS Patch] Aplica el parche que esta en la matriz al buffer, si esta llena
+		int c = 1;
+		int indice = 0;
+		int cont = 1;
+		int origen;
+		while (cont < matriz[0] - 1)
+		{
+			int destino = matriz[c] * 0x10000 + matriz[c + 1] * 0x100 + matriz[c + 2];
+			cont += 3;
+			int tope = matriz[(3 + c)] * 0x100 + matriz[(4 + c)];
+			for (indice = 0; indice < tope; indice++)
+			{
+				origen = 5 + c;
+				b->data[destino + indice + 1] = matriz[origen];
+				c += 1;
+				cont += 1;
+			}
+			c = origen + 1;
+		}
+		matriz[0] = 0; //[IPS Patch] Limpio la matriz, con lo que indico que no hay que parchear
+	}
+
+
 	for (int i=0; i<3223; i++) {
 		writeTurboPilot();
 	}
@@ -395,6 +423,7 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 	bool issueWarning = false;
 	bool headerFound = false;
 	bool firstFile = true;
+	bool parchear = false;//[IPS Patch] Establezco que no hay que parchear
 	size = buf.size();
 	uint8_t bid = 0;       //BlockId
 	size_t pos = 0;
@@ -478,13 +507,64 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 #ifdef DEBUG
 				cliComm.printInfo("Block#35");
 #endif
+				if (!memcmp(&buf[pos], "5patch", 6)) { //[IPS Patch] Si hay un IPS en el bloque 35 saco el nommbre y
+					unsigned int ipspos;			   //lleno la matriz con el parche
+					unsigned int bloque;
+					unsigned int direccion;
+					unsigned int ipsname;
+					unsigned int tparche;
+					unsigned int parchepos;
+					unsigned int matrizlong;
+					char letra [10];
+					byte parche;
+					parchear = true;
+					bloque = byte(buf[pos+0x11])+byte(buf[pos + 0x12]) * 0x100 + byte(buf[pos + 0x13]) * 0x10000 + byte(buf[pos + 0x14]) * 0x1000000;
+					ipsname = pos + 0x6;
+					for (int l = 0; l <= 0xA; l = l + 1) {
+						letra[l] = (buf[ipsname + l]);
+					}
+					cliComm.printInfo(letra);
+					ipspos = pos + 0x1a;
+					
+					matriz[0] = bloque-8;
+					for (int m = 1; m <= bloque-8; m = m + 1) {
+						matriz[m] = (buf[ipspos+m-1]);
+					}	
 				pos += writeBlock35((Block35*)&buf[pos]);
+					}else
+				
+				pos += writeBlock35((Block35*)&buf[pos]);
+							   						   				 			  			  			 
 			} else
 			if (bid == B4B_MSX_KCS) {
 				Block4B *b = (Block4B*)&buf[pos];
 #ifdef DEBUG
 				cliComm.printInfo("Block#4B");
 #endif
+				if (matriz[0]>0){//[IPS Patch] Aplica el parche que esta en la matriz al buffer, si esta llena
+					cliComm.printInfo("Parchear");
+					int c = 1;
+					int indice=0;
+					int cont = 1;
+					int origen;
+					while (cont < matriz[0]-1)
+						{
+						int destino = matriz[c] * 0x10000 + matriz[c + 1] * 0x100 + matriz[c + 2];
+						cont +=3;
+						int tope = matriz[(3 + c)] * 0x100 + matriz[(4 + c)];
+							for (indice = 0; indice<tope; indice++)
+							    {
+								origen = 5 + c;
+								b->data[destino+indice] = matriz[origen];
+								c +=1;
+								cont += 1;
+								}
+							c = origen + 1;
+				        }
+					matriz[0]=0;
+					byte test;
+				
+				}
 				//check for autoRun
 				if (firstFile && (pos+12+5+10)<size) {
 					//determine file type
