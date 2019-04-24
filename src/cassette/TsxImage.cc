@@ -92,7 +92,7 @@ static const byte BASIC_HEADER [10] = { 0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,
 
 bool parchear=false;//[IPS Patch] Establezco que no se parchee por defecto
 byte matriz[0xffff];//[IPS Patch] Creo la matriz donde se vuelca el parche a aplicar
-byte ipslist[10, 2];//[IPS Patch] Creo la matriz donde se guardara el listado de parches
+
 
 inline uint16_t tstates2bytes(uint32_t tstates)
 {
