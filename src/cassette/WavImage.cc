@@ -10,34 +10,32 @@ namespace openmsx {
 // DC-removal filter
 //   y(n) = x(n) - x(n-1) + R * y(n-1)
 // see comments in MSXMixer.cc for more details
-static void filter(float sampleFreq, int16_t* begin, int16_t* end)
-{
-	const float cuttOffFreq = 800.0f; // trial-and-error
-	float R = 1.0f - ((float(2 * M_PI) * cuttOffFreq) / sampleFreq);
-
-	float t0 = 0.0f;
-	for (auto it = begin; it != end; ++it) {
-		float t1 = R * t0 + *it;
-		*it = Math::clipIntToShort(t1 - t0);
-		t0 = t1;
+class DCFilter {
+public:
+	void setFreq(unsigned sampleFreq) {
+		const float cuttOffFreq = 800.0f; // trial-and-error
+		R = 1.0f - ((float(2 * M_PI) * cuttOffFreq) / sampleFreq);
 	}
-}
+	int16_t operator()(int16_t x) {
+		float t1 = R * t0 + x;
+		int16_t y = Math::clipIntToShort(t1 - t0);
+		t0 = t1;
+		return y;
+	}
+private:
+	float R;
+	float t0 = 0.0f;
+};
 
 // Note: type detection not implemented yet for WAV images
 WavImage::WavImage(const Filename& filename, FilePool& filePool)
 	: clock(EmuTime::zero)
 {
-	{
-		// Scoped to avoid the same file being opened twice.
-		File file(filename);
-		setSha1Sum(filePool.getSha1Sum(file));
-	}
-	wav = WavData(filename.getResolved());
-	clock.setFreq(wav.getFreq());
+	File file(filename);
+	setSha1Sum(filePool.getSha1Sum(file));
 
-	auto* buf = wav.getData();
-	auto* end = buf + wav.getSize();
-	filter(wav.getFreq(), buf, end);
+	wav = WavData(std::move(file), DCFilter{});
+	clock.setFreq(wav.getFreq());
 }
 
 int16_t WavImage::getSampleAt(EmuTime::param time)
