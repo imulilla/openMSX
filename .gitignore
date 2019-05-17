@@ -26,3 +26,10 @@ core
 /build/msvc/openmsx.vcxproj.user
 /src/cassette/TsxImage.cc.bak
 /build/msvc/.vs/openmsx/v16/ipch/AutoPCH
+/.gradle/4.10
+/.idea
+/share/machines/sinroms
+/share/systemroms
+/openmsx_tsx-x64-286c6a6.exe
+/openMSX_TSXadv.iml
+/local.properties
