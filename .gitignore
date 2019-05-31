@@ -26,3 +26,16 @@ core
 /build/msvc/openmsx.vcxproj.user
 /src/cassette/TsxImage.cc.bak
 /build/msvc/.vs/openmsx/v16/ipch/AutoPCH
+/.gradle/4.10
+/.idea
+/local.properties
+/build/3rdparty/zlib.vcxproj.user
+/build/3rdparty/tcl.vcxproj.user
+/build/3rdparty/SDL_ttf.vcxproj.user
+/build/3rdparty/SDLmain.vcxproj.user
+/build/3rdparty/SDL.vcxproj.user
+/build/3rdparty/libvorbis.vcxproj.user
+/build/3rdparty/libtheora.vcxproj.user
+/build/3rdparty/libpng.vcxproj.user
+/build/3rdparty/libogg.vcxproj.user
+/build/3rdparty/freetype.vcxproj.user
