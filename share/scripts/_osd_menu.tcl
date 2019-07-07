@@ -20,6 +20,10 @@ proc set_optional {dict_name key value} {
 }
 
 variable menulevels 0
+# some variables for typing-in-menus support
+variable input_buffer ""
+variable input_last_time [openmsx_info realtime]
+variable input_timeout 1; #sec
 
 proc push_menu_info {} {
 	variable menulevels
@@ -217,6 +221,10 @@ proc menu_on_deselect {selectinfo selectidx} {
 }
 
 proc menu_action {button} {
+	# for any menu action, clear the input buffer
+	variable input_buffer
+	set input_buffer ""
+
 	peek_menu_info
 	set selectidx [dict get $menuinfo selectidx ]
 	menu_action_idx $selectidx $button
@@ -355,7 +363,6 @@ if {![file exists $::osd_ld_path] || ![file readable $::osd_ld_path]} {
 	unset ::osd_ld_path
 }
 
-
 variable taperecordings_directory [file normalize $::env(OPENMSX_USER_DATA)/../taperecordings]
 
 proc main_menu_open {} {
@@ -396,6 +403,13 @@ proc do_menu_open {top_menu} {
 		bind -layer osd_menu "OSDcontrol B PRESS" {osd_menu::menu_action B }
 		# on Android, use BACK button to go back in menus
 		bind -layer osd_menu "keyb BACK"      {osd_menu::menu_action B }
+	}
+	bind -layer osd_menu "CTRL+UP"      {osd_menu::select_menu_idx 0}
+	bind -layer osd_menu "CTRL+LEFT"    {osd_menu::select_menu_idx 0}
+	bind -layer osd_menu "keyb HOME"    {osd_menu::select_menu_idx 0}
+	set alphanum {a b c d e f g h i j k l m n o p q r s t u v w x y z 0 1 2 3 4 5 6 7 8 9}
+	foreach char $alphanum {
+		bind -layer osd_menu "keyb $char"      "osd_menu::handle_keyboard_input $char"
 	}
 	activate_input_layer osd_menu -blocking
 }
@@ -526,7 +540,7 @@ proc select_menu_idx {itemidx} {
 	if {$selectidx < 0} {
 		incr scrollidx $selectidx
 		set selectidx 0
-	} elseif {$selectidx >= $menu_len} {
+	} elseif {($menu_len > 0) && ($selectidx >= $menu_len)} {
 		set selectidx [expr {$menu_len - 1}]
 		set scrollidx [expr {$itemidx - $selectidx}]
 	}
@@ -543,6 +557,44 @@ proc select_menu_item {item} {
 
 	set index [lsearch -exact [dict get $menuinfo lst] $item]
 	if {$index == -1} return
+
+	select_menu_idx $index
+}
+
+proc handle_keyboard_input {char} {
+	variable input_buffer
+	variable input_last_time
+	variable input_timeout
+
+	set current_time [openmsx_info realtime]
+	if {[expr {$current_time - $input_last_time}] < $input_timeout} {
+		set input_buffer "$input_buffer$char"
+	} else {
+		set input_buffer $char
+	}
+	set input_last_time $current_time
+
+	osd_menu::select_next_menu_item_starting_with $input_buffer
+}
+
+proc select_next_menu_item_starting_with {text} {
+	peek_menu_info
+
+	set items [dict get $menuinfo presentation]
+	if {[llength $items] == 0} return
+
+	set selectidx [dict get $menuinfo selectidx]
+	set scrollidx [dict get $menuinfo scrollidx]
+	set itemidx [expr {$scrollidx + $selectidx}]
+
+	# start after the current item if this is a new search
+	if {[string length $text] == 1} {
+		incr itemidx
+	}
+	# use the list twice to wrap
+	set index [lsearch -glob -nocase -start $itemidx [concat $items $items] "$text*"]
+	if {$index == -1} return
+	set index [expr {$index % [llength $items]}]
 
 	select_menu_idx $index
 }
@@ -569,7 +621,7 @@ proc create_main_menu {} {
 		foreach slot [lrange [lsort [info command cart?]] 0 1] {
 			set slot_str [string toupper [string index $slot end]]
 			lappend items [list text "Load ROM... (slot $slot_str)" \
-				actions [list A "osd_menu::menu_create \[osd_menu::menu_create_ROM_list \$::osd_rom_path $slot\]"]]
+				actions [list A "set curSel \[lindex \[$slot\] 1\]; set ::osd_rom_path \[expr {\$curSel ne {} ? \[file dirname \$curSel\] : \$::osd_rom_path}\]; osd_menu::menu_create \[osd_menu::menu_create_ROM_list \$::osd_rom_path $slot\]; catch { osd_menu::select_menu_item \[file tail \$curSel\]}"]]
 		}
 	}
 	if {[catch diska]} {
@@ -581,19 +633,20 @@ proc create_main_menu {} {
 		foreach drive [lrange [lsort [info command disk?]] 0 1] {
 			set drive_str [string toupper [string index $drive end]]
 			lappend items [list text "Insert Disk... (drive $drive_str)" \
-				actions [list A "osd_menu::menu_create \[osd_menu::menu_create_disk_list \$::osd_disk_path $drive\]"]]
+				actions [list A "set curSel \[lindex \[$drive\] 1\]; set ::osd_disk_path \[expr {\$curSel ne {} ? \[file dirname \$curSel\] : \$::osd_disk_path}\]; osd_menu::menu_create \[osd_menu::menu_create_disk_list  \$::osd_disk_path $drive\]; catch { osd_menu::select_menu_item \[file tail \$curSel\]}"]]
+			# the action A is checking what is currently in that media slot (e.g. diska) and if it's not empty, it puts that path as last known path. Then it creates the menu and afterwards selects the current item.
 		}
 	}
 	if {[info command hda] ne ""} {; # only exists when hard disk extension available
 		foreach drive [lrange [lsort [info command hd?]] 0 1] {
 			set drive_str [string toupper [string index $drive end]]
 			lappend items [list text "Change HD/SD image... (drive $drive_str)" \
-				actions [list A "osd_menu::menu_create \[osd_menu::menu_create_hdd_list \$::osd_hdd_path $drive\]"]]
+				actions [list A "set curSel \[lindex \[$drive\] 1\]; set ::osd_hdd_path \[expr {\$curSel ne {} ? \[file dirname \$curSel\] : \$::osd_hdd_path}\]; osd_menu::menu_create \[osd_menu::menu_create_hdd_list \$::osd_hdd_path $drive\]; catch { osd_menu::select_menu_item \[file tail \$curSel\]}"]]
 		}
 	}
 	if {[info command laserdiscplayer] ne ""} {; # only exists on some Pioneers
 		lappend items { text "Load LaserDisc..."
-			actions { A { osd_menu::menu_create [osd_menu::menu_create_ld_list $::osd_ld_path]} }
+			actions { A { set curSel [lindex [laserdiscplayer] 1]; set ::osd_ld_path [expr {$curSel ne {} ? [file dirname $curSel] : $::osd_ld_path}]; osd_menu::menu_create [osd_menu::menu_create_ld_list $::osd_ld_path]; catch { osd_menu::select_menu_item [file tail $curSel]}} }
 		}
 	}
 	if {[catch "machine_info connector cassetteport"]} {; # example: turboR
@@ -604,7 +657,7 @@ proc create_main_menu {} {
 		}
 	} else {
 		lappend items { text "Set Tape..."
-	         actions { A { osd_menu::menu_create [osd_menu::menu_create_tape_list $::osd_tape_path]} }
+	         actions { A { osd_menu::menu_create [osd_menu::menu_create_tape_list $::osd_tape_path]; catch { osd_menu::select_menu_item [file tail [lindex [cassetteplayer] 1]]}} }
 	         post-spacing 3 }
 	}
 	lappend items { text "Save State..."
@@ -993,8 +1046,7 @@ proc get_filtered_configs {type} {
 		}
 		# follow symlink (on platforms that support links)
 		catch {
-			set conf [file join [file dirname $conf]
-			                    [file readlink $conf]]
+			set conf [file join [file dirname $conf] [file readlink $conf]]
 		}
 		# only add if the (possibly resolved link) hasn't been seen before
 		if {$conf ni $configs} {
@@ -1466,7 +1518,7 @@ proc menu_create_disk_list {path drive} {
 			font-size 10 \
 			post-spacing 6 }]
 	set cur_image [lindex [$drive] 1]
-	set extensions "dsk|zip|gz|xsa|dmk|di1|di2"
+	set extensions "dsk|zip|gz|xsa|dmk|di1|di2|fd?|1|2|3|4|5|6|7|8|9"
 	set items [list]
 	set presentation [list]
 	if {[lindex [$drive] 2] ne "empty readonly"} {
