@@ -83,6 +83,7 @@ static const bool     ULTRA_SPEED       = false;    // 3600 bauds / short pilots
 static const unsigned TZX_Z80_FREQ      = 3500000;  // 3.5 Mhz
 static const unsigned OUTPUT_FREQ       = 96000;//58900;    // ~ = Z80_FREQ*4/TSTATES_MSX_PULSE
 static const float    TSTATES_MSX_PULSE = 238.f;
+static const unsigned AUDIO_OVERSAMPLE = 4;
 
 // headers definitions
 static const byte TSX_HEADER   [ 8] = { 'Z','X','T','a','p','e','!', 0x1a};
@@ -96,7 +97,7 @@ byte matriz[0xffff];//[IPS Patch] Creo la matriz donde se vuelca el parche a apl
 
 inline uint16_t tstates2bytes(uint32_t tstates)
 {
-	return 	( tstates * OUTPUT_FREQ / TZX_Z80_FREQ );
+	return 	( tstates * OUTPUT_FREQ / TZX_Z80_FREQ);
 }
 
 TsxImage::TsxImage(const Filename& filename, FilePool& filePool, CliComm& cliComm)
@@ -121,22 +122,27 @@ EmuTime TsxImage::getEndTime() const
 
 unsigned TsxImage::getFrequency() const
 {
-	return OUTPUT_FREQ;
+	return OUTPUT_FREQ * AUDIO_OVERSAMPLE;
 }
 
-void TsxImage::fillBuffer(unsigned pos, int** bufs, unsigned num) const
+void TsxImage::fillBuffer(unsigned pos, float** bufs, unsigned num) const
 {
 	size_t nbSamples = output.size();
 	if (pos < nbSamples) {
 		for (auto i : xrange(num)) {
 			bufs[0][i] = (pos < nbSamples)
-			           ? output[pos] * 256
-			           : 0;
+				? output[pos / AUDIO_OVERSAMPLE]
+				: 0.0f;
 			++pos;
 		}
 	} else {
 		bufs[0] = nullptr;
 	}
+}
+
+float TsxImage::getAmplificationFactorImpl() const
+{
+	return 1.0f / 128;
 }
 
 void TsxImage::writeSample(uint32_t tstates, int8_t value)
