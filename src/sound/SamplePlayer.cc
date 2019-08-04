@@ -8,14 +8,14 @@
 
 namespace openmsx {
 
+static const unsigned DUMMY_INPUT_RATE = 44100; // actual rate depends on .wav files
+
 SamplePlayer::SamplePlayer(const std::string& name_, const std::string& desc,
                            const DeviceConfig& config,
                            const std::string& samplesBaseName, unsigned numSamples,
                            const std::string& alternativeName)
-	: ResampledSoundDevice(config.getMotherBoard(), name_, desc, 1)
+	: ResampledSoundDevice(config.getMotherBoard(), name_, desc, 1, DUMMY_INPUT_RATE, false)
 {
-	setInputRate(44100); // Initialize with dummy value
-
 	bool alreadyWarned = false;
 	samples.resize(numSamples); // initialize with empty wavs
 	auto context = systemFileContext();
@@ -131,9 +131,9 @@ void SamplePlayer::doRepeat()
 template<typename Archive>
 void SamplePlayer::serialize(Archive& ar, unsigned /*version*/)
 {
-	ar.serialize("index", index);
-	ar.serialize("currentSampleNum", currentSampleNum);
-	ar.serialize("nextSampleNum", nextSampleNum);
+	ar.serialize("index",            index,
+	             "currentSampleNum", currentSampleNum,
+	             "nextSampleNum",    nextSampleNum);
 	if (ar.isLoader()) {
 		setWavParams();
 	}

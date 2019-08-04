@@ -1456,10 +1456,15 @@ void YMF262::reset(EmuTime::param time)
 	setMixLevel(0x1b, time); // -9dB left and right
 }
 
+static unsigned calcInputRate(bool isYMF278)
+{
+	return unsigned(lrintf(isYMF278 ?    33868800.0f / (19 * 36)
+	                                : 4 * 3579545.0f / ( 8 * 36)));
+}
 YMF262::YMF262(const std::string& name_,
                const DeviceConfig& config, bool isYMF278_)
 	: ResampledSoundDevice(config.getMotherBoard(), name_, "MoonSound FM-part",
-	                       18, true)
+	                       18, calcInputRate(isYMF278_), true)
 	, debuggable(config.getMotherBoard(), getName())
 	, timer1(isYMF278_
 	         ? EmuTimer::createOPL4_1(config.getScheduler(), *this)
@@ -1488,11 +1493,6 @@ YMF262::YMF262(const std::string& name_,
 		std::cout << '\n';
 		for (auto& e : sin.tab) std::cout << e << '\n';
 	}
-
-	float input = isYMF278
-	            ?    33868800.0f / (19 * 36)
-	            : 4 * 3579545.0f / ( 8 * 36);
-	setInputRate(lrintf(input));
 
 	registerSound(config);
 	reset(config.getMotherBoard().getCurrentTime()); // must come after registerSound() because of call to setSoftwareVolume() via setMixLevel()
@@ -1650,45 +1650,45 @@ void YMF262::Slot::serialize(Archive& a, unsigned /*version*/)
 	//   connect, fb_shift, CON
 	// TODO handle more state like this
 
-	a.serialize("Cnt", Cnt);
-	a.serialize("Incr", Incr);
-	a.serialize("op1_out", op1_out);
-	a.serialize("TL", TL);
-	a.serialize("TLL", TLL);
-	a.serialize("volume", volume);
-	a.serialize("sl", sl);
-	a.serialize("state", state);
-	a.serialize("eg_m_ar", eg_m_ar);
-	a.serialize("eg_m_dr", eg_m_dr);
-	a.serialize("eg_m_rr", eg_m_rr);
-	a.serialize("eg_sh_ar", eg_sh_ar);
-	a.serialize("eg_sel_ar", eg_sel_ar);
-	a.serialize("eg_sh_dr", eg_sh_dr);
-	a.serialize("eg_sel_dr", eg_sel_dr);
-	a.serialize("eg_sh_rr", eg_sh_rr);
-	a.serialize("eg_sel_rr", eg_sel_rr);
-	a.serialize("key", key);
-	a.serialize("eg_type", eg_type);
-	a.serialize("AMmask", AMmask);
-	a.serialize("vib", vib);
-	a.serialize("ar", ar);
-	a.serialize("dr", dr);
-	a.serialize("rr", rr);
-	a.serialize("KSR", KSR);
-	a.serialize("ksl", ksl);
-	a.serialize("ksr", ksr);
-	a.serialize("mul", mul);
+	a.serialize("Cnt",       Cnt,
+	            "Incr",      Incr,
+	            "op1_out",   op1_out,
+	            "TL",        TL,
+	            "TLL",       TLL,
+	            "volume",    volume,
+	            "sl",        sl,
+	            "state",     state,
+	            "eg_m_ar",   eg_m_ar,
+	            "eg_m_dr",   eg_m_dr,
+	            "eg_m_rr",   eg_m_rr,
+	            "eg_sh_ar",  eg_sh_ar,
+	            "eg_sel_ar", eg_sel_ar,
+	            "eg_sh_dr",  eg_sh_dr,
+	            "eg_sel_dr", eg_sel_dr,
+	            "eg_sh_rr",  eg_sh_rr,
+	            "eg_sel_rr", eg_sel_rr,
+	            "key",       key,
+	            "eg_type",   eg_type,
+	            "AMmask",    AMmask,
+	            "vib",       vib,
+	            "ar",        ar,
+	            "dr",        dr,
+	            "rr",        rr,
+	            "KSR",       KSR,
+	            "ksl",       ksl,
+	            "ksr",       ksr,
+	            "mul",       mul);
 }
 
 template<typename Archive>
 void YMF262::Channel::serialize(Archive& a, unsigned /*version*/)
 {
-	a.serialize("slots", slot);
-	a.serialize("block_fnum", block_fnum);
-	a.serialize("fc", fc);
-	a.serialize("ksl_base", ksl_base);
-	a.serialize("kcode", kcode);
-	a.serialize("extended", extended);
+	a.serialize("slots",      slot,
+	            "block_fnum", block_fnum,
+	            "fc",         fc,
+	            "ksl_base",   ksl_base,
+	            "kcode",      kcode,
+	            "extended",   extended);
 }
 
 // version 1: initial version
@@ -1696,24 +1696,24 @@ void YMF262::Channel::serialize(Archive& a, unsigned /*version*/)
 template<typename Archive>
 void YMF262::serialize(Archive& a, unsigned version)
 {
-	a.serialize("timer1", *timer1);
-	a.serialize("timer2", *timer2);
-	a.serialize("irq", irq);
-	a.serialize("chanout", chanout);
+	a.serialize("timer1",  *timer1,
+	            "timer2",  *timer2,
+	            "irq",     irq,
+	            "chanout", chanout);
 	a.serialize_blob("registers", reg, sizeof(reg));
-	a.serialize("channels", channel);
-	a.serialize("eg_cnt", eg_cnt);
-	a.serialize("noise_rng", noise_rng);
-	a.serialize("lfo_am_cnt", lfo_am_cnt);
-	a.serialize("lfo_pm_cnt", lfo_pm_cnt);
-	a.serialize("lfo_am_depth", lfo_am_depth);
-	a.serialize("lfo_pm_depth_range", lfo_pm_depth_range);
-	a.serialize("rhythm", rhythm);
-	a.serialize("nts", nts);
-	a.serialize("OPL3_mode", OPL3_mode);
-	a.serialize("status", status);
-	a.serialize("status2", status2);
-	a.serialize("statusMask", statusMask);
+	a.serialize("channels",           channel,
+	            "eg_cnt",             eg_cnt,
+	            "noise_rng",          noise_rng,
+	            "lfo_am_cnt",         lfo_am_cnt,
+	            "lfo_pm_cnt",         lfo_pm_cnt,
+	            "lfo_am_depth",       lfo_am_depth,
+	            "lfo_pm_depth_range", lfo_pm_depth_range,
+	            "rhythm",             rhythm,
+	            "nts",                nts,
+	            "OPL3_mode",          OPL3_mode,
+	            "status",             status,
+	            "status2",            status2,
+	            "statusMask",         statusMask);
 	if (a.versionAtLeast(version, 2)) {
 		a.serialize("alreadySignaledNEW2", alreadySignaledNEW2);
 	}

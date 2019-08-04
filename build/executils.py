@@ -1,3 +1,4 @@
+from __future__ import print_function
 from msysutils import msysActive, msysShell
 
 from os import environ
@@ -34,23 +35,23 @@ def captureStdout(log, commandLine):
 			commandParts, bufsize = -1, env = env,
 			stdin = None, stdout = PIPE, stderr = PIPE,
 			)
-	except OSError, ex:
-		print >> log, 'Failed to execute "%s": %s' % (commandLine, ex)
+	except OSError as ex:
+		print('Failed to execute "%s": %s' % (commandLine, ex), file=log)
 		return None
 	stdoutdata, stderrdata = proc.communicate()
 	if stderrdata:
 		severity = 'warning' if proc.returncode == 0 else 'error'
-		log.write('%s executing "%s"\n' % (severity.capitalize(), commandLine))
+		log.write(u'%s executing "%s"\n' % (severity.capitalize(), commandLine))
 		# pylint 0.18.0 somehow thinks stderrdata is a list, not a string.
 		# pylint: disable-msg=E1103
 		stderrdata = stderrdata.replace('\r', '')
-		log.write(stderrdata)
+		log.write(unicode(stderrdata))
 		if not stderrdata.endswith('\n'):
-			log.write('\n')
+			log.write(u'\n')
 	if proc.returncode == 0:
 		return stdoutdata
 	else:
-		print >> log, 'Execution failed with exit code %d' % proc.returncode
+		print(u'Execution failed with exit code %d' % proc.returncode, file=log)
 		return None
 
 def shjoin(parts):

@@ -1762,6 +1762,72 @@ void V9990CmdEngine::cmdReady(EmuTime::param /*time*/)
 	vdp.cmdReady();
 }
 
+EmuTime V9990CmdEngine::estimateCmdEnd() const
+{
+	EmuDuration delta;
+	switch (CMD >> 4) {
+		case 0x00: // STOP
+			delta = EmuDuration::zero;
+			break;
+
+		case 0x01: // LMMC
+		case 0x05: // CMMC
+			// command terminates when CPU writes data, no need for extra sync
+			delta = EmuDuration::zero;
+			break;
+
+		case 0x03: // LMCM
+		case 0x0D: // POINT
+			// command terminates when CPU reads data, no need for extra sync
+			delta = EmuDuration::zero;
+			break;
+
+		case 0x02: // LMMV
+			// Block commands.
+			delta = getTiming(LMMV_TIMING) * (ANX + (ANY - 1) * getWrappedNX());
+			break;
+		case 0x04: // LMMM
+			delta = getTiming(LMMM_TIMING) * (ANX + (ANY - 1) * getWrappedNX());
+			break;
+		case 0x07: // CMMM
+			delta = getTiming(CMMM_TIMING) * (ANX + (ANY - 1) * getWrappedNX());
+			break;
+		case 0x08: // BMXL
+			delta = getTiming(BMXL_TIMING) * (ANX + (ANY - 1) * getWrappedNX()); // TODO correct?
+			break;
+		case 0x09: // BMLX
+			delta = getTiming(BMLX_TIMING) * (ANX + (ANY - 1) * getWrappedNX()); // TODO correct?
+			break;
+
+		case 0x06: // CMMK
+			// Not yet implemented.
+			delta = EmuDuration::zero;
+			break;
+
+		case 0x0A: // BMLL
+			delta = getTiming(BMLL_TIMING) * nbBytes;
+			break;
+
+		case 0x0B: // LINE
+			delta = getTiming(LINE_TIMING) * (NX - ANX); // TODO ignores clipping
+			break;
+
+		case 0x0C: // SRCH
+			// Can end at any next pixel.
+			delta = getTiming(SRCH_TIMING);
+			break;
+
+		case 0x0E: // PSET
+		case 0x0F: // ADVN
+			// Current implementation of these commands execute instantly, no need for extra sync.
+			delta = EmuDuration::zero;
+			break;
+
+		default: UNREACHABLE;
+	}
+	return engineTime + delta;
+}
+
 // version 1: initial version
 // version 2: we forgot to serialize the time (or clock) member
 template<typename Archive>
@@ -1776,31 +1842,31 @@ void V9990CmdEngine::serialize(Archive& ar, unsigned version)
 		// initialize it with the current time, that's already done in
 		// the constructor.
 	}
-	ar.serialize("srcAddress", srcAddress);
-	ar.serialize("dstAddress", dstAddress);
-	ar.serialize("nbBytes", nbBytes);
-	ar.serialize("borderX", borderX);
-	ar.serialize("ASX", ASX);
-	ar.serialize("ADX", ADX);
-	ar.serialize("ANX", ANX);
-	ar.serialize("ANY", ANY);
-	ar.serialize("SX", SX);
-	ar.serialize("SY", SY);
-	ar.serialize("DX", DX);
-	ar.serialize("DY", DY);
-	ar.serialize("NX", NX);
-	ar.serialize("NY", NY);
-	ar.serialize("WM", WM);
-	ar.serialize("fgCol", fgCol);
-	ar.serialize("bgCol", bgCol);
-	ar.serialize("ARG", ARG);
-	ar.serialize("LOG", LOG);
-	ar.serialize("CMD", CMD);
-	ar.serialize("status", status);
-	ar.serialize("data", data);
-	ar.serialize("bitsLeft", bitsLeft);
-	ar.serialize("partial", partial);
-	ar.serialize("endAfterRead", endAfterRead);
+	ar.serialize("srcAddress",   srcAddress,
+	             "dstAddress",   dstAddress,
+	             "nbBytes",      nbBytes,
+	             "borderX",      borderX,
+	             "ASX",          ASX,
+	             "ADX",          ADX,
+	             "ANX",          ANX,
+	             "ANY",          ANY,
+	             "SX",           SX,
+	             "SY",           SY,
+	             "DX",           DX,
+	             "DY",           DY,
+	             "NX",           NX,
+	             "NY",           NY,
+	             "WM",           WM,
+	             "fgCol",        fgCol,
+	             "bgCol",        bgCol,
+	             "ARG",          ARG,
+	             "LOG",          LOG,
+	             "CMD",          CMD,
+	             "status",       status,
+	             "data",         data,
+	             "bitsLeft",     bitsLeft,
+	             "partial",      partial,
+	             "endAfterRead", endAfterRead);
 
 	if (ar.isLoader()) {
 		setCommandMode();

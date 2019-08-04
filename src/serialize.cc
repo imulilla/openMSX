@@ -13,6 +13,7 @@
 #include "stl.hh"
 #include "cstdiop.hh" // for dup()
 #include <cstring>
+#include <iostream>
 #include <limits>
 
 using std::string;
@@ -37,8 +38,8 @@ unsigned OutputArchiveBase2::generateID1(const void* p)
 	       !addressOnStack(p));
 	#endif
 	++lastId;
-	assert(!polyIdMap.count(p)); // c++20 contains()
-	polyIdMap[p] = lastId;
+	assert(!polyIdMap.contains(p));
+	polyIdMap.emplace_noDuplicateCheck(p, lastId);
 	return lastId;
 }
 unsigned OutputArchiveBase2::generateID2(
@@ -50,8 +51,8 @@ unsigned OutputArchiveBase2::generateID2(
 	#endif
 	++lastId;
 	auto key = std::make_pair(p, std::type_index(typeInfo));
-	assert(!idMap.count(key)); // c++20 contains()
-	idMap[key] = lastId;
+	assert(!idMap.contains(key));
+	idMap.emplace_noDuplicateCheck(key, lastId);
 	return lastId;
 }
 
@@ -87,7 +88,7 @@ void OutputArchiveBase<Derived>::serialize_blob(
 		encoding = "gz-base64";
 		// TODO check for overflow?
 		auto dstLen = uLongf(len + len / 1000 + 12 + 1); // worst-case
-		MemBuffer<byte> buf(dstLen);
+		MemBuffer<uint8_t> buf(dstLen);
 		if (compress2(buf.data(), &dstLen,
 		              reinterpret_cast<const Bytef*>(data),
 		              uLong(len), 9)
@@ -116,8 +117,8 @@ void* InputArchiveBase2::getPointer(unsigned id)
 
 void InputArchiveBase2::addPointer(unsigned id, const void* p)
 {
-	assert(!idMap.count(id)); // c++20 contains()
-	idMap[id] = const_cast<void*>(p);
+	assert(!idMap.contains(id));
+	idMap.emplace_noDuplicateCheck(id, const_cast<void*>(p));
 }
 
 unsigned InputArchiveBase2::getId(const void* ptr) const
@@ -170,12 +171,12 @@ template class InputArchiveBase<XmlInputArchive>;
 void MemOutputArchive::save(const std::string& s)
 {
 	auto size = s.size();
-	byte* buf = buffer.allocate(sizeof(size) + size);
+	uint8_t* buf = buffer.allocate(sizeof(size) + size);
 	memcpy(buf, &size, sizeof(size));
 	memcpy(buf + sizeof(size), s.data(), size);
 }
 
-MemBuffer<byte> MemOutputArchive::releaseBuffer(size_t& size)
+MemBuffer<uint8_t> MemOutputArchive::releaseBuffer(size_t& size)
 {
 	return buffer.release(size);
 }
@@ -196,7 +197,7 @@ string_view MemInputArchive::loadStr()
 {
 	size_t length;
 	load(length);
-	const byte* p = buffer.getCurrentPos();
+	const uint8_t* p = buffer.getCurrentPos();
 	buffer.skip(length);
 	return string_view(reinterpret_cast<const char*>(p), length);
 }
@@ -222,7 +223,7 @@ void MemOutputArchive::serialize_blob(const char* /*tag*/, const void* data,
 			: lastDeltaBlocks.createNullDiff(
 				data, static_cast<const uint8_t*>(data), len));
 	} else {
-		byte* buf = buffer.allocate(len);
+		uint8_t* buf = buffer.allocate(len);
 		memcpy(buf, data, len);
 	}
 
@@ -263,7 +264,7 @@ XmlOutputArchive::XmlOutputArchive(const string& filename)
 		if (duped_fd == -1) goto error;
 		file = gzdopen(duped_fd, "wb9");
 		if (!file) {
-			close(duped_fd);
+			::close(duped_fd);
 			goto error;
 		}
 		current.push_back(&root);
@@ -276,16 +277,31 @@ error:
 	throw XMLException("Could not open compressed file \"", filename, "\"");
 }
 
-XmlOutputArchive::~XmlOutputArchive()
+void XmlOutputArchive::close()
 {
+	if (!file) return; // already closed
+
 	assert(current.back() == &root);
 	const char* header =
 	    "<?xml version=\"1.0\" ?>\n"
 	    "<!DOCTYPE openmsx-serialize SYSTEM 'openmsx-serialize.dtd'>\n";
-	gzwrite(file, const_cast<char*>(header), unsigned(strlen(header)));
 	string dump = root.dump();
-	gzwrite(file, const_cast<char*>(dump.data()), unsigned(dump.size()));
-	gzclose(file);
+	if ((gzwrite(file, const_cast<char*>(header), unsigned(strlen(header))) == 0) ||
+	    (gzwrite(file, const_cast<char*>(dump.data()), unsigned(dump.size())) == 0) ||
+	    (gzclose(file) != Z_OK)) {
+		throw XMLException("Could not write savestate file.");
+	}
+
+	file = nullptr;
+}
+
+XmlOutputArchive::~XmlOutputArchive()
+{
+	try {
+		close();
+	} catch (...) {
+		// Eat exception. Explicitly call close() if you want to handle errors.
+	}
 }
 
 void XmlOutputArchive::saveChar(char c)

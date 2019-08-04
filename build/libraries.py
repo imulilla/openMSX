@@ -9,9 +9,11 @@
 # Conclusion: We have to specify the full path to each library that should be
 #             linked statically.
 
+from __future__ import print_function
 from executils import captureStdout, shjoin
 from msysutils import msysActive, msysPathToNative
 
+from io import open
 from os import listdir
 from os.path import isdir, isfile
 from os import environ
@@ -237,8 +239,8 @@ class GL(Library):
 		def execute(cmd, log):
 			versionPairs = tuple(
 				( major, minor )
-				for major in range(1, 10)
-				for minor in range(0, 10)
+				for major in xrange(1, 10)
+				for minor in xrange(0, 10)
 				)
 			version = cmd.expand(log, cls.getHeaders(platform), *(
 				'GL_VERSION_%d_%d' % pair for pair in versionPairs
@@ -391,13 +393,12 @@ class TCL(Library):
 										yield tclpath
 
 		tclConfigs = {}
-		log = open('derived/tcl-search.log', 'w')
-		print >> log, 'Looking for Tcl...'
-		try:
+		with open('derived/tcl-search.log', 'w', encoding='utf-8') as log:
+			print(u'Looking for Tcl...', file=log)
 			for location in iterLocations():
 				path = location + '/tclConfig.sh'
 				if isfile(path):
-					print >> log, 'Config script:', path
+					print(u'Config script: %s' % path, file=log)
 					text = captureStdout(
 						log,
 						"sh -c '. %s && echo %s'" % (
@@ -412,7 +413,7 @@ class TCL(Library):
 						except ValueError:
 							pass
 						else:
-							print >> log, 'Found: version %d.%d' % version
+							print(u'Found: version %d.%d' % version, file=log)
 							tclConfigs[path] = version
 			try:
 				# Minimum required version is 8.5.
@@ -425,11 +426,9 @@ class TCL(Library):
 					)[1]
 			except ValueError:
 				tclConfig = None
-				print >> log, 'No suitable versions found.'
+				print(u'No suitable versions found.', file=log)
 			else:
-				print >> log, 'Selected:', tclConfig
-		finally:
-			log.close()
+				print(u'Selected: %s' % tclConfig, file=log)
 
 		cls.tclConfig = tclConfig
 		return tclConfig
@@ -439,9 +438,8 @@ class TCL(Library):
 		tclConfig = cls.getTclConfig(platform, distroRoot)
 		if tclConfig is None:
 			return None
-		log = open('derived/tcl-search.log', 'a')
-		try:
-			print >> log, 'Getting Tcl %s...' % description
+		with open('derived/tcl-search.log', 'a', encoding='utf-8') as log:
+			print(u'Getting Tcl %s...' % description, file=log)
 			text = captureStdout(
 				log,
 				shjoin([
@@ -450,9 +448,7 @@ class TCL(Library):
 					])
 				)
 			if text is not None:
-				print >> log, 'Result: %s' % text.strip()
-		finally:
-			log.close()
+				print(u'Result: %s' % text.strip(), file=log)
 		return None if text is None else text.strip()
 
 	@classmethod
@@ -479,30 +475,27 @@ class TCL(Library):
 			'${TCL_SHARED_BUILD}',
 			'library type (shared/static)'
 			)
-		log = open('derived/tcl-search.log', 'a')
-		try:
+		with open('derived/tcl-search.log', 'a', encoding='utf-8') as log:
 			if tclShared == '0':
 				if wantShared:
-					print >> log, (
-						'Dynamic linking requested, but Tcl installation has '
-						'static library.'
+					print(
+						u'Dynamic linking requested, but Tcl installation has '
+						u'static library.', file=log
 						)
 					return None
 			elif tclShared == '1':
 				if not wantShared:
-					print >> log, (
-						'Static linking requested, but Tcl installation has '
-						'dynamic library.'
+					print(
+						u'Static linking requested, but Tcl installation has '
+						u'dynamic library.', file=log
 						)
 					return None
 			else:
-				print >> log, (
-					'Unable to determine whether Tcl installation has '
-					'shared or static library.'
+				print(
+					u'Unable to determine whether Tcl installation has '
+					u'shared or static library.', file=log
 					)
 				return None
-		finally:
-			log.close()
 
 		# Now get the link flags.
 		if wantShared:

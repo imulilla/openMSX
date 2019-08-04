@@ -98,6 +98,7 @@
 
 #include "SCC.hh"
 #include "DeviceConfig.hh"
+#include "cstd.hh"
 #include "likely.hh"
 #include "outer.hh"
 #include "ranges.hh"
@@ -109,6 +110,8 @@ using std::string;
 
 namespace openmsx {
 
+static constexpr auto INPUT_RATE = unsigned(cstd::round(3579545.0 / 32));
+
 static string calcDescription(SCC::ChipMode mode)
 {
 	return (mode == SCC::SCC_Real) ? "Konami SCC" : "Konami SCC+";
@@ -117,16 +120,13 @@ static string calcDescription(SCC::ChipMode mode)
 SCC::SCC(const string& name_, const DeviceConfig& config,
          EmuTime::param time, ChipMode mode)
 	: ResampledSoundDevice(
-		config.getMotherBoard(), name_, calcDescription(mode), 5)
+		config.getMotherBoard(), name_, calcDescription(mode), 5, INPUT_RATE, false)
 	, debuggable(config.getMotherBoard(), getName())
 	, deformTimer(time)
 	, currentChipMode(mode)
 {
 	// Make valgrind happy
 	ranges::fill(orgPeriod, 0);
-
-	float input = 3579545.0f / 32;
-	setInputRate(lrintf(input));
 
 	powerUp(time);
 	registerSound(config);
@@ -553,12 +553,12 @@ SERIALIZE_ENUM(SCC::ChipMode, chipModeInfo);
 template<typename Archive>
 void SCC::serialize(Archive& ar, unsigned /*version*/)
 {
-	ar.serialize("mode", currentChipMode);
-	ar.serialize("period", orgPeriod);
-	ar.serialize("volume", volume);
-	ar.serialize("ch_enable", ch_enable);
-	ar.serialize("deformTimer", deformTimer);
-	ar.serialize("deform", deformValue);
+	ar.serialize("mode",        currentChipMode,
+	             "period",      orgPeriod,
+	             "volume",      volume,
+	             "ch_enable",   ch_enable,
+	             "deformTimer", deformTimer,
+	             "deform",      deformValue);
 	// multi-dimensional arrays are not directly support by the
 	// serialization framework, maybe in the future. So for now
 	// manually loop over the channels.
@@ -594,9 +594,9 @@ void SCC::serialize(Archive& ar, unsigned /*version*/)
 	}
 
 	// call to setFreqVol() modifies these variables, see above
-	ar.serialize("count", count);
-	ar.serialize("pos", pos);
-	ar.serialize("out", out); // note: changed int->float, but no need to bump serialize-version
+	ar.serialize("count", count,
+	             "pos",   pos,
+	             "out",   out); // note: changed int->float, but no need to bump serialize-version
 }
 INSTANTIATE_SERIALIZE_METHODS(SCC);
 

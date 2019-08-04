@@ -1,6 +1,7 @@
 #include "SN76489.hh"
 #include "DeviceConfig.hh"
 #include "Math.hh"
+#include "cstd.hh"
 #include "outer.hh"
 #include "serialize.hh"
 #include "unreachable.hh"
@@ -14,8 +15,7 @@ namespace openmsx {
 
 // The SN76489 divides the clock input by 8, but all users of the clock apply
 // another divider of 2.
-static const float NATIVE_FREQ_FLOAT = (3579545.0f / 8) / 2;
-static const int NATIVE_FREQ_INT = lrintf(NATIVE_FREQ_FLOAT);
+static constexpr auto NATIVE_FREQ_INT = unsigned(cstd::round((3579545.0 / 8) / 2));
 
 // NoiseShifter:
 
@@ -38,7 +38,7 @@ inline unsigned SN76489::NoiseShifter::getOutput() const
 
 inline void SN76489::NoiseShifter::advance()
 {
-	random = (random >> 1) ^ (-(random & 1) & pattern);
+	random = (random >> 1) ^ ((random & 1) ? pattern : 0);
 }
 
 inline void SN76489::NoiseShifter::queueAdvance(unsigned steps)
@@ -72,11 +72,9 @@ void SN76489::NoiseShifter::serialize(Archive& ar, unsigned /*version*/)
 // Main class:
 
 SN76489::SN76489(const DeviceConfig& config)
-	: ResampledSoundDevice(config.getMotherBoard(), "SN76489", "DCSG", 4)
+	: ResampledSoundDevice(config.getMotherBoard(), "SN76489", "DCSG", 4, NATIVE_FREQ_INT, false)
 	, debuggable(config.getMotherBoard(), getName())
 {
-	setInputRate(NATIVE_FREQ_INT);
-
 	initVolumeTable(32768);
 	initState();
 
@@ -306,10 +304,10 @@ void SN76489::serialize(Archive& ar, unsigned version)
 {
 	// Don't serialize volTable since it holds computed constants, not state.
 
-	ar.serialize("regs", regs);
-	ar.serialize("registerLatch", registerLatch);
-	ar.serialize("counters", counters);
-	ar.serialize("outputs", outputs);
+	ar.serialize("regs",          regs,
+	             "registerLatch", registerLatch,
+	             "counters",      counters,
+	             "outputs",       outputs);
 
 	if (ar.isLoader()) {
 		// Initialize the computed NoiseShifter members, based on the

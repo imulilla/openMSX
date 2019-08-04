@@ -230,6 +230,7 @@ void YMF278::Slot::reset()
 
 	lfo_active = false;
 	lfo_cnt = 0;
+	lfo = 0;
 
 	state = EG_OFF;
 
@@ -785,10 +786,12 @@ byte YMF278::peekReg(byte reg) const
 	return result;
 }
 
+static constexpr unsigned INPUT_RATE = 44100;
+
 YMF278::YMF278(const std::string& name_, int ramSize_,
                const DeviceConfig& config)
 	: ResampledSoundDevice(config.getMotherBoard(), name_, "MoonSound wave-part",
-	                       24, true)
+	                       24, INPUT_RATE, true)
 	, motherBoard(config.getMotherBoard())
 	, debugRegisters(motherBoard, getName())
 	, debugMemory   (motherBoard, getName())
@@ -815,8 +818,6 @@ YMF278::YMF278(const std::string& name_, int ramSize_,
 	}
 
 	memadr = 0; // avoid UMR
-
-	setInputRate(44100);
 
 	registerSound(config);
 	reset(motherBoard.getCurrentTime()); // must come after registerSound() because of call to setSoftwareVolume() via setMixLevel()
@@ -994,20 +995,20 @@ template<typename Archive>
 void YMF278::Slot::serialize(Archive& ar, unsigned version)
 {
 	// TODO restore more state from registers
-	ar.serialize("startaddr", startaddr);
-	ar.serialize("loopaddr", loopaddr);
-	ar.serialize("stepptr", stepptr);
-	ar.serialize("pos", pos);
-	ar.serialize("sample1", sample1);
-	ar.serialize("sample2", sample2);
-	ar.serialize("env_vol", env_vol);
-	ar.serialize("lfo_cnt", lfo_cnt);
-	ar.serialize("DL", DL);
-	ar.serialize("wave", wave);
-	ar.serialize("FN", FN);
+	ar.serialize("startaddr", startaddr,
+	             "loopaddr",  loopaddr,
+	             "stepptr",   stepptr,
+	             "pos",       pos,
+	             "sample1",   sample1,
+	             "sample2",   sample2,
+	             "env_vol",   env_vol,
+	             "lfo_cnt",   lfo_cnt,
+	             "DL",        DL,
+	             "wave",      wave,
+	             "FN",        FN);
 	if (ar.versionAtLeast(version, 4)) {
-		ar.serialize("endaddr", endaddr);
-		ar.serialize("OCT", OCT);
+		ar.serialize("endaddr", endaddr,
+		             "OCT",     OCT);
 	} else {
 		unsigned e = 0; ar.serialize("endaddr", e); endaddr = (e ^ 0xffff) + 1;
 
@@ -1021,16 +1022,16 @@ void YMF278::Slot::serialize(Archive& ar, unsigned version)
 	}
 
 	if (ar.versionAtLeast(version, 2)) {
-		ar.serialize("PRVB", PRVB);
-		ar.serialize("TL", TL);
-		ar.serialize("pan", pan);
-		ar.serialize("vib", vib);
-		ar.serialize("AM", AM);
-		ar.serialize("AR", AR);
-		ar.serialize("D1R", D1R);
-		ar.serialize("D2R", D2R);
-		ar.serialize("RC", RC);
-		ar.serialize("RR", RR);
+		ar.serialize("PRVB", PRVB,
+		             "TL",   TL,
+		             "pan",  pan,
+		             "vib",  vib,
+		             "AM",   AM,
+		             "AR",   AR,
+		             "D1R",  D1R,
+		             "D2R",  D2R,
+		             "RC",   RC,
+		             "RR",   RR);
 	} else {
 		// for backwards compatibility with old savestates
 		char PRVB_ = 0; ar.serializeChar("PRVB", PRVB_); PRVB = PRVB_;
@@ -1044,8 +1045,8 @@ void YMF278::Slot::serialize(Archive& ar, unsigned version)
 		char RC_  = 0; ar.serializeChar("RC",  RC_ ); RC  = RC_;
 		char RR_  = 0; ar.serializeChar("RR",  RR_ ); RR  = RR_;
 	}
-	ar.serialize("bits", bits);
-	ar.serialize("lfo_active", lfo_active);
+	ar.serialize("bits",       bits,
+	             "lfo_active", lfo_active);
 
 	ar.serialize("state", state);
 	if (ar.versionBelow(version, 4)) {
@@ -1079,8 +1080,8 @@ void YMF278::Slot::serialize(Archive& ar, unsigned version)
 template<typename Archive>
 void YMF278::serialize(Archive& ar, unsigned version)
 {
-	ar.serialize("slots", slots);
-	ar.serialize("eg_cnt", eg_cnt);
+	ar.serialize("slots",  slots,
+	             "eg_cnt", eg_cnt);
 	if (ar.versionAtLeast(version, 4)) {
 		ar.serialize("ram", ram);
 	} else {
