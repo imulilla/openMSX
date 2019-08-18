@@ -64,5 +64,17 @@ bind_default SHIFT+ALT+F9  "vdrive diska -1"
 bind_default       ALT+F10 "vdrive diskb"
 bind_default SHIFT+ALT+F10 "vdrive diskb -1"
 
-# copy/paste (use middle-click instead of ctrl-v because the latter might be used by the MSX itself).
-bind_default "mouse button2 down" {type [get_clipboard_text]}
+# copy/paste (use middle-click for all platforms and also something similar to
+# CTRL-C/CTRL-V, but not exactly that, as these combinations are also used on
+# MSX. By adding META, the combination will be so rarely used that we can
+# assume it's OK).
+set my_type_command {type [regsub -all "\r?\n" [get_clipboard_text] "\r"]}
+bind_default "mouse button2 down" "$my_type_command"
+if {$tcl_platform(os) eq "Darwin"} { ;# Mac
+	bind_default "keyb META+C" {set_clipboard_text [get_screen]}
+	bind_default "keyb META+V" "$my_type_command"
+} else { ;# any other
+	bind_default "keyb META+CTRL+C" {set_clipboard_text [get_screen]}
+	bind_default "keyb META+CTRL+V" "$my_type_command"
+}
+unset my_type_command
