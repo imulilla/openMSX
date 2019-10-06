@@ -213,7 +213,7 @@ public:
 
 	DummyDevice& getDummyDevice() { return *dummyDevice; }
 
-	static void insertBreakPoint(const BreakPoint& bp);
+	static void insertBreakPoint(BreakPoint bp);
 	static void removeBreakPoint(const BreakPoint& bp);
 	using BreakPoints = std::vector<BreakPoint>;
 	static const BreakPoints& getBreakPoints() { return breakPoints; }
@@ -224,7 +224,7 @@ public:
 	using WatchPoints = std::vector<std::shared_ptr<WatchPoint>>;
 	const WatchPoints& getWatchPoints() const { return watchPoints; }
 
-	static void setCondition(const DebugCondition& cond);
+	static void setCondition(DebugCondition cond);
 	static void removeCondition(const DebugCondition& cond);
 	using Conditions = std::vector<DebugCondition>;
 	static const Conditions& getConditions() { return conditions; }
@@ -233,12 +233,6 @@ public:
 	void doBreak();
 	void doStep();
 	void doContinue();
-
-	// should only be used by CPUCore
-	static bool isStep()            { return step; }
-	static void setStep    (bool x) { step = x; }
-	static bool isContinue()        { return continued; }
-	static void setContinue(bool x) { continued = x; }
 
 	// breakpoint methods used by CPUCore
 	static bool anyBreakPoints()
@@ -297,8 +291,6 @@ private:
 	void updateMemWatch(WatchPoint::Type type);
 	void executeMemWatch(WatchPoint::Type type, unsigned address,
 	                     unsigned value = ~0u);
-
-	void doContinue2();
 
 	struct MemoryDebug final : SimpleDebuggable {
 		explicit MemoryDebug(MSXMotherBoard& motherBoard);
@@ -410,8 +402,6 @@ private:
 	WatchPoints watchPoints; // ordered in creation order,  TODO must also be static
 	static Conditions conditions; // ordered in creation order
 	static bool breaked;
-	static bool continued;
-	static bool step;
 };
 
 

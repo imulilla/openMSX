@@ -4,6 +4,7 @@
 #include "VDP.hh"
 #include "VDPAccessSlots.hh"
 #include "BooleanSetting.hh"
+#include "Probe.hh"
 #include "TclCallback.hh"
 #include "serialize_meta.hh"
 #include "openmsx.hh"
@@ -121,6 +122,7 @@ public:
 private:
 	void executeCommand(EmuTime::param time);
 
+	void setStatusChangeTime(EmuTime::param t);
 	void calcFinishTime(unsigned NX, unsigned NY, unsigned ticksPerPixel);
 
 	                        void startAbrt(EmuTime::param time);
@@ -182,6 +184,8 @@ private:
 	  */
 	BooleanSetting cmdTraceSetting;
 	TclCallback cmdInProgressCallback;
+
+	Probe<bool> executingProbe;
 
 	/** Time at which the next vram access slot is available.
 	  * Only valid when a command is executing.

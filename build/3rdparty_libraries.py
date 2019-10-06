@@ -1,6 +1,5 @@
 # Prints which 3rd party libraries are desired for the given configuration.
 
-from __future__ import print_function
 from components import requiredLibrariesFor
 from configurations import getConfiguration
 from libraries import allDependencies, librariesByName
@@ -36,7 +35,7 @@ if __name__ == '__main__':
 			sys.exit(2)
 	else:
 		print(
-			'Usage: python 3rdparty_libraries.py TARGET_OS LINK_MODE',
+			'Usage: python3 3rdparty_libraries.py TARGET_OS LINK_MODE',
 			file=sys.stderr
 			)
 		sys.exit(2)

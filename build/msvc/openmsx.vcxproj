@@ -623,7 +623,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\utils\Date.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\utils\DivModBySame.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\utils\HexDump.cc" />
-    <ClCompile Include="$(OpenMSXSrcDir)\utils\snappy.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\utils\lz4.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\utils\SerializeBuffer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\utils\MemoryOps.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\utils\sha1.cc" />
@@ -1198,7 +1198,7 @@
     <None Include="$(OpenMSXSrcDir)\utils\inline.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\join.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\likely.hh" />
-    <None Include="$(OpenMSXSrcDir)\utils\snappy.hh" />
+    <None Include="$(OpenMSXSrcDir)\utils\lz4.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\Math.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\MemBuffer.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\MemoryOps.hh" />
@@ -1453,7 +1453,7 @@ rem echo MSVC_DIR=%MSVC_DIR%
 set PYTHONPATH=%PYTHONPATH%;%BUILD_DIR%
 rem echo PYTHONPATH=%PYTHONPATH%
 pushd %ROOT_DIR%
-python "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
+python3 "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
 popd</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">build-info.hh;components.hh;probed_defs.hh;resource-info.h;Version.ii;%(Outputs)</Outputs>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Generating config headers...</Message>
@@ -1468,7 +1468,7 @@ rem echo MSVC_DIR=%MSVC_DIR%
 set PYTHONPATH=%PYTHONPATH%;%BUILD_DIR%
 rem echo PYTHONPATH=%PYTHONPATH%
 pushd %ROOT_DIR%
-python "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
+python3 "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
 popd</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">build-info.hh;components.hh;probed_defs.hh;resource-info.h;Version.ii;%(Outputs)</Outputs>
       <Message Condition="'$(Configuration)|$(Platform)'=='Developer|Win32'">Generating config headers...</Message>
@@ -1483,7 +1483,7 @@ rem echo MSVC_DIR=%MSVC_DIR%
 set PYTHONPATH=%PYTHONPATH%;%BUILD_DIR%
 rem echo PYTHONPATH=%PYTHONPATH%
 pushd %ROOT_DIR%
-python "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
+python3 "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
 popd</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Developer|Win32'">build-info.hh;components.hh;probed_defs.hh;resource-info.h;Version.ii;%(Outputs)</Outputs>
       <Message Condition="'$(Configuration)|$(Platform)'=='Developer|x64'">Generating config headers...</Message>
@@ -1498,7 +1498,7 @@ rem echo MSVC_DIR=%MSVC_DIR%
 set PYTHONPATH=%PYTHONPATH%;%BUILD_DIR%
 rem echo PYTHONPATH=%PYTHONPATH%
 pushd %ROOT_DIR%
-python "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
+python3 "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
 popd</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Developer|x64'">build-info.hh;components.hh;probed_defs.hh;resource-info.h;Version.ii;%(Outputs)</Outputs>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Generating config headers...</Message>
@@ -1513,7 +1513,7 @@ rem echo MSVC_DIR=%MSVC_DIR%
 set PYTHONPATH=%PYTHONPATH%;%BUILD_DIR%
 rem echo PYTHONPATH=%PYTHONPATH%
 pushd %ROOT_DIR%
-python "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
+python3 "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
 popd</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">build-info.hh;components.hh;probed_defs.hh;resource-info.h;Version.ii;%(Outputs)</Outputs>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Generating config headers...</Message>
@@ -1528,7 +1528,7 @@ rem echo MSVC_DIR=%MSVC_DIR%
 set PYTHONPATH=%PYTHONPATH%;%BUILD_DIR%
 rem echo PYTHONPATH=%PYTHONPATH%
 pushd %ROOT_DIR%
-python "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
+python3 "%MSVC_DIR%\genconfig.py" $(Platform) "$(Configuration)" "%CONFIG_DIR%"
 popd</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">build-info.hh;components.hh;probed_defs.hh;resource-info.h;Version.ii;%(Outputs)</Outputs>
     </CustomBuild>

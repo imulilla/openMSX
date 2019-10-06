@@ -2,13 +2,14 @@
 #define ENDIAN_HH
 
 #include "build-info.hh"
+#include "inline.hh"
 #include <cstdint>
 #include <cstring>
 #include <cassert>
 
 namespace Endian {
 
-// Revese bytes in a 16-bit number: 0x1234 becomes 0x3412
+// Reverse bytes in a 16-bit number: 0x1234 becomes 0x3412
 static inline uint16_t bswap16(uint16_t x)
 {
 	// This sequence generates 'optimal' code on a wide range of gcc/clang
@@ -20,7 +21,7 @@ static inline uint16_t bswap16(uint16_t x)
 	//return (x << 8) | (x >> 8);
 }
 
-// Revese bytes in a 32-bit number: 0x12345678 becomes 0x78563412
+// Reverse bytes in a 32-bit number: 0x12345678 becomes 0x78563412
 static inline uint32_t bswap32(uint32_t x)
 {
 #if (__GNUC__ > 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ >= 3))
@@ -35,7 +36,7 @@ static inline uint32_t bswap32(uint32_t x)
 #endif
 }
 
-// Revese bytes in a 64-bit value: 0x1122334455667788 becomes 0x8877665544332211
+// Reverse bytes in a 64-bit value: 0x1122334455667788 becomes 0x8877665544332211
 static inline uint64_t bswap64(uint64_t x)
 {
 #if (__GNUC__ > 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ >= 3))
@@ -163,64 +164,64 @@ static inline uint32_t readL32(const void* p)
 // endianess). If the architecture does not support unaligned memory operations
 // (e.g. early ARM architectures), the operation is split into byte accesses.
 
-template<bool SWAP, typename T> static inline void write_UA(void* p, T x)
+template<bool SWAP, typename T> static ALWAYS_INLINE void write_UA(void* p, T x)
 {
 	if (SWAP) x = bswap(x);
 	memcpy(p, &x, sizeof(x));
 }
-static inline void write_UA_B16(void* p, uint16_t x)
+static ALWAYS_INLINE void write_UA_B16(void* p, uint16_t x)
 {
 	write_UA<!openmsx::OPENMSX_BIGENDIAN>(p, x);
 }
-static inline void write_UA_L16(void* p, uint16_t x)
+static ALWAYS_INLINE void write_UA_L16(void* p, uint16_t x)
 {
 	write_UA< openmsx::OPENMSX_BIGENDIAN>(p, x);
 }
-static inline void write_UA_B32(void* p, uint32_t x)
+static ALWAYS_INLINE void write_UA_B32(void* p, uint32_t x)
 {
 	write_UA<!openmsx::OPENMSX_BIGENDIAN>(p, x);
 }
-static inline void write_UA_L32(void* p, uint32_t x)
+static ALWAYS_INLINE void write_UA_L32(void* p, uint32_t x)
 {
 	write_UA< openmsx::OPENMSX_BIGENDIAN>(p, x);
 }
-static inline void write_UA_B64(void* p, uint64_t x)
+static ALWAYS_INLINE void write_UA_B64(void* p, uint64_t x)
 {
 	write_UA<!openmsx::OPENMSX_BIGENDIAN>(p, x);
 }
-static inline void write_UA_L64(void* p, uint64_t x)
+static ALWAYS_INLINE void write_UA_L64(void* p, uint64_t x)
 {
 	write_UA< openmsx::OPENMSX_BIGENDIAN>(p, x);
 }
 
-template<bool SWAP, typename T> static inline T read_UA(const void* p)
+template<bool SWAP, typename T> static ALWAYS_INLINE T read_UA(const void* p)
 {
 	T x;
 	memcpy(&x, p, sizeof(x));
 	if (SWAP) x = bswap(x);
 	return x;
 }
-static inline uint16_t read_UA_B16(const void* p)
+static ALWAYS_INLINE uint16_t read_UA_B16(const void* p)
 {
 	return read_UA<!openmsx::OPENMSX_BIGENDIAN, uint16_t>(p);
 }
-static inline uint16_t read_UA_L16(const void* p)
+static ALWAYS_INLINE uint16_t read_UA_L16(const void* p)
 {
 	return read_UA< openmsx::OPENMSX_BIGENDIAN, uint16_t>(p);
 }
-static inline uint32_t read_UA_B32(const void* p)
+static ALWAYS_INLINE uint32_t read_UA_B32(const void* p)
 {
 	return read_UA<!openmsx::OPENMSX_BIGENDIAN, uint32_t>(p);
 }
-static inline uint32_t read_UA_L32(const void* p)
+static ALWAYS_INLINE uint32_t read_UA_L32(const void* p)
 {
 	return read_UA< openmsx::OPENMSX_BIGENDIAN, uint32_t>(p);
 }
-static inline uint64_t read_UA_B64(const void* p)
+static ALWAYS_INLINE uint64_t read_UA_B64(const void* p)
 {
 	return read_UA<!openmsx::OPENMSX_BIGENDIAN, uint64_t>(p);
 }
-static inline uint64_t read_UA_L64(const void* p)
+static ALWAYS_INLINE uint64_t read_UA_L64(const void* p)
 {
 	return read_UA< openmsx::OPENMSX_BIGENDIAN, uint64_t>(p);
 }

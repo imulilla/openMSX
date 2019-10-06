@@ -1,4 +1,3 @@
-from __future__ import print_function
 from fileutils import (
 	installDirs, installFile, installSymlink, installTree, scanTree
 	)
@@ -147,7 +146,7 @@ if __name__ == '__main__':
 		main(*sys.argv[1 : ])
 	else:
 		print(
-			'Usage: python install.py '
+			'Usage: python3 install.py '
 			'DESTDIR INSTALL_BINARY_DIR INSTALL_SHARE_DIR INSTALL_DOC_DIR '
 			'BINARY_FULL OPENMSX_TARGET_OS INSTALL_VERBOSE INSTALL_CONTRIB',
 			file=sys.stderr

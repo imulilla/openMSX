@@ -41,8 +41,6 @@ namespace openmsx {
 
 // Global variables
 bool MSXCPUInterface::breaked = false;
-bool MSXCPUInterface::continued = false;
-bool MSXCPUInterface::step = false;
 MSXCPUInterface::BreakPoints MSXCPUInterface::breakPoints;
 //TODO watchpoints
 MSXCPUInterface::Conditions  MSXCPUInterface::conditions;
@@ -728,10 +726,10 @@ void MSXCPUInterface::writeSlottedMem(unsigned address, byte value,
 	}
 }
 
-void MSXCPUInterface::insertBreakPoint(const BreakPoint& bp)
+void MSXCPUInterface::insertBreakPoint(BreakPoint bp)
 {
 	auto it = ranges::upper_bound(breakPoints, bp, CompareBreakpoints());
-	breakPoints.insert(it, bp);
+	breakPoints.insert(it, std::move(bp));
 }
 
 void MSXCPUInterface::removeBreakPoint(const BreakPoint& bp)
@@ -824,9 +822,9 @@ void MSXCPUInterface::removeWatchPoint(shared_ptr<WatchPoint> watchPoint)
 	}
 }
 
-void MSXCPUInterface::setCondition(const DebugCondition& cond)
+void MSXCPUInterface::setCondition(DebugCondition cond)
 {
-	conditions.push_back(cond);
+	conditions.push_back(std::move(cond));
 }
 
 void MSXCPUInterface::removeCondition(const DebugCondition& cond)
@@ -963,29 +961,23 @@ void MSXCPUInterface::doBreak()
 void MSXCPUInterface::doStep()
 {
 	assert(!isFastForward());
-	if (breaked) {
-		step = true;
-		doContinue2();
-	}
+	setCondition(DebugCondition(
+		TclObject("debug break"), TclObject(), true));
+	doContinue();
 }
 
 void MSXCPUInterface::doContinue()
 {
 	assert(!isFastForward());
 	if (breaked) {
-		continued = true;
-		doContinue2();
-	}
-}
+		breaked = false;
 
-void MSXCPUInterface::doContinue2()
-{
-	breaked = false;
-	Reactor& reactor = motherBoard.getReactor();
-	breakedSetting->setReadOnlyValue(TclObject("false"));
-	reactor.getCliComm().update(CliComm::STATUS, "cpu", "running");
-	reactor.unblock();
-	motherBoard.getRealTime().resync();
+		Reactor& reactor = motherBoard.getReactor();
+		breakedSetting->setReadOnlyValue(TclObject("false"));
+		reactor.getCliComm().update(CliComm::STATUS, "cpu", "running");
+		reactor.unblock();
+		motherBoard.getRealTime().resync();
+	}
 }
 
 void MSXCPUInterface::cleanup()

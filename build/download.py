@@ -1,8 +1,7 @@
-from __future__ import print_function
 from os import remove, stat
 from os.path import basename, isdir, isfile, join as joinpath
-from urllib import FancyURLopener
-from urlparse import urlparse
+from urllib.parse import urlparse
+from urllib.request import FancyURLopener
 
 import sys
 
@@ -88,5 +87,5 @@ if __name__ == '__main__':
 			print(ex, file=sys.stderr)
 			sys.exit(1)
 	else:
-		print('Usage: python download.py url localdir', file=sys.stderr)
+		print('Usage: python3 download.py url localdir', file=sys.stderr)
 		sys.exit(2)
