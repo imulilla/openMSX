@@ -26,7 +26,7 @@ class FilePool;
 class TsxImage final : public CassetteImage
 {
 public:
-	TsxImage(const Filename& fileName, FilePool& filePool, CliComm& cliComm);
+	TsxImage(const Filename& fileName, FilePool& filePool, CliComm& cliComm,int contador);
 
 	// CassetteImage
 	int16_t getSampleAt(EmuTime::param time) override;
@@ -136,7 +136,7 @@ private:
 	void writeTurbo1(uint16_t tstates);
 	void writeTurboByte(byte b, uint8_t bits, uint16_t zerolen, uint16_t onelen);
 
-	void convert(const Filename& filename, FilePool& filePool, CliComm& cliComm);
+	void convert(const Filename& filename, FilePool& filePool, CliComm& cliComm,int contador);
 
 	int8_t   currentValue = 127;
 	bool     phaseChanged = false;

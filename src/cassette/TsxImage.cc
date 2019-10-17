@@ -100,10 +100,10 @@ inline uint16_t tstates2bytes(uint32_t tstates)
 	return 	( tstates * OUTPUT_FREQ / TZX_Z80_FREQ);
 }
 
-TsxImage::TsxImage(const Filename& filename, FilePool& filePool, CliComm& cliComm)
+TsxImage::TsxImage(const Filename& filename, FilePool& filePool, CliComm& cliComm,int contador)
 {
 	setFirstFileType(CassetteImage::UNKNOWN);
-	convert(filename, filePool, cliComm);
+	convert(filename, filePool, cliComm,contador);
 }
 
 int16_t TsxImage::getSampleAt(EmuTime::param time)
@@ -419,7 +419,7 @@ size_t TsxImage::writeBlock4B(Block4B *b) //MSX KCS Block
 	return b->blockLen + 5;
 }
 
-void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cliComm)
+void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cliComm,int contador)
 {
 	File file(filename);
 	size_t size;
@@ -432,9 +432,9 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 	bool parchear = false;//[IPS Patch] Establezco que no hay que parchear
 	size = buf.size();
 	uint8_t bid = 0;       //BlockId
-	size_t pos = 0;
+	size_t pos = contador-10;
 
-	if (!memcmp(&buf[pos], TSX_HEADER, 8)) {
+	if (!memcmp(&buf[pos], TSX_HEADER, 8) || (contador > 10)) {
 		headerFound = true;
 		pos += 10;         //Skip TZX header (8 bytes) + major/minor version (2 bytes)
  		while (pos < size) {
@@ -480,7 +480,13 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 #ifdef DEBUG
 			cliComm.printWarning("Block#21");
 #endif
-				pos += *((uint8_t*)&buf[pos+1]) + 2;
+			char blqname[10];
+			for (int l = 0; l <= *((uint8_t*)&buf[pos + 1]); l = l + 1) {
+				blqname[l] = (buf[pos+1+l]);
+			}
+				cliComm.printWarning("bloque:", blqname);
+				pos +=2;
+				cliComm.printWarning("posicion:", pos);
 			} else
 			if (bid == B22_GRP_END) {
 #ifdef DEBUG
