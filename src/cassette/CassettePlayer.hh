@@ -60,8 +60,8 @@ private:
 
 	/** Insert a tape for use in PLAY mode.
 	 */
-	void playTape(const Filename& filename, EmuTime::param time);
-	void insertTape(const Filename& filename, EmuTime::param time);
+	void playTape(const Filename& filename, EmuTime::param time,int contador);
+	void insertTape(const Filename& filename, EmuTime::param time,int contador);
 
 	/** Removes tape (possibly stops recording). And go to STOP mode.
 	 */

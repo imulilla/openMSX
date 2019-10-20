@@ -13,6 +13,7 @@
 #include "xrange.hh"
 #include <cstring> // for memcmp/memcpy
 #include <iostream>
+#include <vector>
 
 namespace openmsx {
 
@@ -93,6 +94,16 @@ static const byte BASIC_HEADER [10] = { 0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,
 
 bool parchear=false;//[IPS Patch] Establezco que no se parchee por defecto
 byte matriz[0xffff];//[IPS Patch] Creo la matriz donde se vuelca el parche a aplicar
+struct bloque {
+	std::string nbloque;
+	int posicion;
+}bloques[255];
+//std::vector<bloque> bloques;
+cliComm.printInfo(bloques[0].nbloque);
+//bloques.nbloque[0] = "";	
+//bloques.posicion[0] = 0;//En la posicion 0 se guarda el numero de bloques
+
+std::vector<bloque> bloques(255);//Creo la matriz para guardar los bloques con sus posiciones,primera posicion numero de bloques
 
 
 inline uint16_t tstates2bytes(uint32_t tstates)
@@ -432,11 +443,13 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 	bool parchear = false;//[IPS Patch] Establezco que no hay que parchear
 	size = buf.size();
 	uint8_t bid = 0;       //BlockId
-	size_t pos = contador-10;
-
+    size_t pos = 0;
+	
 	if (!memcmp(&buf[pos], TSX_HEADER, 8) || (contador > 10)) {
 		headerFound = true;
-		pos += 10;         //Skip TZX header (8 bytes) + major/minor version (2 bytes)
+		if (contador == 0) {
+			pos += 10;//Skip TZX header (8 bytes) + major/minor version (2 bytes)
+		}
  		while (pos < size) {
 			acumBytes = 0.f;
 			bid = buf[pos];
@@ -480,13 +493,18 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 #ifdef DEBUG
 			cliComm.printWarning("Block#21");
 #endif
-			char blqname[10];
-			for (int l = 0; l <= *((uint8_t*)&buf[pos + 1]); l = l + 1) {
-				blqname[l] = (buf[pos+1+l]);
+			
+			char blqname[255]="";
+			for (int l = 0; l < *((uint8_t*)&buf[pos + 1]); l = l + 1) {
+				blqname[l] = (buf[pos+2+l]);
 			}
-				cliComm.printWarning("bloque:", blqname);
-				pos +=2;
-				cliComm.printWarning("posicion:", pos);
+			cliComm.printWarning("bloque:", blqname);
+			pos += *((uint8_t*)&buf[pos + 1]) + 2;
+			cliComm.printWarning("posicion",pos);
+			bloques.push_back(bloque());
+			bloques[(bloques[0].posicion)+1].nbloque = blqname;
+			bloques[(bloques[0].posicion)+1].posicion = pos;
+			bloques[0].posicion ++1;
 			} else
 			if (bid == B22_GRP_END) {
 #ifdef DEBUG

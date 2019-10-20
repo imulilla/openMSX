@@ -23,6 +23,7 @@
 #include "CassettePlayer.hh"
 #include "Connector.hh"
 #include "CassettePort.hh"
+#include "CliComm.hh"
 #include "CommandController.hh"
 #include "DeviceConfig.hh"
 #include "HardwareConfig.hh"
@@ -308,7 +309,7 @@ void CassettePlayer::setImageName(const Filename& newImage)
 		CliComm::MEDIA, "cassetteplayer", casImage.getResolved());
 }
 
-void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time)
+void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time,int contador)
 {
 	if (!filename.empty()) {
 		FilePool& filePool = motherBoard.getReactor().getFilePool();
@@ -327,7 +328,7 @@ void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time)
 					// if that fails use TSX
 					playImage = std::make_unique<TsxImage>(
 						filename, filePool,
-						motherBoard.getMSXCliComm(),1);
+						motherBoard.getMSXCliComm(),contador);
 				}
 				catch (MSXException& e3) {
 
@@ -365,7 +366,7 @@ void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time)
 	setImageName(filename);
 }
 
-void CassettePlayer::playTape(const Filename& filename, EmuTime::param time)
+void CassettePlayer::playTape(const Filename& filename, EmuTime::param time,int contador)
 {
 	// Temporally go to STOP state:
 	// RECORD: First close the recorded image. Otherwise it goes wrong
@@ -373,7 +374,7 @@ void CassettePlayer::playTape(const Filename& filename, EmuTime::param time)
 	// PLAY: Go to stop because we temporally violate some invariants
 	//       (tapePos can be beyond end-of-tape).
 	setState(STOP, getImageName(), time); // keep current image
-	insertTape(filename, time);
+	insertTape(filename, time,contador);
 	rewind(time); // sets PLAY mode
 	autoRun();
 }
@@ -587,7 +588,7 @@ int CassettePlayer::signalEvent(const std::shared_ptr<const Event>& event)
 		if (!getImageName().empty()) {
 			// Reinsert tape to make sure everything is reset.
 			try {
-				playTape(getImageName(), getCurrentTime());
+				playTape(getImageName(), getCurrentTime(),0);
 			} catch (MSXException& e) {
 				motherBoard.getMSXCliComm().printWarning(
 					"Failed to insert tape: ", e.getMessage());
@@ -662,7 +663,8 @@ void CassettePlayer::TapeCommand::execute(
 		try {
 			result = "Changing tape";
 			Filename filename(tokens[2].getString().str(), userFileContext());
-			cassettePlayer.playTape(filename, time);
+			//CliComm. ("token3", tokens[3]);
+			cassettePlayer.playTape(filename,time,stoi(tokens[3]));
 		} catch (MSXException& e) {
 			throw CommandException(std::move(e).getMessage());
 		}
@@ -890,7 +892,7 @@ void CassettePlayer::serialize(Archive& ar, unsigned version)
 			}
 		}
 		try {
-			insertTape(casImage, time);
+			insertTape(casImage, time,0);
 		} catch (MSXException&) {
 			if (oldChecksum.empty()) {
 				// It's OK if we cannot reinsert an empty
