@@ -95,15 +95,15 @@ static const byte BASIC_HEADER [10] = { 0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,
 bool parchear=false;//[IPS Patch] Establezco que no se parchee por defecto
 byte matriz[0xffff];//[IPS Patch] Creo la matriz donde se vuelca el parche a aplicar
 struct bloque {
-	std::string nbloque;
+	char nbloque[10];
 	int posicion;
-}bloques[255];
-//std::vector<bloque> bloques;
-cliComm.printInfo(bloques[0].nbloque);
-//bloques.nbloque[0] = "";	
+};
+std::vector<bloque> bloques(255);//Creo la matriz para guardar los bloques con sus posiciones,primera posicion numero de bloques
+bloques.push_back(0);
+
 //bloques.posicion[0] = 0;//En la posicion 0 se guarda el numero de bloques
 
-std::vector<bloque> bloques(255);//Creo la matriz para guardar los bloques con sus posiciones,primera posicion numero de bloques
+
 
 
 inline uint16_t tstates2bytes(uint32_t tstates)
