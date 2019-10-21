@@ -14,6 +14,7 @@
 #include <cstring> // for memcmp/memcpy
 #include <iostream>
 #include <vector>
+#include <string>
 
 namespace openmsx {
 
@@ -97,11 +98,11 @@ byte matriz[0xffff];//[IPS Patch] Creo la matriz donde se vuelca el parche a apl
 struct bloque {
 	char nbloque[10];
 	int posicion;
-};
-std::vector<bloque> bloques(255);//Creo la matriz para guardar los bloques con sus posiciones,primera posicion numero de bloques
-bloques.push_back(0);
-
-//bloques.posicion[0] = 0;//En la posicion 0 se guarda el numero de bloques
+} bloques[255];//Creo la matriz para guardar los bloques con sus posiciones,primera posicion numero de bloques
+bloques0.posicion = 0;
+cliComm.printInfo(bloques.size());
+							
+							//bloques.posicion[0] = 0;//En la posicion 0 se guarda el numero de bloques
 
 
 
