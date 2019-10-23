@@ -326,6 +326,7 @@ void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time,in
 			catch (MSXException& e2) {
 				try {
 					// if that fails use TSX
+					
 					playImage = std::make_unique<TsxImage>(
 						filename, filePool,
 						motherBoard.getMSXCliComm(),contador);
@@ -664,7 +665,7 @@ void CassettePlayer::TapeCommand::execute(
 			result = "Changing tape";
 			Filename filename(tokens[2].getString().str(), userFileContext());
 			//CliComm. ("token3", tokens[3]);
-			cassettePlayer.playTape(filename,time,stoi(tokens[3]));
+			cassettePlayer.playTape(filename, time, 0);//stoi(tokens[3]));
 		} catch (MSXException& e) {
 			throw CommandException(std::move(e).getMessage());
 		}
@@ -695,7 +696,7 @@ void CassettePlayer::TapeCommand::execute(
 			try {
 				result = "Play mode set, rewinding tape.";
 				cassettePlayer.playTape(
-					cassettePlayer.getImageName(), time);
+					cassettePlayer.getImageName(), time,0);
 			} catch (MSXException& e) {
 				throw CommandException(std::move(e).getMessage());
 			}
@@ -716,7 +717,7 @@ void CassettePlayer::TapeCommand::execute(
 			try {
 				r = "First stopping recording... ";
 				cassettePlayer.playTape(
-					cassettePlayer.getImageName(), time);
+					cassettePlayer.getImageName(), time,0);
 			} catch (MSXException& e) {
 				throw CommandException(std::move(e).getMessage());
 			}
@@ -735,7 +736,7 @@ void CassettePlayer::TapeCommand::execute(
 		try {
 			result = "Changing tape";
 			Filename filename(tokens[1].getString().str(), userFileContext());
-			cassettePlayer.playTape(filename, time);
+			cassettePlayer.playTape(filename, time,0);
 		} catch (MSXException& e) {
 			throw CommandException(std::move(e).getMessage());
 		}
