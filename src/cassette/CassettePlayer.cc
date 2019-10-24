@@ -740,7 +740,12 @@ void CassettePlayer::TapeCommand::execute(
 		} catch (MSXException& e) {
 			throw CommandException(std::move(e).getMessage());
 		}
+	 else if (tokens[1] == "listblocks") {
+	 result = cassettePlayer.getTapePos(time);
+	 result = "bloques";
+	 }
 	}
+	
 	//if (!cassettePlayer.getConnector()) {
 	//	cassettePlayer.cliComm.printWarning("Cassetteplayer not plugged in.");
 	//}

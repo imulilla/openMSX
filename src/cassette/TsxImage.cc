@@ -502,7 +502,7 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 			
 			string blqname="";
 			for (int l = 0; l < *((uint8_t*)&buf[pos + 1]); l = l + 1) {
-				blqname = blqname,(buf[pos+2+l]);
+				blqname = blqname + char(buf[pos+2+l]);
 			}
 			cliComm.printWarning("bloque:", blqname);
 			pos += *((uint8_t*)&buf[pos + 1]) + 2;
@@ -510,7 +510,7 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 			bloques.push_back(bloque());
 			bloques[(bloques[0].posicion)+1].nbloque = blqname;
 			bloques[(bloques[0].posicion)+1].posicion = pos;
-			bloques[0].posicion ++1;
+			bloques[0].posicion = bloques[0].posicion + 1;
 			} else
 			if (bid == B22_GRP_END) {
 #ifdef DEBUG
