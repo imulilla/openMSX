@@ -14,15 +14,7 @@
 #include <cstring> // for memcmp/memcpy
 #include <iostream>
 #include <vector>
-using std::string;
-using std::vector;
-
-struct bloque {
-	string nbloque;
-	int posicion;
-};
-std::vector<bloque> bloques;//Creo la matriz para guardar los bloques con sus posiciones,primera posicion numero de bloques
-
+#include <string>
 
 namespace openmsx {
 
@@ -103,8 +95,14 @@ static const byte BASIC_HEADER [10] = { 0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,
 
 bool parchear=false;//[IPS Patch] Establezco que no se parchee por defecto
 byte matriz[0xffff];//[IPS Patch] Creo la matriz donde se vuelca el parche a aplicar
-
-
+struct bloque {
+	char nbloque[10];
+	int posicion;
+} bloques[255];//Creo la matriz para guardar los bloques con sus posiciones,primera posicion numero de bloques
+bloques0.posicion = 0;
+cliComm.printInfo(bloques.size());
+							
+							//bloques.posicion[0] = 0;//En la posicion 0 se guarda el numero de bloques
 
 
 
@@ -116,9 +114,6 @@ inline uint16_t tstates2bytes(uint32_t tstates)
 
 TsxImage::TsxImage(const Filename& filename, FilePool& filePool, CliComm& cliComm,int contador)
 {
-	bloques.push_back(bloque());
-	bloques[0].posicion = 0;//En la posicion 0 se guarda el numero de bloques
-	bloques[0].nbloque = "";
 	setFirstFileType(CassetteImage::UNKNOWN);
 	convert(filename, filePool, cliComm,contador);
 }
@@ -441,7 +436,7 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 	File file(filename);
 	size_t size;
 	auto buf = file.mmap();
-	
+
 	// search for a header in the .tsx file
 	bool issueWarning = false;
 	bool headerFound = false;
@@ -500,9 +495,9 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 			cliComm.printWarning("Block#21");
 #endif
 			
-			string blqname="";
+			char blqname[255]="";
 			for (int l = 0; l < *((uint8_t*)&buf[pos + 1]); l = l + 1) {
-				blqname = blqname + char(buf[pos+2+l]);
+				blqname[l] = (buf[pos+2+l]);
 			}
 			cliComm.printWarning("bloque:", blqname);
 			pos += *((uint8_t*)&buf[pos + 1]) + 2;
@@ -510,7 +505,7 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 			bloques.push_back(bloque());
 			bloques[(bloques[0].posicion)+1].nbloque = blqname;
 			bloques[(bloques[0].posicion)+1].posicion = pos;
-			bloques[0].posicion = bloques[0].posicion + 1;
+			bloques[0].posicion ++1;
 			} else
 			if (bid == B22_GRP_END) {
 #ifdef DEBUG
