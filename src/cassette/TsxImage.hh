@@ -136,8 +136,8 @@ private:
 	void writeTurbo0(uint16_t tstates);
 	void writeTurbo1(uint16_t tstates);
 	void writeTurboByte(byte b, uint8_t bits, uint16_t zerolen, uint16_t onelen);
-	void convert(const Filename& filename, FilePool& filePool, CliComm& cliComm,int pos);
 	std::string TsxListBlocks();
+	void convert(const Filename& filename, FilePool& filePool, CliComm& cliComm,int pos);
 	int8_t   currentValue = 127;
 	bool     phaseChanged = false;
 	uint32_t pulsePilot4B = 0;
@@ -155,7 +155,6 @@ private:
 	std::vector<signed char> output;
 
 };
-
 } // namespace openmsx
 
 #endif

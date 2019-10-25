@@ -752,8 +752,8 @@ void CassettePlayer::TapeCommand::execute(
 
 	}
 	else if (tokens[1] == "listblocks") {
-	result = std:TsxImage::TsxListBlocks()
-		std::make_unique<TsxImage>
+	result = TsxListBlocks()
+	
 	}
 	else {
 		try {
