@@ -114,6 +114,9 @@ inline uint16_t tstates2bytes(uint32_t tstates)
 	return 	( tstates * OUTPUT_FREQ / TZX_Z80_FREQ);
 }
 
+
+
+
 TsxImage::TsxImage(const Filename& filename, FilePool& filePool, CliComm& cliComm,int contador)
 {
 	bloques.push_back(bloque());
@@ -436,6 +439,11 @@ size_t TsxImage::writeBlock4B(Block4B *b) //MSX KCS Block
 	return b->blockLen + 5;
 }
 
+string TsxImage::TsxListBlocks()
+{
+	return "listabloques";
+}
+
 void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cliComm,int contador)
 {
 	File file(filename);
@@ -502,6 +510,7 @@ void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 			
 			string blqname="";
 			for (int l = 0; l < *((uint8_t*)&buf[pos + 1]); l = l + 1) {
+		
 				blqname = blqname + char(buf[pos+2+l]);
 			}
 			cliComm.printWarning("bloque:", blqname);

@@ -645,10 +645,11 @@ void CassettePlayer::TapeCommand::execute(
 		// DiskChanger
 		TclObject options = makeTclList(cassettePlayer.getStateString());
 		result.addListElement(getName() + ':',
-		                      cassettePlayer.getImageName().getResolved(),
-		                      options);
+			cassettePlayer.getImageName().getResolved(),
+			options);
 
-	} else if (tokens[1] == "new") {
+	}
+	else if (tokens[1] == "new") {
 		string directory = "taperecordings";
 		string prefix = "openmsx";
 		string extension = ".wav";
@@ -657,68 +658,83 @@ void CassettePlayer::TapeCommand::execute(
 			directory, prefix, extension);
 		cassettePlayer.recordTape(Filename(filename), time);
 		result = strCat(
-                        "Created new cassette image file: ", filename,
-		        ", inserted it and set recording mode.");
+			"Created new cassette image file: ", filename,
+			", inserted it and set recording mode.");
 
-	} else if (tokens[1] == "insert" && tokens.size() == 3) {
+	}
+	else if (tokens[1] == "insert" && tokens.size() == 3) {
 		try {
 			result = "Changing tape";
 			Filename filename(tokens[2].getString().str(), userFileContext());
 			//CliComm. ("token3", tokens[3]);
 			cassettePlayer.playTape(filename, time, 0);//stoi(tokens[3]));
-		} catch (MSXException& e) {
+		}
+		catch (MSXException & e) {
 			throw CommandException(std::move(e).getMessage());
 		}
 
-	} else if (tokens[1] == "motorcontrol" && tokens.size() == 3) {
+	}
+	else if (tokens[1] == "motorcontrol" && tokens.size() == 3) {
 		if (tokens[2] == "on") {
 			cassettePlayer.setMotorControl(true, time);
 			result = "Motor control enabled.";
-		} else if (tokens[2] == "off") {
+		}
+		else if (tokens[2] == "off") {
 			cassettePlayer.setMotorControl(false, time);
 			result = "Motor control disabled.";
-		} else {
+		}
+		else {
 			throw SyntaxError();
 		}
 
-	} else if (tokens.size() != 2) {
+	}
+	else if (tokens.size() != 2) {
 		throw SyntaxError();
 
-	} else if (tokens[1] == "motorcontrol") {
+	}
+	else if (tokens[1] == "motorcontrol") {
 		result = strCat("Motor control is ",
-		                (cassettePlayer.motorControl ? "on" : "off"));
+			(cassettePlayer.motorControl ? "on" : "off"));
 
-	} else if (tokens[1] == "record") {
-			result = "TODO: implement this... (sorry)";
+	}
+	else if (tokens[1] == "record") {
+		result = "TODO: implement this... (sorry)";
 
-	} else if (tokens[1] == "play") {
+	}
+	else if (tokens[1] == "play") {
 		if (cassettePlayer.getState() == CassettePlayer::RECORD) {
 			try {
 				result = "Play mode set, rewinding tape.";
 				cassettePlayer.playTape(
-					cassettePlayer.getImageName(), time,0);
-			} catch (MSXException& e) {
+					cassettePlayer.getImageName(), time, 0);
+			}
+			catch (MSXException & e) {
 				throw CommandException(std::move(e).getMessage());
 			}
-		} else if (cassettePlayer.getState() == CassettePlayer::STOP) {
+		}
+		else if (cassettePlayer.getState() == CassettePlayer::STOP) {
 			throw CommandException("No tape inserted or tape at end!");
-		} else {
+		}
+		else {
 			// PLAY mode
 			result = "Already in play mode.";
 		}
 
-	} else if (tokens[1] == "eject") {
+	}
+	else if (tokens[1] == "eject") {
 		result = "Tape ejected";
 		cassettePlayer.removeTape(time);
 
-	} else if (tokens[1] == "rewind") {
+	}
+	else if (tokens[1] == "rewind") {
 		string r;
 		if (cassettePlayer.getState() == CassettePlayer::RECORD) {
 			try {
 				r = "First stopping recording... ";
 				cassettePlayer.playTape(
-					cassettePlayer.getImageName(), time,0);
-			} catch (MSXException& e) {
+					cassettePlayer.getImageName(), time, 0);
+			}
+			catch (MSXException & e) {
 				throw CommandException(std::move(e).getMessage());
 			}
 		}
@@ -726,31 +742,34 @@ void CassettePlayer::TapeCommand::execute(
 		r += "Tape rewound";
 		result = r;
 
-	} else if (tokens[1] == "getpos") {
+	}
+	else if (tokens[1] == "getpos") {
 		result = cassettePlayer.getTapePos(time);
 
-	} else if (tokens[1] == "getlength") {
+	}
+	else if (tokens[1] == "getlength") {
 		result = cassettePlayer.getTapeLength(time);
 
-	} else {
+	}
+	else if (tokens[1] == "listblocks") {
+	result = std:TsxImage::TsxListBlocks()
+		std::make_unique<TsxImage>
+	}
+	else {
 		try {
 			result = "Changing tape";
 			Filename filename(tokens[1].getString().str(), userFileContext());
-			cassettePlayer.playTape(filename, time,0);
-		} catch (MSXException& e) {
+			cassettePlayer.playTape(filename, time, 0);
+		}
+		catch (MSXException & e) {
 			throw CommandException(std::move(e).getMessage());
 		}
-	 else if (tokens[1] == "listblocks") {
-	 result = cassettePlayer.getTapePos(time);
-	 result = "bloques";
-	 }
 	}
-	
+
 	//if (!cassettePlayer.getConnector()) {
 	//	cassettePlayer.cliComm.printWarning("Cassetteplayer not plugged in.");
 	//}
 }
-
 string CassettePlayer::TapeCommand::help(const vector<string>& tokens) const
 {
 	string helptext;

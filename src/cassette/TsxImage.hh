@@ -9,6 +9,7 @@
 #include "openmsx.hh"
 #include "endian.hh"
 #include <vector>
+#include <string>
 
 
 using namespace Endian;
@@ -135,9 +136,8 @@ private:
 	void writeTurbo0(uint16_t tstates);
 	void writeTurbo1(uint16_t tstates);
 	void writeTurboByte(byte b, uint8_t bits, uint16_t zerolen, uint16_t onelen);
-
 	void convert(const Filename& filename, FilePool& filePool, CliComm& cliComm,int pos);
-
+	std::string TsxListBlocks();
 	int8_t   currentValue = 127;
 	bool     phaseChanged = false;
 	uint32_t pulsePilot4B = 0;
