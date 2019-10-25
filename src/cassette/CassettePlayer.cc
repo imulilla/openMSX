@@ -529,7 +529,7 @@ void CassettePlayer::fillBuf(size_t length, double x)
 void CassettePlayer::flushOutput()
 {
 	try {
-		recordImage->write(buf, 1, unsigned(sampcnt));
+	recordImage->write(buf, 1, unsigned(sampcnt));
 		sampcnt = 0;
 		recordImage->flush(); // update wav header
 	} catch (MSXException& e) {
@@ -752,7 +752,7 @@ void CassettePlayer::TapeCommand::execute(
 
 	}
 	else if (tokens[1] == "listblocks") {
-	result = TsxListBlocks()
+	result = openmsx.tsximagTsxListBlocks()
 	
 	}
 	else {

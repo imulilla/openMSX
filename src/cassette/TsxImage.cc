@@ -441,7 +441,12 @@ size_t TsxImage::writeBlock4B(Block4B *b) //MSX KCS Block
 
 string TsxImage::TsxListBlocks()
 {
-	return "listabloques";
+	std::string listadobloques="";
+	for (int i = 1; i < bloques[0].posicion;i ++)
+	{
+		listadobloques = char(i)+"-"+(bloques[i].nbloque)+'\n';
+	}
+	return listadobloques;
 }
 
 void TsxImage::convert(const Filename& filename, FilePool& filePool, CliComm& cliComm,int contador)
