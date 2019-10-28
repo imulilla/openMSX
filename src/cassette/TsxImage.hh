@@ -35,6 +35,7 @@ public:
 	unsigned getFrequency() const override;
 	void fillBuffer(unsigned pos, float** bufs, unsigned num) const override;
 	float getAmplificationFactorImpl() const override;
+	static std::string TsxListBlocks();
 
 private:
 	const static uint8_t MSX_BITCFG  = 0x24;
@@ -136,7 +137,6 @@ private:
 	void writeTurbo0(uint16_t tstates);
 	void writeTurbo1(uint16_t tstates);
 	void writeTurboByte(byte b, uint8_t bits, uint16_t zerolen, uint16_t onelen);
-	std::string TsxListBlocks();
 	void convert(const Filename& filename, FilePool& filePool, CliComm& cliComm,int pos);
 	int8_t   currentValue = 127;
 	bool     phaseChanged = false;

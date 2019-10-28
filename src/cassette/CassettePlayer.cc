@@ -59,6 +59,9 @@ namespace openmsx {
 static const unsigned DUMMY_INPUT_RATE = 44100; // actual rate depends on .cas/.wav file
 static const unsigned RECORD_FREQ = 44100;
 static const double OUTPUT_AMP = 60.0;
+int nbloquetoken;
+
+
 
 static XMLElement createXML()
 {
@@ -311,6 +314,7 @@ void CassettePlayer::setImageName(const Filename& newImage)
 
 void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time,int contador)
 {
+	
 	if (!filename.empty()) {
 		FilePool& filePool = motherBoard.getReactor().getFilePool();
 		try {
@@ -662,17 +666,27 @@ void CassettePlayer::TapeCommand::execute(
 			", inserted it and set recording mode.");
 
 	}
-	else if (tokens[1] == "insert" && tokens.size() == 3) {
-		try {
-			result = "Changing tape";
+	//else if ((tokens[1] == "insert") or (tokens[1] == "position")) && (tokens.size() > 2))
+	else if ((tokens[1] == "insert") && (tokens.size() > 2))
+	{
+		try
+		{
 			Filename filename(tokens[2].getString().str(), userFileContext());
-			//CliComm. ("token3", tokens[3]);
-			cassettePlayer.playTape(filename, time, 0);//stoi(tokens[3]));
+			if (tokens[1] == "insert")
+			{
+				nbloquetoken = 0;
+				result = "Changing tape";
+			}
+			else
+			{
+				nbloquetoken = std::stoi(tokens[3].getString().str());
+				result = "positioned in the block", (tokens[3].getString().str());
+			}
+			cassettePlayer.playTape(filename, time, nbloquetoken);
 		}
 		catch (MSXException & e) {
 			throw CommandException(std::move(e).getMessage());
 		}
-
 	}
 	else if (tokens[1] == "motorcontrol" && tokens.size() == 3) {
 		if (tokens[2] == "on") {
@@ -752,8 +766,7 @@ void CassettePlayer::TapeCommand::execute(
 
 	}
 	else if (tokens[1] == "listblocks") {
-	result = openmsx.tsximagTsxListBlocks()
-	
+		result = TsxImage::TsxListBlocks();
 	}
 	else {
 		try {
@@ -789,7 +802,7 @@ string CassettePlayer::TapeCommand::help(const vector<string>& tokens) const
 			    "cassette player: it makes the cassette player "
 			    "run (if in play mode); the motor signal from the "
 			    "MSX will be ignored. Normally this is set to "
-			    "'on': the cassetteplayer obeys the motor control "
+			-    "'on': the cassetteplayer obeys the motor control "
 			    "signal from the MSX.";
 		} else if (tokens[1] == "play") {
 			helptext =
