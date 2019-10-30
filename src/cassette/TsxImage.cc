@@ -444,13 +444,19 @@ size_t TsxImage::writeBlock4B(Block4B *b) //MSX KCS Block
 string TsxImage::TsxListBlocks()
 {
 	
-	std::string listadobloques="";
+	std::string listadobloques="Nº - Bloque\r";
 	if (bloques.size()> 0) {
+		
 		for (int i = 1; i <= bloques[0].posicion; i++)
 		{
-			listadobloques = ((char(49)))+"-"+(bloques[i].nbloque);
+			
+			listadobloques = listadobloques + (std::to_string(i)) + " - " + (bloques[i].nbloque);
+
+		
 		}
+		
 	}
+	
 	return listadobloques;
 }
 
