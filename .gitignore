@@ -13,3 +13,6 @@ core
 *.VC.db
 *.VC.VC.opendb
 __pycache__/
+.vs
+*.user*
+*.pyc
