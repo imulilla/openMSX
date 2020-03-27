@@ -696,7 +696,7 @@ proc create_main_menu {} {
 	         actions { A { osd_menu::menu_create [osd_menu::menu_create_load_state] }}
 	         post-spacing 3 }
 	lappend items { text "Hardware..."
-	         actions { A { osd_menu::menu_create $osd_menu::hardware_menu }}
+	         actions { A { osd_menu::menu_create [osd_menu::create_hardware_menu] }}
 	         post-spacing 3 }
 	lappend items { text "Misc Settings..."
 	         actions { A { osd_menu::menu_create $osd_menu::misc_setting_menu }}}
@@ -909,25 +909,36 @@ proc create_video_setting_menu {} {
 	return $menu_def
 }
 
-set hardware_menu {
-	font-size 8
-	border-size 2
-	width 175
-	xpos 100
-	ypos 120
-	items {{ text "Hardware"
-	         font-size 10
-	         post-spacing 6
-	         selectable false }
-	       { text "Change Machine..."
-	         actions { A { osd_menu::menu_create [osd_menu::menu_create_load_machine_list]; catch { osd_menu::select_menu_item [machine_info config_name]} }}}
-	       { text "Set Current Machine as Default"
-	         actions { A { set ::default_machine [machine_info config_name]; osd_menu::menu_close_top }}}
-	       { text "Extensions..."
-	         actions { A { osd_menu::menu_create $osd_menu::extensions_menu }}}
-	       { text "Connectors..."
-	         actions { A { osd_menu::menu_create [osd_menu::menu_create_connectors_list] }}}
-	 }}
+proc create_hardware_menu {} {
+
+	set menu_def {
+		font-size 8
+		border-size 2
+		width 175
+		xpos 100
+		ypos 120
+	}
+	lappend items { text "Hardware"
+			 font-size 10
+			 post-spacing 6
+			 selectable false }
+	lappend items { text "Change Machine..."
+			 actions { A { osd_menu::menu_create [osd_menu::menu_create_load_machine_list]; catch { osd_menu::select_menu_item [machine_info config_name]} }}}
+	lappend items { text "Set Current Machine as Default"
+			 actions { A { set ::default_machine [machine_info config_name]; osd_menu::menu_close_top }}}
+	lappend items { text "Extensions..."
+			 actions { A { osd_menu::menu_create $osd_menu::extensions_menu }}}
+	lappend items { text "Connectors..."
+			 actions { A { osd_menu::menu_create [osd_menu::menu_create_connectors_list] }}}
+	if {![catch {openmsx_info setting firmwareswitch}]} {
+		lappend items { text "Firmware switch active: $::firmwareswitch"
+			actions { LEFT  { osd_menu::menu_setting [cycle_back firmwareswitch] }
+			          RIGHT { osd_menu::menu_setting [cycle      firmwareswitch] }}}
+
+	}
+	dict set menu_def items $items
+	return $menu_def
+}
 
 set extensions_menu {
 	font-size 8
@@ -1734,28 +1745,38 @@ proc confirm_change_hdd {item result} {
 }
 
 proc menu_create_ld_list {path} {
-	set eject_item [list]
-	set inserted [lindex [laserdiscplayer] 1]
-	if {$inserted ne ""} {
-		lappend eject_item "--eject-- [file tail $inserted]"
+	set menu_def [list execute menu_select_ld \
+		font-size 8 \
+		border-size 2 \
+		width 200 \
+		xpos 100 \
+		ypos 120 \
+		header { text "LaserDiscs $::osd_ld_path" \
+			font-size 10 \
+			post-spacing 6 }]
+	set cur_image [lindex [laserdiscplayer] 1]
+	set extensions "ogv"
+	set items [list]
+	set presentation [list]
+	if {$cur_image ne ""} {
+		lappend items "--eject--"
+		lappend presentation "--eject-- [file tail $cur_image]"
 	}
-	return [prepare_menu_list [concat $eject_item [ls $path "ogv"]] \
-	                          10 \
-	                          { execute menu_select_ld
-	                            font-size 8
-	                            border-size 2
-	                            width 200
-	                            xpos 100
-	                            ypos 120
-	                            header { text "Laserdiscs $::osd_ld_path"
-	                                     font-size 10
-	                                     post-spacing 6 }}]
+
+	set files [ls $path $extensions]
+	set items [concat $items $files]
+	set presentation [concat $presentation $files]
+
+	lappend menu_def presentation $presentation
+	return [prepare_menu_list $items 10 $menu_def]
 }
 
 proc menu_select_ld {item} {
-	if {[string range $item 0 8] eq "--eject--"} {
+	if {$item eq "--eject--"} {
 		menu_close_all
 		osd::display_message [laserdiscplayer eject]
+		set cur_image [lindex [laserdiscplayer] 1]
+		osd::display_message "LaserDisc $cur_image ejected!"
 	} else {
 		set fullname [file join $::osd_ld_path $item]
 		if {[file isdirectory $fullname]} {
