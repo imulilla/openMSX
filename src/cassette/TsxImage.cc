@@ -14,7 +14,7 @@
 #include <cstring> // for memcmp/memcpy
 #include <iostream>
 #include <fstream>
-#include <cassette\CassettePlayer.hh>
+#include <cassette/CassettePlayer.hh>
 
 namespace openmsx {
 

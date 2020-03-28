@@ -8,7 +8,7 @@
 #include "stl.hh"
 #include "xrange.hh"
 #include <cstring> // for memcmp
-#include <cassette\CassettePlayer.hh>
+#include <cassette/CassettePlayer.hh>
 
 namespace openmsx {
 
