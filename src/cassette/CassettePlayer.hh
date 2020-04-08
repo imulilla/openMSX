@@ -33,10 +33,12 @@ public:
 	void setMotor(bool status, EmuTime::param time) override;
 	int16_t readSample(EmuTime::param time) override;
 	void setSignal(bool output, EmuTime::param time) override;
+	static std::string ListSections(int seccion);
+	static void AddSection(unsigned pos, std::string name,std::string tipo);
 
 	// Pluggable
 	const std::string& getName() const override;
-	string_view getDescription() const override;
+	std::string_view getDescription() const override;
 	void plugHelper(Connector& connector, EmuTime::param time) override;
 	void unplugHelper(EmuTime::param time) override;
 
@@ -58,10 +60,11 @@ private:
 	const Filename& getImageName() const { return casImage; }
 	void checkInvariants() const;
 
+
 	/** Insert a tape for use in PLAY mode.
 	 */
-	void playTape(const Filename& filename, EmuTime::param time,int contador);
-	void insertTape(const Filename& filename, EmuTime::param time,int contador);
+	void playTape(const Filename& filename, EmuTime::param time, size_t posicioncinta);
+	void insertTape(const Filename& filename, EmuTime::param time, size_t posicioncinta);
 
 	/** Removes tape (possibly stops recording). And go to STOP mode.
 	 */
@@ -136,7 +139,7 @@ private:
 	void execSyncAudioEmu(EmuTime::param time);
 	EmuTime::param getCurrentTime() const { return syncEndOfTape.getCurrentTime(); }
 
-	static const size_t BUF_SIZE = 1024;
+	static constexpr size_t BUF_SIZE = 1024;
 	unsigned char buf[BUF_SIZE];
 
 	double lastX; // last unfiltered output
