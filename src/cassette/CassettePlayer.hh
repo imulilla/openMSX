@@ -33,7 +33,7 @@ public:
 	void setMotor(bool status, EmuTime::param time) override;
 	int16_t readSample(EmuTime::param time) override;
 	void setSignal(bool output, EmuTime::param time) override;
-	static std::string ListSections();
+	static std::string ListSections(int seccion);
 	static void AddSection(unsigned pos, std::string name,std::string tipo);
 
 	// Pluggable

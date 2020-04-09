@@ -120,7 +120,8 @@ CassettePlayer::~CassettePlayer()
 void CassettePlayer::autoRun()
 {
 	if (!playImage) return;
-
+	//if ((bloques[0].posicion > 0)&&(bloques[0]="TSX")) return;
+	
 	// try to automatically run the tape, if that's set
 	CassetteImage::FileType type = playImage->getFirstFileType();
 	if (!autoRunSetting.getBoolean() || type == CassetteImage::UNKNOWN) {
@@ -341,7 +342,7 @@ void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time, s
 					playImage = std::make_unique<TsxImage>(
 						filename, filePool,
 						motherBoard.getMSXCliComm(), posicioncinta);
-				}
+					}
 				catch (MSXException& e3) {
 
 				throw MSXException(
@@ -636,23 +637,32 @@ void CassettePlayer::execSyncAudioEmu(EmuTime::param time)
 }
 
 
-string CassettePlayer::ListSections()
+string CassettePlayer::ListSections(int seccion)
 {
-
-	std::string listadosecciones = "N - Bloque - Tipo - Posicion\n";
-	if (bloques.size() > 0) {
-
-		for (int i = 1; i <= bloques[0].posicion; i++)
+	std::string listadosecciones="";
+	if (bloques.size() > 0)
+	{
+		if (seccion == -1)
 		{
+			listadosecciones = "N - Bloque - Tipo - Posicion\n";
 
-			listadosecciones = listadosecciones + (std::to_string(i)) + " - " + (bloques[i].nbloque) + " - " + (bloques[i].tipo) + " - " + (std::to_string(bloques[i].posicion)) + "\n";
 
-
+			for (int i = 1; i <= bloques[0].posicion; i++)
+			{
+				listadosecciones = listadosecciones + (std::to_string(i)) + " - " + (bloques[i].nbloque) + " - " + (bloques[i].tipo) + " - " + (std::to_string(bloques[i].posicion)) + "\n";
+			}
 		}
-
+		else
+		{
+			if (seccion == 0) listadosecciones = (bloques[0].posicion);
+			else
+			{
+				listadosecciones = (bloques[seccion].nbloque);
+			}
+			
+		}
+		return listadosecciones;
 	}
-
-	return listadosecciones;
 }
 
 void CassettePlayer::AddSection(unsigned pos,std::string name,std::string tipo)
@@ -662,7 +672,6 @@ void CassettePlayer::AddSection(unsigned pos,std::string name,std::string tipo)
 	bloques[(bloques[0].posicion) + 1].posicion = pos;
 	bloques[(bloques[0].posicion) + 1].tipo = tipo;
 	bloques[0].posicion = bloques[0].posicion + 1;
-	//TclObject options = makeTclList(cassettePlayer.getStateString());result.addListElement(getName() + ':',,options);
 }
 
 // class TapeCommand
@@ -735,6 +744,21 @@ void CassettePlayer::TapeCommand::execute(
 		} else {
 			throw SyntaxError();
 		}
+	}
+	else if (tokens[1] == "listsections") {
+		if (tokens.size() == 2)
+		{
+			result = cassettePlayer.ListSections(-1);
+		}
+		else
+		{
+			if (tokens.size() == 3 &&
+				(std::stoi(string(tokens[2].getString())) > -1) &&
+				(std::stoi(string(tokens[2].getString())) <= bloques[0].posicion))
+			{
+				result = cassettePlayer.ListSections(std::stoi(string(tokens[2].getString())));
+			}
+		}
 
 	} else if (tokens.size() != 2) {
 		throw SyntaxError();
@@ -787,11 +811,6 @@ void CassettePlayer::TapeCommand::execute(
 	}
 	else if (tokens[1] == "getlength") {
 		result = cassettePlayer.getTapeLength(time);
-
-	}
-	else if (tokens[1] == "listsections") {
-		result = cassettePlayer.ListSections();
-
 	} else {
 		try {
 			result = "Changing tape";
@@ -850,7 +869,8 @@ string CassettePlayer::TapeCommand::help(const vector<string>& tokens) const
 			    "used to be able to resume recording to an "
 			    "existing cassette image, previously inserted with "
 			    "the insert command.";
-		} else if (tokens[1] == "getpos") {
+		} else if (tokens[1]
+			== "getpos") {
 			helptext =
 			    "Return the position of the tape, in seconds from "
 			    "the beginning of the tape.";
@@ -880,8 +900,8 @@ string CassettePlayer::TapeCommand::help(const vector<string>& tokens) const
 		    ": query the total length of the tape\n"
 		    "cassetteplayer <filename>        "
 		    ": insert (a different) tape file\n"
-			"cassetteplayer listsections      "
-			": List selectable tape blocks\n"
+			"cassetteplayer listsections #    "
+			": List selectable tape blocks or shows the name of the block.With 0 it returns the number of blocks\n"
 			"cassetteplayer section <number>  "
 			": Load the tape in the selected block\n";
 	}
