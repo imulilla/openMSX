@@ -3,6 +3,7 @@
 #include "HardwareConfig.hh"
 #include "MSXMotherBoard.hh"
 #include "MSXException.hh"
+#include "one_of.hh"
 #include <cassert>
 
 using std::string;
@@ -50,6 +51,11 @@ std::string_view MSXRomCLI::fileTypeHelp() const
 	return text;
 }
 
+std::string_view MSXRomCLI::fileTypeCategoryName() const
+{
+	return "rom";
+}
+
 void MSXRomCLI::parse(const string& arg, const string& slotname,
                       span<string>& cmdLine)
 {
@@ -57,7 +63,7 @@ void MSXRomCLI::parse(const string& arg, const string& slotname,
 	std::vector<TclObject> options;
 	while (true) {
 		string option = peekArgument(cmdLine);
-		if ((option == "-ips") || (option == "-romtype")) {
+		if (option == one_of("-ips", "-romtype")) {
 			options.emplace_back(option);
 			cmdLine = cmdLine.subspan(1);
 			options.emplace_back(getArgument(option, cmdLine));

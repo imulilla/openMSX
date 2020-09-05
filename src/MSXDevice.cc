@@ -9,6 +9,7 @@
 #include "TclObject.hh"
 #include "Math.hh"
 #include "MSXException.hh"
+#include "one_of.hh"
 #include "ranges.hh"
 #include "serialize.hh"
 #include "stl.hh"
@@ -178,7 +179,8 @@ void MSXDevice::registerSlots()
 				getName(), " should be in range "
 				"[0x0000,0x10000).");
 		}
-		if ((base & (align - 1)) || (size & (align - 1))) {
+		if (((base & (align - 1)) || (size & (align - 1))) &&
+		    !allowUnaligned()) {
 			throw MSXException(
 				"invalid memory specification for device ",
 				getName(), " should be aligned on at least 0x",
@@ -329,15 +331,15 @@ void MSXDevice::registerPorts()
 		unsigned num  = i->getAttributeAsInt("num");
 		const auto& type = i->getAttribute("type", "IO");
 		if (((base + num) > 256) || (num == 0) ||
-		    ((type != "I") && (type != "O") && (type != "IO"))) {
+		    (type != one_of("I", "O", "IO"))) {
 			throw MSXException("Invalid IO port specification");
 		}
 		for (unsigned port = base; port < base + num; ++port) {
-			if ((type == "I") || (type == "IO")) {
+			if (type == one_of("I", "IO")) {
 				getCPUInterface().register_IO_In(port, this);
 				inPorts.push_back(port);
 			}
-			if ((type == "O") || (type == "IO")) {
+			if (type == one_of("O", "IO")) {
 				getCPUInterface().register_IO_Out(port, this);
 				outPorts.push_back(port);
 			}
@@ -512,14 +514,17 @@ void MSXDevice::fillDeviceRWCache(unsigned start, unsigned size, byte* rwData)
 }
 void MSXDevice::fillDeviceRWCache(unsigned start, unsigned size, const byte* rData, byte* wData)
 {
+	assert(!allowUnaligned());
 	clip(start, size, [&](auto... args) { getCPUInterface().fillRWCache(args...); }, rData, wData);
 }
 void MSXDevice::fillDeviceRCache(unsigned start, unsigned size, const byte* rData)
 {
+	assert(!allowUnaligned());
 	clip(start, size, [&](auto... args) { getCPUInterface().fillRCache(args...); }, rData);
 }
 void MSXDevice::fillDeviceWCache(unsigned start, unsigned size, byte* wData)
 {
+	assert(!allowUnaligned());
 	clip(start, size, [&](auto... args) { getCPUInterface().fillWCache(args...); }, wData);
 }
 

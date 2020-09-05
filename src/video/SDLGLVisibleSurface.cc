@@ -4,11 +4,16 @@
 #include "GLSnow.hh"
 #include "OSDConsoleRenderer.hh"
 #include "OSDGUILayer.hh"
+#include "Display.hh"
+#include "RenderSettings.hh"
+#include "CliComm.hh"
 #include "PNG.hh"
 #include "build-info.hh"
 #include "MemBuffer.hh"
+#include "outer.hh"
 #include "vla.hh"
 #include "InitException.hh"
+#include "unreachable.hh"
 #include <memory>
 
 namespace openmsx {
@@ -79,10 +84,16 @@ SDLGLVisibleSurface::SDLGLVisibleSurface(
 
 	setOpenGlPixelFormat();
 	gl::context = std::make_unique<gl::Context>(width, height);
+
+	getDisplay().getRenderSettings().getVSyncSetting().attach(vSyncObserver);
+	// set initial value
+	vSyncObserver.update(getDisplay().getRenderSettings().getVSyncSetting());
 }
 
 SDLGLVisibleSurface::~SDLGLVisibleSurface()
 {
+	getDisplay().getRenderSettings().getVSyncSetting().detach(vSyncObserver);
+
 	gl::context.reset();
 	SDL_GL_DeleteContext(glContext);
 }
@@ -134,6 +145,24 @@ std::unique_ptr<Layer> SDLGLVisibleSurface::createOSDGUILayer(OSDGUI& gui)
 std::unique_ptr<OutputSurface> SDLGLVisibleSurface::createOffScreenSurface()
 {
 	return std::make_unique<SDLGLOffScreenSurface>(*this);
+}
+
+void SDLGLVisibleSurface::VSyncObserver::update(const Setting& setting)
+{
+	auto& surface = OUTER(SDLGLVisibleSurface, vSyncObserver);
+	auto& syncSetting = surface.getDisplay().getRenderSettings().getVSyncSetting();
+	assert(&setting == &syncSetting); (void)setting;
+
+	// for now, we assume that adaptive vsync is the best kind of vsync, so when
+	// vsync is enabled, we attempt adaptive vsync.
+	int interval = syncSetting.getBoolean() ? -1 : 0;
+
+	if ((SDL_GL_SetSwapInterval(interval) < 0) && (interval == -1)) {
+		// "Adaptive vsync" is not supported by all drivers. SDL
+		// documentation suggests to fallback to "regular vsync" in
+		// that case.
+		SDL_GL_SetSwapInterval(1);
+	}
 }
 
 } // namespace openmsx

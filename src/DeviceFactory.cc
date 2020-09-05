@@ -26,7 +26,8 @@
 #include "MSXMoonSound.hh"
 #include "MSXOPL3Cartridge.hh"
 #include "MSXYamahaSFG.hh"
-#include "MC6850.hh"
+#include "MusicModuleMIDI.hh"
+#include "JVCMSXMIDI.hh"
 #include "MSXKanji.hh"
 #include "MSXBunsetsu.hh"
 #include "MSXMemoryMapper.hh"
@@ -80,6 +81,7 @@
 #include "CliComm.hh"
 #include "MSXException.hh"
 #include "components.hh"
+#include "one_of.hh"
 #include <memory>
 
 #if COMPONENT_LASERDISC
@@ -104,7 +106,7 @@ static unique_ptr<MSXDevice> createWD2793BasedFDC(const DeviceConfig& conf)
 	} else {
 		type = styleEl->getData();
 	}
-	if ((type == "Philips") || (type == "Sony")) {
+	if (type == one_of("Philips", "Sony")) {
 		return make_unique<PhilipsFDC>(conf);
 	} else if (type == "Microsol") {
 		return make_unique<MicrosolFDC>(conf);
@@ -142,7 +144,7 @@ unique_ptr<MSXDevice> DeviceFactory::create(const DeviceConfig& conf)
 		result = make_unique<MSXE6Timer>(conf);
 	} else if (type == "HiResTimer") {
 		result = make_unique<MSXHiResTimer>(conf);
-	} else if (type == "ResetStatusRegister" || type == "F4Device") {
+	} else if (type == one_of("ResetStatusRegister", "F4Device")) {
 		result = make_unique<MSXResetStatusRegister>(conf);
 	} else if (type == "TurboRPause") {
 		result = make_unique<MSXTurboRPause>(conf);
@@ -171,7 +173,9 @@ unique_ptr<MSXDevice> DeviceFactory::create(const DeviceConfig& conf)
 	} else if (type == "MSX-AUDIO") {
 		result = make_unique<MSXAudio>(conf);
 	} else if (type == "MusicModuleMIDI") {
-		result = make_unique<MC6850>(conf);
+		result = make_unique<MusicModuleMIDI>(conf);
+	} else if (type == "JVCMSXMIDI") {
+		result = make_unique<JVCMSXMIDI>(conf);
 	} else if (type == "FACMIDIInterface") {
 		result = make_unique<MSXFacMidiInterface>(conf);
 	} else if (type == "YamahaSFG") {
@@ -200,7 +204,7 @@ unique_ptr<MSXDevice> DeviceFactory::create(const DeviceConfig& conf)
 		result = make_unique<SVIPrinterPort>(conf);
 	} else if (type == "SCCplus") { // Note: it's actually called SCC-I
 		result = make_unique<MSXSCCPlusCart>(conf);
-	} else if ((type == "WD2793") || (type == "WD1770")) {
+	} else if (type == one_of("WD2793", "WD1770")) {
 		result = createWD2793BasedFDC(conf);
 	} else if (type == "Microsol") {
 		conf.getCliComm().printWarning(

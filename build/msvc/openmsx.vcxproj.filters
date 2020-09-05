@@ -402,6 +402,9 @@
     <ClCompile Include="$(OpenMSXSrcDir)\file\FilePool.cc">
       <Filter>file</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\file\FilePoolCore.cc">
+      <Filter>file</Filter>
+    </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\file\GZFileAdapter.cc">
       <Filter>file</Filter>
     </ClCompile>
@@ -912,6 +915,15 @@
     <ClCompile Include="$(OpenMSXSrcDir)\sound\YM2413Okazaki.cc">
       <Filter>sound</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\sound\YM2413NukeYKT.cc">
+      <Filter>sound</Filter>
+    </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\sound\YM2413OriginalNukeYKT.cc">
+      <Filter>sound</Filter>
+    </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\sound\opll.cc">
+      <Filter>sound</Filter>
+    </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\sound\YMF262.cc">
       <Filter>sound</Filter>
     </ClCompile>
@@ -1152,6 +1164,9 @@
     <ClCompile Include="$(OpenMSXSrcDir)\serial\I8254.cc">
       <Filter>serial</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\serial\JVCMSXMIDI.cc">
+      <Filter>serial</Filter>
+    </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\serial\MC6850.cc">
       <Filter>serial</Filter>
     </ClCompile>
@@ -1186,6 +1201,9 @@
       <Filter>serial</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\serial\MSXMidi.cc">
+      <Filter>serial</Filter>
+    </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\serial\MusicModuleMIDI.cc">
       <Filter>serial</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\serial\MSXRS232.cc">
@@ -1736,6 +1754,9 @@
       <Filter>file</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\file\FilePool.hh">
+      <Filter>file</Filter>
+    </None>
+    <None Include="$(OpenMSXSrcDir)\file\FilePoolCore.hh">
       <Filter>file</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\file\GZFileAdapter.hh">
@@ -2293,6 +2314,18 @@
     <None Include="$(OpenMSXSrcDir)\sound\YM2413Okazaki.hh">
       <Filter>sound</Filter>
     </None>
+    <None Include="$(OpenMSXSrcDir)\sound\YM2413NukeYKT.hh">
+      <Filter>sound</Filter>
+    </None>
+    <None Include="$(OpenMSXSrcDir)\sound\YM2413NukeYktTables.ii">
+      <Filter>sound</Filter>
+    </None>
+    <None Include="$(OpenMSXSrcDir)\sound\YM2413OriginalNukeYKT.hh">
+      <Filter>sound</Filter>
+    </None>
+    <None Include="$(OpenMSXSrcDir)\sound\opll.hh">
+      <Filter>sound</Filter>
+    </None>
     <None Include="$(OpenMSXSrcDir)\sound\YMF262.hh">
       <Filter>sound</Filter>
     </None>
@@ -2366,6 +2399,9 @@
       <Filter>utils</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\utils\Observer.hh">
+      <Filter>utils</Filter>
+    </None>
+    <None Include="$(OpenMSXSrcDir)\utils\one_of.hh">
       <Filter>utils</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\utils\ref.hh">
@@ -2659,6 +2695,9 @@
     <None Include="$(OpenMSXSrcDir)\serial\I8254.hh">
       <Filter>serial</Filter>
     </None>
+    <None Include="$(OpenMSXSrcDir)\serial\JVCMSXMIDI.hh">
+      <Filter>serial</Filter>
+    </None>
     <None Include="$(OpenMSXSrcDir)\serial\MC6850.hh">
       <Filter>serial</Filter>
     </None>
@@ -2693,6 +2732,9 @@
       <Filter>serial</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\serial\MSXMidi.hh">
+      <Filter>serial</Filter>
+    </None>
+    <None Include="$(OpenMSXSrcDir)\serial\MusicModuleMIDI.hh">
       <Filter>serial</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\serial\MSXRS232.hh">

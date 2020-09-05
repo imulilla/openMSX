@@ -370,12 +370,10 @@ ResampleCoeffs::Table ResampleCoeffs::calcTable(
 
 template <unsigned CHANNELS>
 ResampleHQ<CHANNELS>::ResampleHQ(
-		ResampledSoundDevice& input_,
-		const DynamicClock& hostClock_, unsigned emuSampleRate)
-	: input(input_)
+		ResampledSoundDevice& input_, const DynamicClock& hostClock_)
+	: ResampleAlgo(input_)
 	, hostClock(hostClock_)
-	, emuClock(hostClock.getTime(), emuSampleRate)
-	, ratio(float(emuSampleRate) / hostClock.getFreq())
+	, ratio(float(hostClock.getPeriod().toDouble() / getEmuClock().getPeriod().toDouble()))
 {
 	ResampleCoeffs::instance().getCoeffs(double(ratio), permute, table, filterLen);
 
@@ -640,10 +638,11 @@ void ResampleHQ<CHANNELS>::prepareData(unsigned emuNum)
 }
 
 template <unsigned CHANNELS>
-bool ResampleHQ<CHANNELS>::generateOutput(
+bool ResampleHQ<CHANNELS>::generateOutputImpl(
 	float* __restrict dataOut, unsigned hostNum, EmuTime::param time)
 {
-	unsigned emuNum = emuClock.getTicksTill(time);
+	auto& emuClk = getEmuClock();
+	unsigned emuNum = emuClk.getTicksTill(time);
 	if (emuNum > 0) {
 		prepareData(emuNum);
 	}
@@ -652,15 +651,15 @@ bool ResampleHQ<CHANNELS>::generateOutput(
 	if (notMuted) {
 		// main processing loop
 		EmuTime host1 = hostClock.getFastAdd(1);
-		assert(host1 > emuClock.getTime());
-		float pos = emuClock.getTicksTillDouble(host1);
+		assert(host1 > emuClk.getTime());
+		float pos = emuClk.getTicksTillDouble(host1);
 		assert(pos <= (ratio + 2));
 		for (unsigned i = 0; i < hostNum; ++i) {
 			calcOutput(pos, &dataOut[i * CHANNELS]);
 			pos += ratio;
 		}
 	}
-	emuClock += emuNum;
+	emuClk += emuNum;
 	bufStart += emuNum;
 	nonzeroSamples = std::max<int>(0, nonzeroSamples - emuNum);
 

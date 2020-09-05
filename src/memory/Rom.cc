@@ -123,7 +123,7 @@ void Rom::init(MSXMotherBoard& motherBoard, const XMLElement& config,
 		}
 		// .. then try the actual sha1sum ..
 		auto fileType = context.isUserContext()
-			? FilePool::ROM : FilePool::SYSTEM_ROM;
+			? FileType::ROM : FileType::SYSTEM_ROM;
 		if (!file.is_open() && resolvedSha1Elem) {
 			Sha1Sum sha1(resolvedSha1Elem->getData());
 			file = filepool.getFile(fileType, sha1);
@@ -318,7 +318,7 @@ void Rom::init(MSXMotherBoard& motherBoard, const XMLElement& config,
 	}
 }
 
-bool Rom::checkSHA1(const XMLElement& config)
+bool Rom::checkSHA1(const XMLElement& config) const
 {
 	auto sums = config.getChildren("sha1");
 	if (sums.empty()) {

@@ -72,6 +72,7 @@ protected:
 	  * @param name Name for this device, will be made unique
 	  * @param description Description for this sound device
 	  * @param numChannels The number of channels for this device
+	  * @param inputRate The sample rate of this sound device
 	  * @param stereo Is this a stereo device
 	  */
 	SoundDevice(MSXMixer& mixer, std::string_view name, std::string_view description,
@@ -126,7 +127,7 @@ public: // Will be called by Mixer:
 	  *
 	  * This method is regularly called from the Mixer, it should return a
 	  * pointer to a buffer filled with the required number of samples.
-	  * Samples are always ints, later they are converted to the systems
+	  * Samples are always floats, later they are converted to the systems
 	  * native format (e.g. 16-bit signed).
 	  *
 	  * Note: To enable various optimizations (like SSE), this method can

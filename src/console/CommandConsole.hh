@@ -46,14 +46,7 @@ public:
 	/** Get the text for the i-th chunk. */
 	std::string_view chunkText(size_t i) const;
 
-	/** Get a part of total line. The result keeps the same colors as this
-	  * line. E.g. used to get part of (long) line that should be wrapped
-	  * over multiple console lines.
-	  * @param pos First character (multi-byte sequence counted as 1
-	  *            character).
-	  * @param len Length of the substring, also counted in characters
-	  */
-	ConsoleLine substr(size_t pos, size_t len) const;
+	const auto& getChunks() const { return chunks; }
 
 private:
 	std::string line;
@@ -73,13 +66,14 @@ public:
 	BooleanSetting& getConsoleSetting() { return consoleSetting; }
 
 	unsigned getScrollBack() const { return consoleScrollBack; }
-	ConsoleLine getLine(unsigned line) const;
 	void getCursorPosition(unsigned& xPosition, unsigned& yPosition) const;
 
 	void setColumns(unsigned columns_) { columns = columns_; }
 	unsigned getColumns() const { return columns; }
 	void setRows(unsigned rows_) { rows = rows_; }
 	unsigned getRows() const { return rows; }
+
+	const auto& getLines() const { return lines; }
 
 private:
 	// InterpreterOutput
@@ -93,9 +87,14 @@ private:
 	void tabCompletion();
 	void commandExecute();
 	void scroll(int delta);
+	void gotoStartOfWord();
+	void deleteToStartOfWord();
+	void gotoEndOfWord();
+	void deleteToEndOfWord();
 	void prevCommand();
 	void nextCommand();
 	void clearCommand();
+	void clearHistory();
 	void backspace();
 	void delete_key();
 	void normalKey(uint32_t chr);
@@ -104,6 +103,7 @@ private:
 	void newLineConsole(ConsoleLine line);
 	void putPrompt();
 	void resetScrollBack();
+	void paste();
 	ConsoleLine highLight(std::string_view line);
 
 	/** Prints a string on the console.

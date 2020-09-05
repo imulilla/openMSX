@@ -30,7 +30,7 @@ void CassettePlayerCLI::parseFileType(const string& filename,
                                       span<string>& /*cmdLine*/)
 {
 	if (!parser.getGlobalCommandController().hasCommand("cassetteplayer")) {
-		throw MSXException("No cassetteplayer.");
+		throw MSXException("No cassette player present.");
 	}
 	TclObject command = makeTclList("cassetteplayer", filename);
 	command.executeCommand(parser.getInterpreter());
@@ -39,6 +39,11 @@ void CassettePlayerCLI::parseFileType(const string& filename,
 std::string_view CassettePlayerCLI::fileTypeHelp() const
 {
 	return "Cassette image, raw recording or fMSX CAS image";
+}
+
+std::string_view CassettePlayerCLI::fileTypeCategoryName() const
+{
+	return "cassette";
 }
 
 } // namespace openmsx

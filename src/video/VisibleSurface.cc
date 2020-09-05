@@ -7,6 +7,7 @@
 #include "Event.hh"
 #include "EventDistributor.hh"
 #include "InputEventGenerator.hh"
+#include "one_of.hh"
 #include <cassert>
 
 namespace openmsx {
@@ -27,7 +28,7 @@ VisibleSurface::VisibleSurface(
 {
 	auto& renderSettings = display.getRenderSettings();
 
-	inputEventGenerator_.getGrabInput().attach(*this);
+	inputEventGenerator.getGrabInput().attach(*this);
 	renderSettings.getPointerHideDelaySetting().attach(*this);
 	renderSettings.getFullScreenSetting().attach(*this);
 	eventDistributor.registerEventListener(
@@ -63,15 +64,15 @@ void VisibleSurface::executeRT()
 {
 	// timer expired, hide cursor
 	videoSystem.showCursor(false);
+	inputEventGenerator.updateGrab(grab);
 }
 
 int VisibleSurface::signalEvent(const std::shared_ptr<const Event>& event)
 {
-	EventType type = event->getType();
-	assert((type == OPENMSX_MOUSE_MOTION_EVENT) ||
-	       (type == OPENMSX_MOUSE_BUTTON_UP_EVENT) ||
-	       (type == OPENMSX_MOUSE_BUTTON_DOWN_EVENT));
-	(void)type;
+	assert(event->getType() == one_of(OPENMSX_MOUSE_MOTION_EVENT,
+	                                  OPENMSX_MOUSE_BUTTON_UP_EVENT,
+	                                  OPENMSX_MOUSE_BUTTON_DOWN_EVENT));
+	(void)event;
 	updateCursor();
 	return 0;
 }
@@ -80,13 +81,15 @@ void VisibleSurface::updateCursor()
 {
 	cancelRT();
 	auto& renderSettings = display.getRenderSettings();
-	if (renderSettings.getFullScreen() ||
-	    inputEventGenerator.getGrabInput().getBoolean()) {
+	grab = renderSettings.getFullScreen() ||
+	       inputEventGenerator.getGrabInput().getBoolean();
+	if (grab) {
 		// always hide cursor in fullscreen or grabinput mode, but do it
 		// after the derived class is constructed to avoid an SDL bug.
 		scheduleRT(0);
 		return;
 	}
+	inputEventGenerator.updateGrab(grab);
 	float delay = renderSettings.getPointerHideDelay();
 	if (delay == 0.0f) {
 		videoSystem.showCursor(false);

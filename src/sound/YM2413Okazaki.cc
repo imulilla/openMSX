@@ -8,6 +8,7 @@
 #include "Math.hh"
 #include "cstd.hh"
 #include "inline.hh"
+#include "one_of.hh"
 #include "ranges.hh"
 #include "serialize.hh"
 #include "unreachable.hh"
@@ -743,6 +744,7 @@ void YM2413::reset()
 	for (unsigned i = 0; i < 0x40; ++i) {
 		writeReg(i, 0);
 	}
+	registerLatch = 0;
 }
 
 // Drum key on
@@ -963,7 +965,7 @@ void Slot::calc_envelope_outline(unsigned& out)
 template <bool HAS_AM, bool FIXED_ENV>
 ALWAYS_INLINE unsigned Slot::calc_envelope(int lfo_am, unsigned fixed_env)
 {
-	assert(!FIXED_ENV || (state == SUSHOLD) || (state == FINISH));
+	assert(!FIXED_ENV || (state == one_of(SUSHOLD, FINISH)));
 
 	if (FIXED_ENV) {
 		unsigned out = fixed_env;
@@ -992,7 +994,7 @@ ALWAYS_INLINE unsigned Slot::calc_envelope(int lfo_am, unsigned fixed_env)
 }
 template <bool HAS_AM> unsigned Slot::calc_fixed_env() const
 {
-	assert((state == SUSHOLD) || (state == FINISH));
+	assert(state == one_of(SUSHOLD, FINISH));
 	assert(eg_dphase == EnvPhaseIndex(0));
 	unsigned out = eg_phase.toInt(); // in range [0, 128)
 	out = EG2DB(out + tll); // [0, 480)
@@ -1163,10 +1165,8 @@ void YM2413::generateChannels(float* bufs[9 + 5], unsigned num)
 			// Below we choose between 128 specialized versions of
 			// calcChannel(). This allows to move a lot of
 			// conditional code out of the inner-loop.
-			bool carFixedEnv = (ch.car.state == SUSHOLD) ||
-			                   (ch.car.state == FINISH);
-			bool modFixedEnv = (ch.mod.state == SUSHOLD) ||
-			                   (ch.mod.state == FINISH);
+			bool carFixedEnv = ch.car.state == one_of(SUSHOLD, FINISH);
+			bool modFixedEnv = ch.mod.state == one_of(SUSHOLD, FINISH);
 			if (ch.car.state == SETTLE) {
 				modFixedEnv = false;
 			}
@@ -1393,6 +1393,20 @@ void YM2413::generateChannels(float* bufs[9 + 5], unsigned num)
 		bufs[12] = nullptr;
 		bufs[13] = nullptr;
 	}
+}
+
+void YM2413::writePort(bool port, uint8_t value, int /*offset*/)
+{
+	if (port == 0) {
+		registerLatch = value;
+	} else {
+		writeReg(registerLatch & 0x3f, value);
+	}
+}
+
+void YM2413::pokeReg(uint8_t r, uint8_t data)
+{
+	writeReg(r, data);
 }
 
 void YM2413::writeReg(uint8_t r, uint8_t data)
@@ -1664,6 +1678,7 @@ void Channel::serialize(Archive& ar, unsigned /*version*/)
 // version 1: initial version
 // version 2: 'registers' are moved here (no longer serialized in base class)
 // version 3: no longer serialize 'user_patch_mod' and 'user_patch_car'
+// version 4: added 'registerLatch'
 template<typename Archive>
 void YM2413::serialize(Archive& ar, unsigned version)
 {
@@ -1702,6 +1717,11 @@ void YM2413::serialize(Archive& ar, unsigned version)
 			ch.car.setEnvelopeState(ch.car.state);
 		}
 		update_key_status();
+	}
+	if (ar.versionAtLeast(version, 4)) {
+		ar.serialize("registerLatch", registerLatch);
+	} else {
+		// could be restored from MSXMusicBase, worth the effort?
 	}
 }
 

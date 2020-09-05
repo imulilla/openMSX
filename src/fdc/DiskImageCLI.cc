@@ -38,11 +38,16 @@ std::string_view DiskImageCLI::fileTypeHelp() const
 	return "Disk image";
 }
 
+std::string_view DiskImageCLI::fileTypeCategoryName() const
+{
+	return "disk";
+}
+
 void DiskImageCLI::parse(std::string_view drive, std::string_view image,
                          span<string>& cmdLine)
 {
 	if (!parser.getGlobalCommandController().hasCommand(drive)) { // TODO WIP
-		throw MSXException("No drive named '", drive, "'.");
+		throw MSXException("No disk drive ", char(::toupper(drive.back())), " present to put image '", image, "' in.");
 	}
 	TclObject command = makeTclList(drive, image);
 	while (peekArgument(cmdLine) == "-ips") {

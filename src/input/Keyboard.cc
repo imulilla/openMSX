@@ -19,6 +19,7 @@
 #include "serialize_stl.hh"
 #include "serialize_meta.hh"
 #include "openmsx.hh"
+#include "one_of.hh"
 #include "outer.hh"
 #include "stl.hh"
 #include "view.hh"
@@ -34,6 +35,24 @@ using std::shared_ptr;
 using std::make_shared;
 
 namespace openmsx {
+
+// How does the CAPSLOCK key behave?
+#ifdef __APPLE__
+// See the comments in this issue:
+//    https://github.com/openMSX/openMSX/issues/1261
+// Basically it means on apple:
+//   when the host capslock key is pressed,       SDL sends capslock-pressed
+//   when the host capslock key is released,      SDL sends nothing
+//   when the host capslock key is pressed again, SDL sends capslock-released
+//   when the host capslock key is released,      SDL sends nothing
+static constexpr bool SANE_CAPSLOCK_BEHAVIOR = false;
+#else
+// We get sane capslock events from SDL:
+//  when the host capslock key is pressed,  SDL sends capslock-pressed
+//  when the host capslock key is released, SDL sends capslock-released
+static constexpr bool SANE_CAPSLOCK_BEHAVIOR = true;
+#endif
+
 
 static const int TRY_AGAIN = 0x80; // see pressAscii()
 
@@ -105,7 +124,8 @@ Keyboard::Keyboard(MSXMotherBoard& motherBoard,
                    StateChangeDistributor& stateChangeDistributor_,
                    MatrixType matrix,
                    const DeviceConfig& config)
-	: commandController(commandController_)
+	: Schedulable(scheduler_)
+	, commandController(commandController_)
 	, msxEventDistributor(msxEventDistributor_)
 	, stateChangeDistributor(stateChangeDistributor_)
 	, keyTab(keyTabs[matrix])
@@ -255,9 +275,7 @@ void Keyboard::transferHostKeyMatrix(const Keyboard& source)
 void Keyboard::signalMSXEvent(const shared_ptr<const Event>& event,
                               EmuTime::param time)
 {
-	EventType type = event->getType();
-	if ((type == OPENMSX_KEY_DOWN_EVENT) ||
-	    (type == OPENMSX_KEY_UP_EVENT)) {
+	if (event->getType() == one_of(OPENMSX_KEY_DOWN_EVENT, OPENMSX_KEY_UP_EVENT)) {
 		// Ignore possible console on/off events:
 		// we do not rescan the keyboard since this may lead to
 		// an unwanted pressing of <return> in MSX after typing
@@ -347,10 +365,14 @@ void Keyboard::changeKeyMatrixEvent(EmuTime::param time, byte row, byte newValue
  */
 bool Keyboard::processQueuedEvent(const Event& event, EmuTime::param time)
 {
+	auto mode = keyboardSettings.getMappingMode();
+
 	auto& keyEvent = checked_cast<const KeyEvent&>(event);
 	bool down = event.getType() == OPENMSX_KEY_DOWN_EVENT;
-	auto key = static_cast<Keys::KeyCode>(
-		int(keyEvent.getKeyCode()) & int(Keys::K_MASK));
+	auto code = (mode == KeyboardSettings::POSITIONAL_MAPPING)
+	          ? keyEvent.getScanCode() : keyEvent.getKeyCode();
+	auto key = static_cast<Keys::KeyCode>(int(code) & int(Keys::K_MASK));
+
 	if (down) {
 		// TODO: refactor debug(...) method to expect a std::string and then adapt
 		// all invocations of it to provide a properly formatted string, using the C++
@@ -376,7 +398,7 @@ bool Keyboard::processQueuedEvent(const Event& event, EmuTime::param time)
 	}
 
 	// Process deadkeys.
-	if (keyboardSettings.getMappingMode() == KeyboardSettings::CHARACTER_MAPPING) {
+	if (mode == KeyboardSettings::CHARACTER_MAPPING) {
 		for (unsigned n = 0; n < 3; n++) {
 			if (key == keyboardSettings.getDeadkeyHostKey(n)) {
 				UnicodeKeymap::KeyInfo deadkey = unicodeKeymap.getDeadkey(n);
@@ -438,11 +460,24 @@ void Keyboard::processGraphChange(EmuTime::param time, bool down)
  */
 void Keyboard::processCapslockEvent(EmuTime::param time, bool down)
 {
-	debug("Changing CAPS lock state according to SDL request\n");
-	if (down) {
+	if (SANE_CAPSLOCK_BEHAVIOR) {
+		debug("Changing CAPS lock state according to SDL request\n");
+		if (down) {
+			locksOn ^= KeyInfo::CAPS_MASK;
+		}
+		updateKeyMatrix(time, down, modifierPos[KeyInfo::CAPS]);
+	} else {
+		debug("Pressing CAPS lock and scheduling a release\n");
 		locksOn ^= KeyInfo::CAPS_MASK;
+		updateKeyMatrix(time, true, modifierPos[KeyInfo::CAPS]);
+		setSyncPoint(time + EmuDuration::hz(10)); // 0.1s (in MSX time)
 	}
-	updateKeyMatrix(time, down, modifierPos[KeyInfo::CAPS]);
+}
+
+void Keyboard::executeUntil(EmuTime::param time)
+{
+	debug("Releasing CAPS lock\n");
+	updateKeyMatrix(time, false, modifierPos[KeyInfo::CAPS]);
 }
 
 void Keyboard::processKeypadEnterKey(EmuTime::param time, bool down)
@@ -518,18 +553,17 @@ void Keyboard::updateKeyMatrix(EmuTime::param time, bool down, KeyMatrixPosition
  */
 bool Keyboard::processKeyEvent(EmuTime::param time, bool down, const KeyEvent& keyEvent)
 {
-	Keys::KeyCode keyCode = keyEvent.getKeyCode();
-	auto key = static_cast<Keys::KeyCode>(
-		int(keyCode) & int(Keys::K_MASK));
-	unsigned unicode;
+	auto mode = keyboardSettings.getMappingMode();
 
-	bool isOnKeypad = (
+	auto keyCode  = keyEvent.getKeyCode();
+	auto scanCode = keyEvent.getScanCode();
+	auto code = (mode == KeyboardSettings::POSITIONAL_MAPPING) ? scanCode : keyCode;
+	auto key = static_cast<Keys::KeyCode>(int(code) & int(Keys::K_MASK));
+
+	bool isOnKeypad =
 		(key >= Keys::K_KP0 && key <= Keys::K_KP9) ||
-		(key == Keys::K_KP_PERIOD) ||
-		(key == Keys::K_KP_DIVIDE) ||
-		(key == Keys::K_KP_MULTIPLY) ||
-		(key == Keys::K_KP_MINUS) ||
-		(key == Keys::K_KP_PLUS));
+		(key == one_of(Keys::K_KP_PERIOD, Keys::K_KP_DIVIDE, Keys::K_KP_MULTIPLY,
+		               Keys::K_KP_MINUS,  Keys::K_KP_PLUS));
 
 	if (isOnKeypad && !hasKeypad &&
 	    !keyboardSettings.getAlwaysEnableKeypad()) {
@@ -540,10 +574,12 @@ bool Keyboard::processKeyEvent(EmuTime::param time, bool down, const KeyEvent& k
 
 	if (down) {
 		UnicodeKeymap::KeyInfo keyInfo;
+		unsigned unicode;
 		if (isOnKeypad ||
-		    keyboardSettings.getMappingMode() == KeyboardSettings::KEY_MAPPING) {
-			// User entered a key on numeric keypad or the driver is in KEY
-			// mapping mode.
+		    mode == one_of(KeyboardSettings::KEY_MAPPING,
+		                   KeyboardSettings::POSITIONAL_MAPPING)) {
+			// User entered a key on numeric keypad or the driver is in
+			// KEY/POSITIONAL mapping mode.
 			// First option (keypad) maps to same unicode as some other key
 			// combinations (e.g. digit on main keyboard or TAB/DEL).
 			// Use unicode to handle the more common combination and use direct
@@ -615,6 +651,7 @@ bool Keyboard::processKeyEvent(EmuTime::param time, bool down, const KeyEvent& k
 			keyCode = key = Keys::K_INSERT;
 		}
 #endif
+		unsigned unicode;
 		if (key < MAX_KEYSYM) {
 			unicode = dynKeymap[key]; // Get the unicode that was derived from this key
 		} else {
@@ -1181,6 +1218,11 @@ Keyboard::CapsLockAligner::~CapsLockAligner()
 
 int Keyboard::CapsLockAligner::signalEvent(const shared_ptr<const Event>& event)
 {
+	if (!SANE_CAPSLOCK_BEHAVIOR) {
+		// don't even try
+		return 0;
+	}
+
 	if (state == IDLE) {
 		EmuTime::param time = getCurrentTime();
 		EventType type = event->getType();

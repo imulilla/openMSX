@@ -26,6 +26,7 @@ app: install $(DESTDIR)/$(APP_PLIST) $(DESTDIR)/$(APP_ICON)
 bindist: app $(DESTDIR)/$(BINDIST_README) $(DESTDIR)/$(BINDIST_LICENSE)
 	@echo "Creating disk image:"
 	@hdiutil create -srcfolder $(BINDIST_DIR) \
+		-fs HFS+J \
 		-volname openMSX \
 		-imagekey zlib-level=9 \
 		-ov $(BINDIST_PACKAGE)
@@ -34,7 +35,7 @@ $(DESTDIR)/$(APP_PLIST): $(DESTDIR)/$(APP_DIR)/Contents/%: $(APP_SUPPORT_DIR)/% 
 	@echo "  Writing meta-info..."
 	@mkdir -p $(@D)
 	@sed -e 's/%ICON%/$(notdir $(APP_ICON))/' \
-		-e 's/%VERSION%/$(shell $(PYTHON) build/version.py)/' < $< > $@
+		-e 's/%VERSION%/$(shell $(PYTHON) build/version.py triple)/' < $< > $@
 	@echo "APPLoMSX" > $(@D)/PkgInfo
 
 $(DESTDIR)/$(APP_ICON): $(DESTDIR)/$(APP_RES)/%: $(APP_SUPPORT_DIR)/% bindistclean

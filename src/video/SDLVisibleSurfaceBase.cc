@@ -11,6 +11,19 @@
 
 namespace openmsx {
 
+int SDLVisibleSurfaceBase::windowPosX = SDL_WINDOWPOS_UNDEFINED;
+int SDLVisibleSurfaceBase::windowPosY = SDL_WINDOWPOS_UNDEFINED;
+
+SDLVisibleSurfaceBase::~SDLVisibleSurfaceBase()
+{
+	// store last known position for when we recreate it
+	// the window gets recreated when changing renderers, for instance.
+	// Do not store if we're fullscreen, the location is the top-left
+	if ((SDL_GetWindowFlags(window.get()) & SDL_WINDOW_FULLSCREEN) == 0) {
+		SDL_GetWindowPosition(window.get(), &windowPosX, &windowPosY);
+	}
+}
+
 // TODO: The video subsystem is not de-inited on errors.
 //       While it would be consistent to do so, doing it in this class is
 //       not ideal since the init doesn't happen here.
@@ -24,7 +37,7 @@ void SDLVisibleSurfaceBase::createSurface(int width, int height, unsigned flags)
 	assert(!window);
 	window.reset(SDL_CreateWindow(
 			getDisplay().getWindowTitle().c_str(),
-			SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+			windowPosX, windowPosY,
 			width, height,
 			flags));
 	if (!window) {

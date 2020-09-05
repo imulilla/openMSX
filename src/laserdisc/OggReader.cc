@@ -4,6 +4,7 @@
 #include "likely.hh"
 #include "CliComm.hh"
 #include "MemoryOps.hh"
+#include "one_of.hh"
 #include "ranges.hh"
 #include "stl.hh"
 #include "stringsp.hh" // for strncasecmp
@@ -420,7 +421,7 @@ void OggReader::readVorbis(ogg_packet* packet)
 	vorbis_synthesis_read(&vd, decoded);
 }
 
-size_t OggReader::frameNo(ogg_packet* packet)
+size_t OggReader::frameNo(ogg_packet* packet) const
 {
 	if (packet->granulepos == -1) {
 		return size_t(-1);
@@ -586,8 +587,7 @@ void OggReader::readTheora(ogg_packet* packet)
 	// postion
 	Frame* last = frameList.empty() ? nullptr : frameList.back().get();
 	if (last && (last->no != size_t(-1))) {
-		if ((frameno != size_t(-1)) &&
-		    (frameno != last->no + last->length)) {
+		if (frameno != one_of(size_t(-1), last->no + last->length)) {
 			cli.printWarning("Theora frame sequence wrong");
 		} else {
 			frameno = last->no + last->length;
@@ -926,7 +926,7 @@ size_t OggReader::findOffset(size_t frame, size_t sample)
 
 	state = PLAYING;
 
-	if ((keyFrame == size_t(-1)) || (frame == keyFrame)) {
+	if (keyFrame == one_of(size_t(-1), frame)) {
 		return offset;
 	}
 

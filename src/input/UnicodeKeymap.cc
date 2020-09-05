@@ -3,6 +3,7 @@
 #include "File.hh"
 #include "FileContext.hh"
 #include "FileException.hh"
+#include "one_of.hh"
 #include "ranges.hh"
 #include "stl.hh"
 #include "StringOp.hh"
@@ -46,9 +47,9 @@ static unsigned parseHex(string_view str, bool& ok)
   */
 static inline bool isSep(char c)
 {
-	return c == ','                           // comma
-	    || c == ' ' || c == '\t' || c == '\r' // whitespace
-	    || c == '#';                          // comment
+	return c == one_of(',',             // comma
+	                   ' ', '\t', '\r', // whitespace
+	                   '#');            // comment
 }
 
 /** Removes separator characters at the start of the given string reference.
@@ -74,12 +75,12 @@ static void skipSep(string_view& str)
 static string_view nextToken(string_view& str)
 {
 	skipSep(str);
-	auto tokenBegin = str.begin();
+	auto tokenBegin = str.data();
 	while (!str.empty() && str.front() != '\n' && !isSep(str.front())) {
 		// Pop non-separator character.
 		str.remove_prefix(1);
 	}
-	return string_view(&*tokenBegin, str.begin() - tokenBegin);
+	return string_view(tokenBegin, str.data() - tokenBegin);
 }
 
 

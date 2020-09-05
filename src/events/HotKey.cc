@@ -21,7 +21,7 @@ using std::vector;
 using std::make_shared;
 
 // This file implements all Tcl key bindings. These are the 'classical' hotkeys
-// (e.g. F11 to (un)mute sound) and the more recent input layers. The idea
+// (e.g. F12 to (un)mute sound) and the more recent input layers. The idea
 // behind an input layer is something like an OSD widget that (temporarily)
 // takes semi-exclusive access to the input. So while the widget is active
 // keyboard (and joystick) input is no longer passed to the emulated MSX.
@@ -74,6 +74,8 @@ HotKey::HotKey(RTScheduler& rtScheduler,
 	eventDistributor.registerEventListener(
 		OPENMSX_FOCUS_EVENT, *this, EventDistributor::HOTKEY);
 	eventDistributor.registerEventListener(
+		OPENMSX_FILEDROP_EVENT, *this, EventDistributor::HOTKEY);
+	eventDistributor.registerEventListener(
 		OPENMSX_OSD_CONTROL_RELEASE_EVENT, *this, EventDistributor::HOTKEY);
 	eventDistributor.registerEventListener(
 		OPENMSX_OSD_CONTROL_PRESS_EVENT, *this, EventDistributor::HOTKEY);
@@ -83,6 +85,7 @@ HotKey::~HotKey()
 {
 	eventDistributor.unregisterEventListener(OPENMSX_OSD_CONTROL_PRESS_EVENT, *this);
 	eventDistributor.unregisterEventListener(OPENMSX_OSD_CONTROL_RELEASE_EVENT, *this);
+	eventDistributor.unregisterEventListener(OPENMSX_FILEDROP_EVENT, *this);
 	eventDistributor.unregisterEventListener(OPENMSX_FOCUS_EVENT, *this);
 	eventDistributor.unregisterEventListener(OPENMSX_JOY_BUTTON_UP_EVENT, *this);
 	eventDistributor.unregisterEventListener(OPENMSX_JOY_BUTTON_DOWN_EVENT, *this);
@@ -110,7 +113,7 @@ void HotKey::initDefaultBindings()
 		                       "toggle pause"));
 		bindDefault(HotKeyInfo(make_shared<KeyDownEvent>(
 		                            Keys::combine(Keys::K_T, Keys::KM_META)),
-		                       "toggle throttle"));
+		                       "toggle fastforward"));
 		bindDefault(HotKeyInfo(make_shared<KeyDownEvent>(
 		                            Keys::combine(Keys::K_L, Keys::KM_META)),
 		                       "toggle console"));
@@ -130,13 +133,13 @@ void HotKey::initDefaultBindings()
 		bindDefault(HotKeyInfo(make_shared<KeyDownEvent>(Keys::K_PAUSE),
 		                       "toggle pause"));
 		bindDefault(HotKeyInfo(make_shared<KeyDownEvent>(Keys::K_F9),
-		                       "toggle throttle"));
+		                       "toggle fastforward"));
 		bindDefault(HotKeyInfo(make_shared<KeyDownEvent>(Keys::K_F10),
 		                       "toggle console"));
 		bindDefault(HotKeyInfo(make_shared<KeyDownEvent>(Keys::K_F11),
-		                       "toggle mute"));
-		bindDefault(HotKeyInfo(make_shared<KeyDownEvent>(Keys::K_F12),
 		                       "toggle fullscreen"));
+		bindDefault(HotKeyInfo(make_shared<KeyDownEvent>(Keys::K_F12),
+		                       "toggle mute"));
 		bindDefault(HotKeyInfo(make_shared<KeyDownEvent>(
 		                            Keys::combine(Keys::K_F4, Keys::KM_ALT)),
 		                       "exit"));

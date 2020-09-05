@@ -88,14 +88,14 @@ CassettePlayer::CassettePlayer(const HardwareConfig& hwConf)
 	, motor(false), motorControl(true)
 	, syncScheduled(false)
 {
-	removeTape(EmuTime::zero());
-
 	static XMLElement xml = createXML();
 	registerSound(DeviceConfig(hwConf, xml));
 
 	motherBoard.getReactor().getEventDistributor().registerEventListener(
 		OPENMSX_BOOT_EVENT, *this);
 	motherBoard.getMSXCliComm().update(CliComm::HARDWARE, getName(), "add");
+
+	removeTape(EmuTime::zero());
 }
 
 CassettePlayer::~CassettePlayer()
@@ -391,10 +391,12 @@ void CassettePlayer::recordTape(const Filename& filename, EmuTime::param time)
 
 void CassettePlayer::removeTape(EmuTime::param time)
 {
-	sync(time); // before tapePos changes
+	// first stop with tape still inserted
+	setState(STOP, getImageName(), time);
+	// then remove the tape
 	playImage.reset();
 	tapePos = EmuTime::zero();
-	setState(STOP, Filename(), time);
+	setImageName({});
 }
 
 void CassettePlayer::setMotor(bool status, EmuTime::param time)
@@ -866,11 +868,10 @@ void CassettePlayer::serialize(Archive& ar, unsigned version)
 	if (ar.isLoader()) {
 		FilePool& filePool = motherBoard.getReactor().getFilePool();
 		auto time = getCurrentTime();
-		removeTape(time);
 		casImage.updateAfterLoadState();
 		if (!oldChecksum.empty() &&
 		    !FileOperations::exists(casImage.getResolved())) {
-			auto file = filePool.getFile(FilePool::TAPE, oldChecksum);
+			auto file = filePool.getFile(FileType::TAPE, oldChecksum);
 			if (file.is_open()) {
 				casImage.setResolved(file.getURL());
 			}

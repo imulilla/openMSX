@@ -7,6 +7,7 @@
 #include "FileException.hh"
 #include "ReadDir.hh"
 #include "StringOp.hh"
+#include "one_of.hh"
 #include "ranges.hh"
 #include "stl.hh"
 #include <cassert>
@@ -261,7 +262,7 @@ DirAsDSK::DirAsDSK(DiskChanger& diskChanger_, CliComm& cliComm_,
 	: SectorBasedDisk(hostDir_)
 	, diskChanger(diskChanger_)
 	, cliComm(cliComm_)
-	, hostDir(hostDir_.getResolved() + '/')
+	, hostDir(FileOperations::expandTilde(hostDir_.getResolved() + '/'))
 	, syncMode(syncMode_)
 	, lastAccess(EmuTime::zero())
 	, nofSectors((diskChanger_.isDoubleSidedDrive() ? 2 : 1) * SECTORS_PER_TRACK * NUM_TRACKS)
@@ -434,7 +435,7 @@ void DirAsDSK::deleteMSXFile(DirIndex dirIndex)
 	mapDirs.erase(dirIndex);
 
 	char c = msxDir(dirIndex).filename[0];
-	if (c == 0 || c == char(0xE5)) {
+	if (c == one_of(0, char(0xE5))) {
 		// Directory entry not in use, don't need to do anything.
 		return;
 	}
@@ -848,8 +849,7 @@ DirAsDSK::DirIndex DirAsDSK::getFreeDirEntry(unsigned msxDirSector)
 		for (unsigned idx = 0; idx < DIR_ENTRIES_PER_SECTOR; ++idx) {
 			DirIndex dirIndex(msxDirSector, idx);
 			const char* msxName = msxDir(dirIndex).filename;
-			if ((msxName[0] == char(0x00)) ||
-			    (msxName[0] == char(0xE5))) {
+			if (msxName[0] == one_of(char(0x00), char(0xE5))) {
 				// Found an unused msx entry. There shouldn't
 				// be any hostfile mapped to this entry.
 				assert(!mapDirs.contains(dirIndex));
@@ -1006,8 +1006,7 @@ template<typename FUNC> bool DirAsDSK::scanMsxDirs(FUNC func, unsigned sector)
 				const MSXDirEntry& entry = msxDir(dirIndex);
 				if (func.onDirEntry(dirIndex, entry)) return true;
 
-				if ((entry.filename[0] == char(0x00)) ||
-				    (entry.filename[0] == char(0xE5)) ||
+				if ((entry.filename[0] == one_of(char(0x00), char(0xE5))) ||
 				    !(entry.attrib & MSXDirEntry::ATT_DIRECTORY)) {
 					// Not a directory.
 					continue;
@@ -1164,7 +1163,7 @@ void DirAsDSK::exportToHost(DirIndex dirIndex, DirIndex dirDirIndex)
 	} else {
 		// Host file/dir does not yet exist, create hostname from
 		// msx name.
-		if ((msxName[0] == char(0x00)) || (msxName[0] == char(0xE5))) {
+		if (msxName[0] == one_of(char(0x00), char(0xE5))) {
 			// Invalid MSX name, don't do anything.
 			return;
 		}

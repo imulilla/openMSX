@@ -144,6 +144,10 @@ public:
 	  * ATM this only works when using the SDLGL-PP renderer. */
 	DisplayDeform getDisplayDeform() { return displayDeformSetting.getEnum(); }
 
+	/** VSync [on, off]
+	 * ATM this only works when using the SDLGL-PP renderer. */
+	BooleanSetting& getVSyncSetting() { return vSyncSetting; }
+
 	/** Amount of horizontal stretch.
 	  * This number represents the amount of MSX pixels (normal width) that
 	  * will be stretched to the complete width of the host window. */
@@ -221,6 +225,7 @@ private:
 	EnumSetting<bool> cmdTimingSetting;
 	EnumSetting<bool> tooFastAccessSetting;
 	EnumSetting<DisplayDeform> displayDeformSetting;
+	BooleanSetting vSyncSetting;
 	FloatSetting horizontalStretchSetting;
 	FloatSetting pointerHideDelaySetting;
 	BooleanSetting interleaveBlackFrameSetting;

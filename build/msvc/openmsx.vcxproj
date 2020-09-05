@@ -433,6 +433,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\file\Filename.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\file\FileOperations.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\file\FilePool.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\file\FilePoolCore.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\file\GZFileAdapter.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\file\LocalFile.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\file\LocalFileReference.cc" />
@@ -622,6 +623,9 @@
     <ClCompile Include="$(OpenMSXSrcDir)\sound\YM2413.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\sound\YM2413Burczynski.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\sound\YM2413Okazaki.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\sound\YM2413NukeYKT.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\sound\YM2413OriginalNukeYKT.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\sound\opll.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\sound\YMF262.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\sound\YMF278.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\thread\Thread.cc" />
@@ -742,6 +746,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\serial\DummyRS232Device.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\I8251.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\I8254.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\serial\JVCMSXMIDI.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\MC6850.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\Midi_w32.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\MidiInConnector.cc" />
@@ -755,6 +760,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\serial\MSXFacMidiInterface.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\MSXMidi.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\MSXRS232.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\serial\MusicModuleMIDI.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\RS232Connector.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\RS232Device.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serial\RS232Tester.cc" />
@@ -828,6 +834,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\serialize.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serialize_core.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\serialize_meta.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\SpeedManager.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\ThrottleManager.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\Version.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\sound\SVIPSG.cc" />
@@ -973,6 +980,7 @@
     <None Include="$(OpenMSXSrcDir)\file\Filename.hh" />
     <None Include="$(OpenMSXSrcDir)\file\FileOperations.hh" />
     <None Include="$(OpenMSXSrcDir)\file\FilePool.hh" />
+    <None Include="$(OpenMSXSrcDir)\file\FilePoolCore.hh" />
     <None Include="$(OpenMSXSrcDir)\file\GZFileAdapter.hh" />
     <None Include="$(OpenMSXSrcDir)\file\LocalFile.hh" />
     <None Include="$(OpenMSXSrcDir)\file\LocalFileReference.hh" />
@@ -1180,6 +1188,10 @@
     <None Include="$(OpenMSXSrcDir)\sound\YM2413Core.hh" />
     <None Include="$(OpenMSXSrcDir)\sound\YM2413Interface.hh" />
     <None Include="$(OpenMSXSrcDir)\sound\YM2413Okazaki.hh" />
+    <None Include="$(OpenMSXSrcDir)\sound\YM2413NukeYKT.hh" />
+    <None Include="$(OpenMSXSrcDir)\sound\YM2413NukeYktTables.ii" />
+    <None Include="$(OpenMSXSrcDir)\sound\YM2413OriginalNukeYKT.hh" />
+    <None Include="$(OpenMSXSrcDir)\sound\opll.hh" />
     <None Include="$(OpenMSXSrcDir)\sound\YMF262.hh" />
     <None Include="$(OpenMSXSrcDir)\sound\YMF278.hh" />
     <None Include="$(OpenMSXSrcDir)\thread\Thread.hh" />
@@ -1211,6 +1223,7 @@
     <None Include="$(OpenMSXSrcDir)\utils\MemoryOps.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\my_auto_ptr.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\Observer.hh" />
+    <None Include="$(OpenMSXSrcDir)\utils\one_of.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\ref.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\ScopedAssign.hh" />
     <None Include="$(OpenMSXSrcDir)\utils\sdlwin32.hh" />
@@ -1368,6 +1381,7 @@
     <None Include="$(OpenMSXSrcDir)\serial\DummyRS232Device.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\I8251.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\I8254.hh" />
+    <None Include="$(OpenMSXSrcDir)\serial\JVCMSXMIDI.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\MC6850.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\Midi_w32.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\MidiInConnector.hh" />
@@ -1381,6 +1395,7 @@
     <None Include="$(OpenMSXSrcDir)\serial\MSXFacMidiInterface.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\MSXMidi.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\MSXRS232.hh" />
+    <None Include="$(OpenMSXSrcDir)\serial\MusicModuleMIDI.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\RS232Connector.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\RS232Device.hh" />
     <None Include="$(OpenMSXSrcDir)\serial\RS232Tester.hh" />
@@ -1565,6 +1580,7 @@ popd</Command>
     <None Include="$(OpenMSXSrcDir)\serialize_core.hh" />
     <None Include="$(OpenMSXSrcDir)\serialize_meta.hh" />
     <None Include="$(OpenMSXSrcDir)\serialize_stl.hh" />
+    <None Include="$(OpenMSXSrcDir)\SpeedManager.hh" />
     <None Include="$(OpenMSXSrcDir)\ThrottleManager.hh" />
     <None Include="$(OpenMSXSrcDir)\Version.hh" />
     <None Include="$(OpenMSXSrcDir)\sound\SVIPSG.hh" />

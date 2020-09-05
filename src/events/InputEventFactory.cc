@@ -3,6 +3,7 @@
 #include "CommandException.hh"
 #include "StringOp.hh"
 #include "TclObject.hh"
+#include "one_of.hh"
 #include <stdexcept>
 #include <SDL.h>
 
@@ -71,7 +72,7 @@ static EventPtr parseMouseEvent(const TclObject& str, Interpreter& interp)
 					OPENMSX_MOUSE_MOTION_GROUP_EVENT,
 					std::vector<EventType>{OPENMSX_MOUSE_MOTION_EVENT},
 					makeTclList("mouse", comp1));
-			} else if ((len == 4) || (len == 6)) {
+			} else if (len == one_of(4u, 6u)) {
 				int absX = 0, absY = 0;
 				if (len == 6) {
 					absX = str.getListIndex(interp, 4).getInt(interp);
@@ -222,6 +223,17 @@ static EventPtr parseFocusEvent(const TclObject& str, Interpreter& interp)
 	return make_shared<FocusEvent>(str.getListIndex(interp, 1).getBoolean(interp));
 }
 
+static EventPtr parseFileDropEvent(const TclObject& str, Interpreter& interp)
+{
+	if (str.getListLength(interp) != 1) {
+		throw CommandException("Invalid filedrop event: ", str.getString());
+	}
+	return make_shared<GroupEvent>(
+		OPENMSX_FILEDROP_GROUP_EVENT,
+		std::vector<EventType>{OPENMSX_FILEDROP_EVENT},
+		makeTclList("filename"));
+}
+
 static EventPtr parseResizeEvent(const TclObject& str, Interpreter& interp)
 {
 	if (str.getListLength(interp) != 3) {
@@ -254,6 +266,8 @@ EventPtr createInputEvent(const TclObject& str, Interpreter& interp)
 		return parseJoystickEvent(str, interp);
 	} else if (type == "focus") {
 		return parseFocusEvent(str, interp);
+	} else if (type == "filedrop") {
+		return parseFileDropEvent(str, interp);
 	} else if (type == "resize") {
 		return parseResizeEvent(str, interp);
 	} else if (type == "quit") {

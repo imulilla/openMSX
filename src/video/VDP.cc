@@ -33,6 +33,7 @@ TODO:
 #include "Reactor.hh"
 #include "MSXException.hh"
 #include "CliComm.hh"
+#include "one_of.hh"
 #include "ranges.hh"
 #include "unreachable.hh"
 #include <cstring>
@@ -133,6 +134,8 @@ VDP::VDP(const DeviceConfig& config)
 	else if (versionString == "TMS9129") version = TMS9129;
 	else if (versionString == "V9938") version = V9938;
 	else if (versionString == "V9958") version = V9958;
+	else if (versionString == "YM2220PAL") version = YM2220PAL;
+	else if (versionString == "YM2220NTSC") version = YM2220NTSC;
 	else throw MSXException("Unknown VDP version \"", versionString, '"');
 
 	// saturation parameters only make sense when using TMS VDP's
@@ -185,8 +188,7 @@ VDP::VDP(const DeviceConfig& config)
 	EmuTime::param time = getCurrentTime();
 	unsigned vramSize =
 		(isMSX1VDP() ? 16 : config.getChildDataAsInt("vram"));
-	if ((vramSize !=  16) && (vramSize !=  64) &&
-	    (vramSize != 128) && (vramSize != 192)) {
+	if (vramSize != one_of(16u, 64u, 128u, 192u)) {
 		throw MSXException(
 			"VRAM size of ", vramSize, "kB is not supported!");
 	}
@@ -1384,8 +1386,7 @@ void VDP::updateDisplayMode(DisplayMode newMode, bool cmdBit, EmuTime::param tim
 
 void VDP::update(const Setting& setting)
 {
-	assert((&setting == &cmdTiming) ||
-	       (&setting == &tooFastAccess));
+	assert(&setting == one_of(&cmdTiming, &tooFastAccess));
 	(void)setting;
 	brokenCmdTiming    = cmdTiming    .getEnum();
 	allowTooFastAccess = tooFastAccess.getEnum();
@@ -1432,6 +1433,32 @@ constexpr std::array<std::array<uint8_t, 3>, 16> TOSHIBA_PALETTE = {{
 	{ 187,  85, 187 },
 	{ 204, 204, 204 },
 	{ 238, 238, 238 },
+}};
+
+/*
+ * Palette for the YM2220 is a crude approximantion based on the fact that the
+ * pictures of a Yamaha AX-150 (YM2220) and a Philips NMS-8250 (V9938) have a
+ * quite similar appearance. See first post here:
+ *
+ * https://www.msx.org/forum/msx-talk/hardware/unknown-vdp-yamaha-ym2220?page=3
+ */
+constexpr std::array<std::array<uint8_t, 3>, 16> YM2220_PALETTE = {{
+	{   0,   0,   0 },
+	{   0,   0,   0 },
+	{  36, 218,  36 },
+	{ 200, 255, 109 },
+	{  36,  36, 255 },
+	{  72, 109, 255 },
+	{ 182,  36,  36 },
+	{  72, 218, 255 },
+	{ 255,  36,  36 },
+	{ 255, 175, 175 },
+	{ 230, 230,   0 },
+	{ 230, 230, 200 },
+	{  36, 195,  36 },
+	{ 218,  72, 182 },
+	{ 182, 182, 182 },
+	{ 255, 255, 255 },
 }};
 
 /*
@@ -1491,6 +1518,9 @@ std::array<std::array<uint8_t, 3>, 16> VDP::getMSX1Palette() const
 	}
 	if ((version & VM_TOSHIBA_PALETTE) != 0) {
 		return TOSHIBA_PALETTE;
+	}
+	if ((version & VM_YM2220_PALETTE) != 0) {
+		return YM2220_PALETTE;
 	}
 	std::array<std::array<uint8_t, 3>, 16> tmsPalette;
 	for (int color = 0; color < 16; color++) {

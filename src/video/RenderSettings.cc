@@ -147,10 +147,18 @@ RenderSettings::RenderSettings(CommandController& commandController)
 	, displayDeformSetting(
 		commandController,
 		"display_deform", "Display deform (for the moment this only "
-		"works with the SDLGL-PP renderer", DEFORM_NORMAL,
+		"works with the SDLGL-PP renderer)", DEFORM_NORMAL,
 		EnumSetting<DisplayDeform>::Map{
 			{"normal", DEFORM_NORMAL},
 			{"3d",     DEFORM_3D}})
+
+	, vSyncSetting(commandController,
+		"vsync", "Synchronize page flip with the host screen vertical sync:\n"
+		" on -> flip on host vsync: avoids tearing\n"
+		" off -> immediate flip: might be more fluent when host framerate"
+		" (typically 60Hz) differs from MSX framerate (50 or 60Hz)\n"
+		"Currently this only affects the SDLGL-PP renderer.",
+		true)
 
 	// Many android devices are relatively low powered. Therefore use
 	// no stretch (value 320) as default for Android because it gives

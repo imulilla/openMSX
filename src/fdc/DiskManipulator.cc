@@ -14,6 +14,7 @@
 #include "SectorBasedDisk.hh"
 #include "StringOp.hh"
 #include "TclObject.hh"
+#include "one_of.hh"
 #include "ranges.hh"
 #include "stl.hh"
 #include "strCat.hh"
@@ -140,21 +141,18 @@ void DiskManipulator::execute(span<const TclObject> tokens, TclObject& result)
 	}
 
 	string_view subcmd = tokens[1].getString();
-	if (((tokens.size() != 4)                     && (subcmd == "savedsk")) ||
-	    ((tokens.size() != 4)                     && (subcmd == "mkdir"))   ||
-	    ((tokens.size() != 3)                     && (subcmd == "dir"))     ||
-	    ((tokens.size() < 3 || tokens.size() > 4) && (subcmd == "format"))  ||
-	    ((tokens.size() < 3 || tokens.size() > 4) && (subcmd == "chdir"))   ||
-	    ((tokens.size() < 4)                      && (subcmd == "export"))  ||
-	    ((tokens.size() < 4)                      && (subcmd == "import"))  ||
-	    ((tokens.size() < 4)                      && (subcmd == "create"))) {
+	if (((tokens.size() != 4)                     && (subcmd == one_of("savedsk", "mkdir"))) ||
+	    ((tokens.size() != 3)                     && (subcmd ==        "dir"             ))  ||
+	    ((tokens.size() < 3 || tokens.size() > 4) && (subcmd == one_of("format", "chdir")))  ||
+	    ((tokens.size() < 4)                      && (subcmd == one_of("export", "import", "create")))) {
 		throw CommandException("Incorrect number of parameters");
 	}
 
 	if (subcmd == "export") {
-		string_view directory = tokens[3].getString();
+		string_view dir = tokens[3].getString();
+		auto directory = FileOperations::expandTilde(dir);
 		if (!FileOperations::isDirectory(directory)) {
-			throw CommandException(directory, " is not a directory");
+			throw CommandException(dir, " is not a directory");
 		}
 		auto& settings = getDriveSettings(tokens[2].getString());
 		span<const TclObject> lists(std::begin(tokens) + 4, std::end(tokens));
@@ -291,7 +289,7 @@ void DiskManipulator::tabCompletion(vector<string>& tokens) const
 
 	} else if (tokens.size() == 3) {
 		vector<string> names;
-		if ((tokens[1] == "format") || (tokens[1] == "create")) {
+		if (tokens[1] == one_of("format", "create")) {
 			names.emplace_back("-dos1");
 		}
 		for (auto& d : drives) {
@@ -315,9 +313,7 @@ void DiskManipulator::tabCompletion(vector<string>& tokens) const
 		completeString(tokens, names);
 
 	} else if (tokens.size() >= 4) {
-		if ((tokens[1] == "savedsk") ||
-		    (tokens[1] == "import")  ||
-		    (tokens[1] == "export")) {
+		if (tokens[1] == one_of("savedsk", "import", "export")) {
 			completeFileName(tokens, userFileContext());
 		} else if (tokens[1] == "create") {
 			static constexpr const char* const cmds[] = {
@@ -504,7 +500,7 @@ string DiskManipulator::import(DriveSettings& driveData,
 	auto& interp = getInterpreter();
 	for (auto& l : lists) {
 		for (auto i : xrange(l.getListLength(interp))) {
-			auto s = l.getListIndex(interp, i).getString();
+			auto s = FileOperations::expandTilde(l.getListIndex(interp, i).getString());
 			try {
 				FileOperations::Stat st;
 				if (!FileOperations::getStat(s, st)) {

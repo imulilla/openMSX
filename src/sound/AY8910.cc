@@ -18,6 +18,7 @@
 #include "serialize.hh"
 #include "cstd.hh"
 #include "likely.hh"
+#include "one_of.hh"
 #include "outer.hh"
 #include "random.hh"
 #include <cassert>
@@ -621,8 +622,15 @@ void AY8910::wrtReg(unsigned reg, byte value, EmuTime::param time)
 		tone[reg / 2].setPeriod(regs[reg & ~1] + 256 * (regs[reg | 1] & 0x0F));
 		break;
 	case AY_NOISEPER:
-		// half the frequency of tone generation
-		noise.setPeriod(2 * (value & 0x1F));
+		// Half the frequency of tone generation.
+		//
+		// Verified on turboR GT: value=0 and value=1 sound the same.
+		//
+		// Likely in real AY8910 this is implemented by driving the
+		// noise generator at halve the frequency instead of
+		// multiplying the value by 2 (hence the correction for value=0
+		// here). But the effect is the same(?).
+		noise.setPeriod(2 * std::max(1, value & 0x1F));
 		break;
 	case AY_AVOL:
 	case AY_BVOL:
@@ -966,8 +974,7 @@ float AY8910::getAmplificationFactorImpl() const
 
 void AY8910::update(const Setting& setting)
 {
-	if ((&setting == &vibratoPercent) ||
-	    (&setting == &detunePercent)) {
+	if (&setting == one_of(&vibratoPercent, &detunePercent)) {
 		doDetune = (vibratoPercent.getDouble() != 0) ||
 			   (detunePercent .getDouble() != 0);
 		if (doDetune && !detuneInitialized) {

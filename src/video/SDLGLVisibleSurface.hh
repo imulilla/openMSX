@@ -34,6 +34,10 @@ public:
 	std::unique_ptr<OutputSurface> createOffScreenSurface() override;
 
 private:
+	struct VSyncObserver : openmsx::Observer<Setting> {
+		void update(const Setting& setting) override;
+	} vSyncObserver;
+
 	SDL_GLContext glContext;
 };
 

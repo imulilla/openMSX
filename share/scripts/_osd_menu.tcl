@@ -32,8 +32,9 @@ proc push_menu_info {} {
 	variable $levelname
 	set $levelname [uplevel {dict create \
 		name $name lst $lst menu_len $menu_len presentation $presentation \
-		menutexts $menutexts selectinfo $selectinfo selectidx $selectidx \
-		scrollidx $scrollidx on_close $on_close}]
+		menutextexpressions $menutextexpressions menutexts $menutexts \
+		selectinfo $selectinfo selectidx $selectidx scrollidx \
+		$scrollidx on_close $on_close}]
 }
 
 proc peek_menu_info {} {
@@ -75,6 +76,7 @@ proc menu_create {menudef} {
 
 	set y $bordersize
 	set selectinfo [list]
+	set menutextexpressions [list]
 	set menutexts [list]
 	foreach itemdef [dict get $menudef items] {
 		set selectable  [get_optional itemdef "selectable" true]
@@ -88,8 +90,13 @@ proc menu_create {menudef} {
 		set on_select   [get_optional itemdef "on-select"   ""]
 		set on_deselect [get_optional itemdef "on-deselect" ""]
 		set textid "${name}.item${y}"
-		set text [dict get $itemdef text]
-		lappend menutexts $textid $text
+		if {[dict exists $itemdef textexpr]} {
+			set textexpr [dict get $itemdef textexpr]
+			lappend menutextexpressions $textid $textexpr
+		} else {
+			set text [dict get $itemdef text]
+			lappend menutexts $textid $text
+		}
 		osd create text $textid -font $font -size $fontsize \
 					-rgba $textcolor -x $bordersize -y $y
 		if {$selectable} {
@@ -157,9 +164,12 @@ proc menu_update_scrollbar {} {
 
 proc menu_refresh_top {} {
 	peek_menu_info
-	foreach {osdid text} [dict get $menuinfo menutexts] {
-		set cmd [list subst $text]
+	foreach {osdid textexpr} [dict get $menuinfo menutextexpressions] {
+		set cmd [list subst $textexpr]
 		osd configure $osdid -text [uplevel #0 $cmd]
+	}
+	foreach {osdid text} [dict get $menuinfo menutexts] {
+		osd configure $osdid -text $text
 	}
 
 	set selectinfo [dict get $menuinfo selectinfo]
@@ -464,7 +474,7 @@ proc prepare_menu_list {lst num menudef} {
 		}
 		lappend actions "LEFT"  "osd_menu::move_selection -$menu_len"
 		lappend actions "RIGHT" "osd_menu::move_selection  $menu_len"
-		set item [list "text" "\[osd_menu::list_menu_item_show $i\]" \
+		set item [list "textexpr" "\[osd_menu::list_menu_item_show $i\]" \
 		               "actions" $actions]
 		if {$on_select ne ""} {
 			lappend item "on-select" "osd_menu::list_menu_item_select $i $on_select"
@@ -599,7 +609,13 @@ proc select_next_menu_item_starting_with {text} {
 	select_menu_idx $index
 }
 
-proc create_slot_actions {slot path listtype} {
+variable mediaslot_info [dict create \
+"rom"      [dict create mediabasecommand "cart"           mediapath "::osd_rom_path"  listtype "rom"  itemtext "Load ROM"    shortmediaslotname "slot"  longmediaslotname "cartridge slot"]\
+"disk"     [dict create mediabasecommand "disk"           mediapath "::osd_disk_path" listtype "disk" itemtext "Insert disk" shortmediaslotname "drive" longmediaslotname "disk drive"]\
+#"cassette" [dict create mediabasecommand "cassetteplayer" mediapath "::osd_tape_path" listtype "tape" itemtext "Set tape"    shortmediaslotname "xxx"   longmediaslotname "cassette player"]\
+]
+
+proc create_slot_actions_to_select_file {slot path listtype} {
 	# the action A is checking what is currently in that media slot (e.g. diska) and if it's not empty, it puts that path as last known path. Then it creates the menu and afterwards selects the current item.
 	return [list actions [list A "set curSel \[lindex \[$slot\] 1\]; set $path \[expr {\$curSel ne {} ? \[file dirname \$curSel\] : \$$path}\]; osd_menu::menu_create \[osd_menu::menu_create_${listtype}_list \$$path $slot\]; catch { osd_menu::select_menu_item \[file tail \$curSel\]}"]]
 }
@@ -607,7 +623,7 @@ proc create_slot_actions {slot path listtype} {
 proc get_slot_str {slot} {
 	return [string toupper [string index $slot end]]
 }
-proc create_slot_menu {slots path listtype menutitle} {
+proc create_slot_menu_def {slots path listtype menutitle create_action_proc} {
 	set menudef {
 		font-size 8
 		border-size 2
@@ -625,28 +641,35 @@ proc create_slot_menu {slots path listtype menutitle} {
 		if {![string match "empty*" [lindex [$slot] 2]]} {
 			set slotcontent [file tail [lindex [$slot] 1]]
 		}
-		lappend items [list text "[get_slot_str $slot]: $slotcontent" {*}[create_slot_actions $slot $path $listtype]]
+		lappend items [list text "[get_slot_str $slot]: $slotcontent" {*}[$create_action_proc $slot $path $listtype]]
 	}
 	dict set menudef items $items
-	osd_menu::menu_create $menudef
+	return $menudef
 }
 
-proc create_media_menu_items {media mediapath listtype itemtext shortmediaslotname longmediaslotname} {
-	if {[catch ${media}a]} {; # example: Philips NMS 801 without cart slot, or no diskdrives
+proc create_media_menu_items {file_type_category} {
+	variable mediaslot_info
+	set longmediaslotname [dict get $mediaslot_info $file_type_category longmediaslotname]
+	set shortmediaslotname [dict get $mediaslot_info $file_type_category shortmediaslotname]
+	set mediapath [dict get $mediaslot_info $file_type_category mediapath]
+	set listtype [dict get $mediaslot_info $file_type_category listtype]
+	set itemtext [dict get $mediaslot_info $file_type_category itemtext]
+	set mediabasecommand [dict get $mediaslot_info $file_type_category mediabasecommand]
+	if {[catch ${mediabasecommand}a]} {; # example: Philips NMS 801 without cart slot, or no diskdrives. TODO: make more generic
 		lappend menuitems [list text "(No $longmediaslotname present...)"\
 			selectable false\
 			text-color 0x808080ff\
 		]
 	} else {
-		set slots [lsort [info command ${media}?]]
+		set slots [lsort [info command ${mediabasecommand}?]]; # TODO: make more generic
 		if {[llength $slots] <= 2} {
 			foreach slot $slots {
-				lappend menuitems [list text "${itemtext}... (${shortmediaslotname} [get_slot_str $slot])" {*}[create_slot_actions $slot $mediapath $listtype]]
+				lappend menuitems [list text "${itemtext}... (${shortmediaslotname} [get_slot_str $slot])" {*}[create_slot_actions_to_select_file $slot $mediapath $listtype]]
 			}
 		} else {
 			set slot [lindex $slots 0]
-			lappend menuitems [list text "${itemtext}... (${shortmediaslotname} [get_slot_str $slot])" {*}[create_slot_actions $slot $mediapath $listtype]]
-			lappend menuitems [list text "${itemtext}... (any ${shortmediaslotname})" actions [list A "osd_menu::create_slot_menu \[list $slots\] \{$mediapath\} \{$listtype\} \{Select $longmediaslotname...\}"]]
+			lappend menuitems [list text "${itemtext}... (${shortmediaslotname} [get_slot_str $slot])" {*}[create_slot_actions_to_select_file $slot $mediapath $listtype]]
+			lappend menuitems [list text "${itemtext}... (any ${shortmediaslotname})" actions [list A "osd_menu::menu_create \[osd_menu::create_slot_menu_def \[list $slots\] \{$mediapath\} \{$listtype\} \{Select $longmediaslotname...\} \{create_slot_actions_to_select_file\}\]"]]
 		}
 	}
 	return $menuitems
@@ -661,12 +684,12 @@ proc create_main_menu {} {
 		border-size 2
 		width 160
 	}
-	lappend items { text "[openmsx_info version]"
+	lappend items { textexpr "[openmsx_info version]"
 	         font-size 12
 	         post-spacing 6
 	         selectable false }
-	lappend items {*}[create_media_menu_items "cart" "::osd_rom_path"  "ROM"  "Load ROM"    "slot"  "cartridge slot"]
-	lappend items {*}[create_media_menu_items "disk" "::osd_disk_path" "disk" "Insert disk" "drive" "disk drive"    ]
+	lappend items {*}[create_media_menu_items "rom"]
+	lappend items {*}[create_media_menu_items "disk"]
 	if {[info command hda] ne ""} {; # only exists when hard disk extension available
 		foreach drive [lrange [lsort [info command hd?]] 0 1] {
 			set drive_str [string toupper [string index $drive end]]
@@ -719,24 +742,28 @@ proc create_main_menu {} {
 set misc_setting_menu {
 	font-size 8
 	border-size 2
-	width 150
+	width 160
 	xpos 100
 	ypos 120
 	items {{ text "Misc Settings"
 	         font-size 10
 	         post-spacing 6
 	         selectable false }
-	       { text "Speed: $speed"
+	       { textexpr "Speed: ${speed}%"
 	         actions { LEFT  { osd_menu::menu_setting [incr speed -1] }
 	                   RIGHT { osd_menu::menu_setting [incr speed  1] }}}
-	       { text "Minimal Frameskip: $minframeskip"
-	         actions { LEFT  { osd_menu::menu_setting [incr minframeskip -1] }
-	                   RIGHT { osd_menu::menu_setting [incr minframeskip  1] }}}
-	       { text "Maximal Frameskip: $maxframeskip"
-	         actions { LEFT  { osd_menu::menu_setting [incr maxframeskip -1] }
-	                   RIGHT { osd_menu::menu_setting [incr maxframeskip  1] }}}}}
+	       { textexpr "Fastforward speed: ${fastforwardspeed}%"
+	         actions { LEFT  { osd_menu::menu_setting [incr fastforwardspeed -1] }
+	                   RIGHT { osd_menu::menu_setting [incr fastforwardspeed  1] }}}
+	       { textexpr "Full speed when loading: [osd_menu::boolean_to_text $fullspeedwhenloading]"
+	         actions { LEFT  { osd_menu::menu_setting [cycle_back fullspeedwhenloading] }
+	                   RIGHT { osd_menu::menu_setting [cycle      fullspeedwhenloading] }}}
+{ textexpr "Keyboard mapping mode: $kbd_mapping_mode"
+	         actions { LEFT  { osd_menu::menu_setting [cycle_back kbd_mapping_mode] }
+	                   RIGHT { osd_menu::menu_setting [cycle      kbd_mapping_mode] }}}
+              }}
 
-set resampler_desc [dict create fast "fast (but low quality)" blip "blip (good speed/quality)" hq "hq (best but slow on Android)"]
+set resampler_desc [dict create fast "fast (but low quality)" blip "blip (good speed/quality)" hq "hq (best but uses more CPU)"]
 
 set sound_setting_menu {
 	font-size 8
@@ -748,15 +775,15 @@ set sound_setting_menu {
 	         font-size 10
 	         post-spacing 6
 	         selectable false }
-	       { text "Volume: $master_volume"
+	       { textexpr "Volume: $master_volume"
 	         actions { LEFT  { osd_menu::menu_setting [incr master_volume -5] }
 	                   RIGHT { osd_menu::menu_setting [incr master_volume  5] }}}
-	       { text "Mute: $mute"
+	       { textexpr "Mute: [osd_menu::boolean_to_text $mute]"
 	         actions { LEFT  { osd_menu::menu_setting [cycle_back mute] }
 	                   RIGHT { osd_menu::menu_setting [cycle      mute] }}}
 	       { text "Individual Sound Device Settings..."
 	         actions { A { osd_menu::menu_create [osd_menu::menu_create_sound_device_list]}}}
-	       { text "Resampler: [osd_menu::get_resampler_presentation $resampler]"
+	       { textexpr "Resampler: [osd_menu::get_resampler_presentation $resampler]"
 	         actions { LEFT  { osd_menu::menu_setting [cycle_back resampler] }
 	                   RIGHT { osd_menu::menu_setting [cycle      resampler] }}}}}
 
@@ -801,7 +828,7 @@ proc create_sound_device_settings_menu {device} {
 	foreach aspect [list volume balance] {
 		set var_name ::${device}_${aspect}
 		set item [list]
-		lappend item "text"
+		lappend item "textexpr"
 		set first [string range $aspect 0 0]
 		set rest [string range $aspect 1 end]
 		set first [string toupper $first]
@@ -821,12 +848,12 @@ proc create_sound_device_settings_menu {device} {
 	for {set channel 1} {$channel <= $channel_count} {incr channel} {
 		set chmute_var_name ${device}_ch${channel}_mute
 		set item [list]
-		lappend item "text"
+		lappend item "textexpr"
 		set pretext ""
 		if {$channel_count > 1} {
 			set pretext "Channel $channel "
 		}
-		lappend item "${pretext}Mute: \[[list set $chmute_var_name]]"
+		lappend item "${pretext}Mute: \[osd_menu::boolean_to_text \[[list set $chmute_var_name]]]"
 		lappend item "actions"
 		set actions [list]
 		lappend actions "LEFT"
@@ -847,6 +874,17 @@ proc create_sound_device_settings_menu {device} {
 	return $menu_def
 }
 
+proc boolean_to_text {boolean} {
+	if {[lsearch -nocase [list "true" "on" "yes"] $boolean] != -1} {
+		return "on"
+	} elseif {[lsearch -nocase [list "false" "off" "no"] $boolean] != -1} {
+		return "off"
+	} else {
+		puts stderr "Couldn't make head or tails of: XXX${boolean}XXX"
+		return $boolean
+	}
+}
+
 proc create_video_setting_menu {} {
 	variable scaling_available
 
@@ -862,47 +900,53 @@ proc create_video_setting_menu {} {
 	         post-spacing 6
 	         selectable false }
 	if {[expr {[lindex [lindex [openmsx_info setting videosource] 2] 1] > 1}]} {
-		lappend items { text "Video source: $videosource"
+		lappend items { textexpr "Video source: $videosource"
 			actions { LEFT  { osd_menu::menu_setting [cycle_back videosource] }
 			          RIGHT { osd_menu::menu_setting [cycle      videosource] }}
-				  post-spacing 6}
+				  post-spacing 3}
 	}
 	if {$scaling_available} {
-		lappend items { text "Scaler: $scale_algorithm"
+		lappend items { textexpr "Scaler: $scale_algorithm"
 			actions { LEFT  { osd_menu::menu_setting [cycle_back scale_algorithm] }
 			          RIGHT { osd_menu::menu_setting [cycle      scale_algorithm] }}}
 		# only add scale factor setting if it can actually be changed
 		set scale_minmax [lindex [openmsx_info setting scale_factor] 2]
 		if {[expr {[lindex $scale_minmax 0] != [lindex $scale_minmax 1]}]} {
-			lappend items { text "Scale Factor: ${scale_factor}x"
+			lappend items { textexpr "Scale Factor: ${scale_factor}x"
 				actions { LEFT  { osd_menu::menu_setting [incr scale_factor -1] }
 				          RIGHT { osd_menu::menu_setting [incr scale_factor  1] }}}
 		}
 	}
-	lappend items { text "Horizontal Stretch: [osd_menu::get_horizontal_stretch_presentation $horizontal_stretch]"
+	lappend items { textexpr "Horizontal Stretch: [osd_menu::get_horizontal_stretch_presentation $horizontal_stretch]"
 	         actions { A  { osd_menu::menu_create [osd_menu::menu_create_stretch_list]; osd_menu::select_menu_item $horizontal_stretch }}
-	         post-spacing 6 }
+	         post-spacing 3 }
+	if {$::renderer eq "SDLGL-PP"} {
+		lappend items { textexpr "VSync: [osd_menu::boolean_to_text $vsync]"
+			actions { LEFT  { osd_menu::menu_setting [cycle_back vsync] }
+			          RIGHT { osd_menu::menu_setting [cycle      vsync] }}
+		post-spacing 3 }
+	}
 	if {$scaling_available} {
-		lappend items { text "Scanline: $scanline%"
+		lappend items { textexpr "Scanline: $scanline%"
 			actions { LEFT  { osd_menu::menu_setting [incr scanline -1] }
 			          RIGHT { osd_menu::menu_setting [incr scanline  1] }}}
-		lappend items { text "Blur: $blur%"
+		lappend items { textexpr "Blur: $blur%"
 			actions { LEFT  { osd_menu::menu_setting [incr blur -1] }
 			          RIGHT { osd_menu::menu_setting [incr blur  1] }}}
 	}
 	if {$::renderer eq "SDLGL-PP"} {
-		lappend items { text "Glow: $glow%"
+		lappend items { textexpr "Glow: $glow%"
 			actions { LEFT  { osd_menu::menu_setting [incr glow -1] }
 			          RIGHT { osd_menu::menu_setting [incr glow  1] }}}
-		lappend items { text "Display Deform: $display_deform"
+		lappend items { textexpr "Display Deform: $display_deform"
 			actions { LEFT  { osd_menu::menu_setting [cycle_back display_deform] }
 			          RIGHT { osd_menu::menu_setting [cycle      display_deform] }}}
 	}
-	lappend items { text "Noise: $noise%"
+	lappend items { textexpr "Noise: $noise%"
 		actions { LEFT  { osd_menu::menu_setting [set noise [expr $noise - 1]] }
 		          RIGHT { osd_menu::menu_setting [set noise [expr $noise + 1]] }}
-			  post-spacing 6}
-	lappend items { text "Enforce VDP Sprites-per-line Limit: $limitsprites"
+			  post-spacing 3}
+	lappend items { textexpr "Enforce VDP Sprites-per-line Limit: [osd_menu::boolean_to_text $limitsprites]"
 			actions { LEFT  { osd_menu::menu_setting [cycle_back limitsprites] }
 			          RIGHT { osd_menu::menu_setting [cycle      limitsprites] }}}
 	dict set menu_def items $items
@@ -931,7 +975,7 @@ proc create_hardware_menu {} {
 	lappend items { text "Connectors..."
 			 actions { A { osd_menu::menu_create [osd_menu::menu_create_connectors_list] }}}
 	if {![catch {openmsx_info setting firmwareswitch}]} {
-		lappend items { text "Firmware switch active: $::firmwareswitch"
+		lappend items { textexpr "Firmware switch: [osd_menu::boolean_to_text $::firmwareswitch]"
 			actions { LEFT  { osd_menu::menu_setting [cycle_back firmwareswitch] }
 			          RIGHT { osd_menu::menu_setting [cycle      firmwareswitch] }}}
 
@@ -980,7 +1024,7 @@ set running_machines_menu {
 	         font-size 10
 	         post-spacing 6
 	         selectable false }
-	       { text "Select Running Machine Tab: [utils::get_machine_display_name]"
+	       { textexpr "Select Running Machine Tab: [utils::get_machine_display_name]"
 	         actions { A { osd_menu::menu_create [osd_menu::menu_create_running_machine_list] }}}
 	       { text "New Running Machine Tab"
 	         actions { A { osd_menu::menu_create [osd_menu::menu_create_load_machine_list "add"] }}}
@@ -1417,14 +1461,14 @@ proc is_empty_dir {directory extensions} {
 	return true
 }
 
-proc menu_create_ROM_list {path slot} {
+proc menu_create_rom_list {path slot} {
 	set menu_def [list execute [list menu_select_rom $slot] \
 		font-size 8 \
 		border-size 2 \
 		width 200 \
 		xpos 100 \
 		ypos 120 \
-		header { text "ROMs $::osd_rom_path" \
+		header { textexpr "ROMs $::osd_rom_path" \
 			font-size 10 \
 			post-spacing 6 }]
 	set extensions "rom|ri|mx1|mx2|zip|gz"
@@ -1451,7 +1495,7 @@ proc menu_create_ROM_list {path slot} {
 	return [prepare_menu_list $items 10 $menu_def]
 }
 
-proc menu_select_rom {slot item} {
+proc menu_select_rom {slot item {open_main false}} {
 	if {$item eq "--eject--"} {
 		menu_close_all
 		$slot eject
@@ -1461,13 +1505,15 @@ proc menu_select_rom {slot item} {
 		if {[file isdirectory $fullname]} {
 			menu_close_top
 			set ::osd_rom_path [file normalize $fullname]
-			menu_create [menu_create_ROM_list $::osd_rom_path $slot]
+			menu_create [menu_create_rom_list $::osd_rom_path $slot]
 		} else {
 			set mappertype ""
 			set hash [sha1sum $fullname]
 			if {[catch {set mappertype [dict get [openmsx_info software $hash] mapper_type_name]}]} {
 				# not in the database, execute after selecting mapper type
-				menu_create [menu_create_mappertype_list $slot $fullname]
+				set menu_proc menu_create
+				if {$open_main} { set menu_proc do_menu_open }
+				${menu_proc} [menu_create_mappertype_list $slot $fullname]
 			} else {
 				# in the database, so just execute
 				menu_rom_with_mappertype_exec $slot $fullname $mappertype
@@ -1484,36 +1530,61 @@ proc menu_rom_with_mappertype_exec {slot fullname mappertype} {
 
 		set rominfo [getlist_rom_info]
 
-		if {$rominfo eq ""} {
-			osd::display_message "No ROM information available..."
-		} else {
-			osd::display_message "Now running ROM:\nTitle:\nYear:\nCompany:\nCountry:\nStatus:\nRemark:"
+		set message1 "Now running ROM"
+		set message2 " \n"
 
-			append result " \n" \
-						  "[dict get $rominfo title]\n" \
-						  "[dict get $rominfo year]\n" \
-						  "[dict get $rominfo company]\n" \
-						  "[dict get $rominfo country]\n" \
-						  "[dict get $rominfo status]\n"
+		dict with rominfo {
 
-			if {[dict get $rominfo remark] ne ""} {
-				append result [dict get $rominfo remark]
-			} else {
-				append result "None"
+			if {$slotname ne "" && $slot ne ""} {
+				append message1 " in cartridge slot $slotname (slot $slot)"
 			}
+			append message1 ":\n"
 
-			set txt_size 6
-			set xpos 35
-
-			# TODO: prevent this from being duplicated from osd_widgets::text_box
-			if {$::scale_factor == 1} {
-				set txt_size 9
-				set xpos 53
+			if {$title ne ""} {
+				append message1 "Title:\n"
+				append message2 "$title\n"
+			} elseif {$filename ne ""} {
+				append message1 "File:\n"
+				append message2 "$filename\n"
 			}
-
-			# TODO: this code knows the internal name of the widget of osd::display_message proc... it shouldn't need to.
-			osd create text osd_display_message.rominfo_text -x $xpos -y 2 -size $txt_size -rgba 0xffffffff -text "$result"
+			if {$year ne ""} {
+				append message1 "Year:\n"
+				append message2 "$year\n"
+			}
+			if {$company ne ""} {
+				append message1 "Company:\n"
+				append message2 "$company\n"
+			}
+			if {$country ne ""} {
+				append message1 "Country:\n"
+				append message2 "$country\n"
+			}
+			if {$status ne ""} {
+				append message1 "Status:\n"
+				append message2 "$status\n"
+			}
+			if {$remark ne ""} {
+				append message1 "Remark:\n"
+				append message2 "$remark\n"
+			}
+			if {$mappertype ne ""} {
+				append message1 "Mapper:\n"
+				append message2 "$mappertype\n"
+			}
 		}
+		osd::display_message $message1
+
+		set txt_size 6
+		set xpos 35
+
+		# TODO: prevent this from being duplicated from osd_widgets::text_box
+		if {$::scale_factor == 1} {
+			set txt_size 9
+			set xpos 53
+		}
+
+		# TODO: this code knows the internal name of the widget of osd::display_message proc... it shouldn't need to.
+		osd create text osd_display_message.rominfo_text -x $xpos -y 2 -size $txt_size -rgba 0xffffffff -text "$message2"
 		reset
 	}
 }
@@ -1555,7 +1626,7 @@ proc menu_create_disk_list {path drive} {
 		width 200 \
 		xpos 100 \
 		ypos 120 \
-		header { text "Disks $::osd_disk_path" \
+		header { textexpr "Disks $::osd_disk_path" \
 			font-size 10 \
 			post-spacing 6 }]
 	set cur_image [lindex [$drive] 1]
@@ -1589,15 +1660,22 @@ proc menu_create_disk_list {path drive} {
 	return [prepare_menu_list $items 10 $menu_def]
 }
 
-proc menu_select_disk {drive item} {
+proc menu_select_disk {drive item {dummy false}} {
 	if {$item eq "--eject--"} {
 		set cur_image [lindex [$drive] 1]
 		menu_close_all
 		$drive eject
-		osd::display_message "Disk $cur_image ejected!"
+		osd::display_message "Disk $cur_image ejected from drive [get_slot_str $drive]!"
 	} else {
-		set fullname [file normalize [file join $::osd_disk_path $item]]
-		if {[file isdirectory $fullname] && $item ne "."} {
+		# if the item is already a directory, it's an absolute path, use that as fullname
+		if {[file isdirectory $item] && $item ne "." && $item ne ".." && $item ni [file volumes]} {
+			set fullname $item
+			set abspath true
+		} else {
+			set fullname [file normalize [file join $::osd_disk_path $item]]
+			set abspath false
+		}
+		if {[file isdirectory $fullname] && $item ne "." && !$abspath} {
 			menu_close_top
 			set ::osd_disk_path [file normalize $fullname]
 			menu_create [menu_create_disk_list $::osd_disk_path $drive]
@@ -1607,7 +1685,7 @@ proc menu_select_disk {drive item} {
 			} else {
 				menu_close_all
 				if {$item eq "."} { set item $fullname }
-				osd::display_message "Disk $item inserted!"
+				osd::display_message "Disk $item inserted in drive [get_slot_str $drive]!"
 			}
 		}
 	}
@@ -1622,7 +1700,7 @@ proc menu_create_tape_list {path} {
 		width 200
 		xpos 100
 		ypos 120
-		header { text "Tapes $::osd_tape_path"
+		header { textexpr "Tapes $::osd_tape_path"
 			font-size 10
 			post-spacing 6 }}
 	set extensions "cas|wav|zip|gz"
@@ -1713,7 +1791,7 @@ proc menu_create_hdd_list {path drive} {
 	                            width 200 \
 	                            xpos 100 \
 	                            ypos 120 \
-	                            header { text "Hard disk images $::osd_hdd_path"
+	                            header { textexpr "Hard disk images $::osd_hdd_path"
 	                                     font-size 10
 	                                     post-spacing 6 }]]
 }
@@ -1751,7 +1829,7 @@ proc menu_create_ld_list {path} {
 		width 200 \
 		xpos 100 \
 		ypos 120 \
-		header { text "LaserDiscs $::osd_ld_path" \
+		header { textexpr "LaserDiscs $::osd_ld_path" \
 			font-size 10 \
 			post-spacing 6 }]
 	set cur_image [lindex [laserdiscplayer] 1]
@@ -1913,6 +1991,79 @@ proc confirm_action {text action item} {
 					post-spacing 6 ]]
 
 	osd_menu::menu_create [osd_menu::prepare_menu_list $items [llength $items] $menu_def]
+}
+
+proc menu_loadreplay_exec {item} {
+	if {[catch {reverse loadreplay $item} errorText]} {
+		osd::display_message $errorText error
+	} else {
+		menu_close_all
+	}
+}
+
+proc menu_loadscript_exec {item} {
+	if {[catch {source $item} errorText]} {
+		osd::display_message $errorText error
+	}
+}
+
+proc create_slot_actions_to_put_stuff_in_slot {slot path listtype} {
+	return [list actions [list A [list osd_menu::menu_select_$listtype $slot $path]]]
+}
+
+proc drop_handler { event } {
+	variable mediaslot_info
+	lassign $event type filename
+	set category [openmsx_info file_type_category $filename]
+	set isdir [file isdirectory $filename]
+	if {$category eq "unknown" && $isdir} {
+		set category "disk"
+	}
+	set filetext "file"
+	if {$isdir} {
+		set filetext "folder"
+	}
+	if {$category eq "disk" || $category eq "rom"} {
+		set longmediaslotname [dict get $mediaslot_info $category longmediaslotname]
+		set listtype [dict get $mediaslot_info $category listtype]
+		set mediabasecommand [dict get $mediaslot_info $category mediabasecommand]
+		set slots [lsort [info command ${mediabasecommand}?]]
+		if {[llength $slots] == 0} {
+			osd::display_message "Can't handle dropped $filetext $filename, no $longmediaslotname present." error
+		} elseif {[llength $slots] > 1} {
+			set path $filename
+			set menutitle "Select ${longmediaslotname}"
+			set create_action_proc "create_slot_actions_to_put_stuff_in_slot"
+			osd_menu::do_menu_open [create_slot_menu_def $slots $path $listtype $menutitle $create_action_proc]
+		} else {
+			osd_menu::menu_select_$listtype "${mediabasecommand}a" $filename true
+		}
+	} elseif {$category eq "laserdisc"} {
+		if {[info command laserdiscplayer] ne ""} {; # only exists on some Pioneers
+			osd_menu::menu_select_ld $filename
+		} else {
+			osd::display_message "Can't handle dropped $filetext $filename, no laser disc player present." error
+		}
+	} elseif {$category eq "cassette"} {
+		if {[catch "machine_info connector cassetteport"]} {; # example: turboR
+			osd::display_message "Can't handle dropped $filetext $filename, no cassette port present." error
+		} else {
+			osd_menu::menu_select_tape $filename
+		}
+	} elseif {$category eq "savestate"} {
+		osd_menu::menu_loadstate_exec [file rootname $filename]
+	} elseif {$category eq "replay"} {
+		osd_menu::menu_loadreplay_exec $filename
+	} elseif {$category eq "script"} {
+		osd_menu::menu_loadscript_exec $filename
+	} else {
+		# stuff we can implement outside openMSX
+		if {[file extension $filename] eq ".txt"} {
+			type_from_file $filename
+		} else {
+			osd::display_message "Don't know how to handle dropped $filetext $filename..." error
+		}
+	}
 }
 
 # Keep openmsx console from interfering with the osd menu:

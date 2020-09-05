@@ -58,6 +58,7 @@
 #include "DeviceConfig.hh"
 #include "XMLElement.hh"
 #include "MSXException.hh"
+#include "one_of.hh"
 #include <memory>
 
 using std::make_unique;
@@ -173,12 +174,9 @@ unique_ptr<MSXDevice> create(const DeviceConfig& config)
 		if (!romInfo) {
 			auto machineType = config.getMotherBoard().getMachineType();
 			if (machineType == "Coleco") {
-				unsigned size = rom.getSize();
-				if ((size == 128*1024) || (size == 256*1024) ||
-				    (size == 512*1024) || (size == 1024*1024)) {
+				if (rom.getSize() == one_of(128*1024u, 256*1024u, 512*1024u, 1024*1024u)) {
 					type = ROM_COLECOMEGACART;
-				}
-				else {
+				} else {
 					type = ROM_PAGE23;
 				}
 			} else {
@@ -375,6 +373,7 @@ unique_ptr<MSXDevice> create(const DeviceConfig& config)
 	case ROM_MANBOW2_2:
 	case ROM_HAMARAJANIGHT:
 	case ROM_MEGAFLASHROMSCC:
+	case ROM_RBSC_FLASH_KONAMI_SCC:
 		result = make_unique<RomManbow2>(config, move(rom), type);
 		break;
 	case ROM_MATRAINK:
