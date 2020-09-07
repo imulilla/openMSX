@@ -5,6 +5,7 @@
 #include "inline.hh"
 #include <cstdint>
 #include <cstring>
+#include <cassert>
 
 namespace Endian {
 
@@ -121,7 +122,7 @@ static_assert(alignof(B32) <= 4, "may have alignment 4");
 static_assert(alignof(L32) <= 4, "may have alignment 4");
 
 
-// Helper functions to read/write aligned 16/32 bit values.
+// Helper functions to read/write aligned 16/24/32 bit values.
 static inline void writeB16(void* p, uint16_t x)
 {
 	*reinterpret_cast<B16*>(p) = x;
@@ -156,7 +157,7 @@ static inline void writeL32(void* p, uint32_t x)
 	return *reinterpret_cast<const L32*>(p);
 }
 
-// Read/write big/little 16/32/64-bit values to/from a (possibly) unaligned
+// Read/write big/little 16/24/32/64-bit values to/from a (possibly) unaligned
 // memory location. If the host architecture supports unaligned load/stores
 // (e.g. x86), these functions perform a single load/store (with possibly an
 // adjust operation on the value if the endianess is different from the host
@@ -244,6 +245,23 @@ private:
 	uint8_t x[2];
 };
 
+class UA_L24 {
+public:
+	UA_L24(uint32_t x) {
+		assert(x < 0x1000000);
+		v[0] = (x >>  0) & 0xff;
+		v[1] = (x >>  8) & 0xff;
+		v[2] = (x >> 16) & 0xff;
+	}
+	operator uint32_t() {
+		return (v[0] <<  0) |
+		       (v[1] <<  8) |
+		       (v[2] << 16);
+	}
+private:
+	uint8_t v[3];
+};
+
 class UA_B32 {
 public:
 	[[nodiscard]] inline operator uint32_t() const { return read_UA_B32(x); }
@@ -272,7 +290,7 @@ static_assert(alignof(UA_L32) == 1, "must have alignment 1");
 // Template meta-programming.
 // Get a type of the same size of the given type that stores the value in a
 // specific endianess. Typically used in template functions that can work on
-// either 16 or 32 bit values.
+// either 16, 24 or 32 bit values.
 //  usage:
 //    using LE_T = typename Endian::Little<T>::type;
 //  The type LE_T is now a type that stores values of the same size as 'T'

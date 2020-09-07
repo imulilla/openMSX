@@ -18,7 +18,7 @@ class FilePool;
 class CasImage final : public CassetteImage
 {
 public:
-	CasImage(const Filename& fileName, FilePool& filePool, CliComm& cliComm);
+	CasImage(const Filename& fileName, FilePool& filePool, CliComm& cliComm, size_t posicioncinta);
 
 	// CassetteImage
 	int16_t getSampleAt(EmuTime::param time) override;
@@ -34,7 +34,7 @@ private:
 	void writeSilence(int s);
 	void writeByte(byte b);
 	bool writeData(span<byte> buf, size_t& pos);
-	void convert(const Filename& filename, FilePool& filePool, CliComm& cliComm);
+	void convert(const Filename& filename, FilePool& filePool, CliComm& cliComm, size_t posicioncinta);
 
 	std::vector<signed char> output;
 };

@@ -8,6 +8,7 @@
 #include "stl.hh"
 #include "xrange.hh"
 #include <cstring> // for memcmp
+#include <cassette/CassettePlayer.hh>
 
 namespace openmsx {
 
@@ -49,10 +50,10 @@ constexpr byte BINARY_HEADER[10] = { 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD
 constexpr byte BASIC_HEADER [10] = { 0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3 };
 
 
-CasImage::CasImage(const Filename& filename, FilePool& filePool, CliComm& cliComm)
+CasImage::CasImage(const Filename& filename, FilePool& filePool, CliComm& cliComm,size_t posicioncinta)
 {
 	setFirstFileType(CassetteImage::UNKNOWN);
-	convert(filename, filePool, cliComm);
+	convert(filename, filePool, cliComm,posicioncinta);
 }
 
 int16_t CasImage::getSampleAt(EmuTime::param time)
@@ -155,7 +156,7 @@ bool CasImage::writeData(span<byte> buf, size_t& pos)
 	return false;
 }
 
-void CasImage::convert(const Filename& filename, FilePool& filePool, CliComm& cliComm)
+void CasImage::convert(const Filename& filename, FilePool& filePool, CliComm& cliComm, size_t posicioncinta)
 {
 	File file(filename);
 	auto buf = file.mmap();
@@ -165,6 +166,11 @@ void CasImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 	bool headerFound = false;
 	bool firstFile = true;
 	size_t pos = 0;
+	bool section = false;
+	if (posicioncinta != 0) {
+		section = true;
+		pos = posicioncinta - 8;
+	}
 	while ((pos + 8) <= buf.size()) {
 		if (memcmp(&buf[pos], CAS_HEADER, 8) == 0) {
 			// it probably works fine if a long header is used for every
@@ -177,12 +183,43 @@ void CasImage::convert(const Filename& filename, FilePool& filePool, CliComm& cl
 			if ((pos + 10) <= buf.size()) {
 				// determine file type
 				FileType type = CassetteImage::UNKNOWN;
+				std::string blqname = "";
 				if (memcmp(&buf[pos], ASCII_HEADER, 10) == 0) {
 					type = CassetteImage::ASCII;
-				} else if (memcmp(&buf[pos], BINARY_HEADER, 10) == 0) {
+					if (!section)
+					{
+
+						std::string blqname = "";
+						for (int l = 1; l < 7; l = l + 1)
+						{
+							blqname = blqname + char(buf[pos + 9 + l]);
+						}
+						openmsx::CassettePlayer::AddSection(pos, blqname, "ASCII");
+					}
+				}
+				else if (memcmp(&buf[pos], BINARY_HEADER, 10) == 0) {
 					type = CassetteImage::BINARY;
-				} else if (memcmp(&buf[pos], BASIC_HEADER, 10) == 0) {
+					if (!section)
+					{
+						std::string blqname = "";
+						for (int l = 1; l < 7; l = l + 1)
+						{
+							blqname = blqname + char(buf[pos + 9 + l]);
+						}
+						openmsx::CassettePlayer::AddSection(pos, blqname, "BINARY");
+					}
+				}
+				else if (memcmp(&buf[pos], BASIC_HEADER, 10) == 0) {
 					type = CassetteImage::BASIC;
+					if (!section)
+					{
+						std::string blqname = "";
+						for (int l = 1; l < 7; l = l + 1)
+						{
+							blqname = blqname + char(buf[pos + 9 + l]);
+						}
+						openmsx::CassettePlayer::AddSection(pos, blqname, "BASIC");
+					}
 				}
 				if (firstFile) setFirstFileType(type);
 				switch (type) {

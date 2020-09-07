@@ -13,3 +13,6 @@ core
 *.VC.db
 *.VC.VC.opendb
 __pycache__/
+/.vs
+/build/3rdparty
+/build/msvc/.vs/openmsx/v16

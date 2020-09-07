@@ -32,6 +32,7 @@
 #include "File.hh"
 #include "WavImage.hh"
 #include "CasImage.hh"
+#include "TsxImage.hh"
 #include "CliComm.hh"
 #include "MSXMotherBoard.hh"
 #include "Reactor.hh"
@@ -64,6 +65,13 @@ static XMLElement createXML()
 	xml.addChild("sound").addChild("volume", "5000");
 	return xml;
 }
+
+struct bloque {
+	string nbloque;
+	string tipo;
+	int posicion;
+};
+std::vector<bloque> bloques;//Creo la matriz para guardar los bloques con sus posiciones,primera posicion numero de bloques
 
 CassettePlayer::CassettePlayer(const HardwareConfig& hwConf)
 	: ResampledSoundDevice(hwConf.getMotherBoard(), getName(), getDescription(), 1, DUMMY_INPUT_RATE, false)
@@ -307,9 +315,15 @@ void CassettePlayer::setImageName(const Filename& newImage)
 		CliComm::MEDIA, "cassetteplayer", casImage.getResolved());
 }
 
-void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time)
+void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time, size_t posicioncinta)
 {
 	if (!filename.empty()) {
+		bloques.push_back(bloque());
+		if (posicioncinta == 0) {
+			bloques[0].posicion = 0;//En la posicion 0 se guarda el numero de bloques
+			bloques[0].nbloque = "";
+			bloques[0].tipo = "";
+		}
 		FilePool& filePool = motherBoard.getReactor().getFilePool();
 		try {
 			// first try WAV
@@ -319,16 +333,29 @@ void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time)
 				// if that fails use CAS
 				playImage = std::make_unique<CasImage>(
 					filename, filePool,
-					motherBoard.getMSXCliComm());
-			} catch (MSXException& e2) {
+					motherBoard.getMSXCliComm(),posicioncinta);
+			}
+			catch (MSXException& e2) {
+				try {
+					// if that fails use TSX
+					playImage = std::make_unique<TsxImage>(
+						filename, filePool,
+						motherBoard.getMSXCliComm(), posicioncinta);
+				}
+				catch (MSXException& e3) {
+
 				throw MSXException(
 					"Failed to insert WAV image: \"",
 					e.getMessage(),
 					"\" and also failed to insert CAS image: \"",
-					e2.getMessage(), '\"');
+						e2.getMessage(),
+						"\" and also failed to insert TSX image: \"",
+						e3.getMessage(), '\"');
+				}
 			}
 		}
-	} else {
+	}
+	else {
 		// This is a bit tricky, consider this scenario: we switch from
 		// RECORD->PLAY, but we didn't actually record anything: The
 		// removeTape() call above (indirectly) deletes the empty
@@ -351,7 +378,7 @@ void CassettePlayer::insertTape(const Filename& filename, EmuTime::param time)
 	setImageName(filename);
 }
 
-void CassettePlayer::playTape(const Filename& filename, EmuTime::param time)
+void CassettePlayer::playTape(const Filename& filename, EmuTime::param time,size_t posicioncinta)
 {
 	// Temporally go to STOP state:
 	// RECORD: First close the recorded image. Otherwise it goes wrong
@@ -359,7 +386,7 @@ void CassettePlayer::playTape(const Filename& filename, EmuTime::param time)
 	// PLAY: Go to stop because we temporally violate some invariants
 	//       (tapePos can be beyond end-of-tape).
 	setState(STOP, getImageName(), time); // keep current image
-	insertTape(filename, time);
+	insertTape(filename, time,posicioncinta);
 	rewind(time); // sets PLAY mode
 	autoRun();
 }
@@ -537,7 +564,7 @@ std::string_view CassettePlayer::getDescription() const
 	// as an identifier for this audio device in e.g. Catapult. We should
 	// use another way to identify audio devices A.S.A.P.!
 
-	return "Cassetteplayer, use to read .cas or .wav files.";
+	return "Cassetteplayer, use to read .cas, .tsx or .wav files.";
 }
 
 void CassettePlayer::plugHelper(Connector& conn, EmuTime::param time)
@@ -575,7 +602,7 @@ int CassettePlayer::signalEvent(const std::shared_ptr<const Event>& event)
 		if (!getImageName().empty()) {
 			// Reinsert tape to make sure everything is reset.
 			try {
-				playTape(getImageName(), getCurrentTime());
+				playTape(getImageName(), getCurrentTime(),0);
 			} catch (MSXException& e) {
 				motherBoard.getMSXCliComm().printWarning(
 					"Failed to insert tape: ", e.getMessage());
@@ -610,6 +637,35 @@ void CassettePlayer::execSyncAudioEmu(EmuTime::param time)
 	syncScheduled = false;
 }
 
+
+string CassettePlayer::ListSections()
+{
+
+	std::string listadosecciones = "N - Bloque - Tipo - Posicion\n";
+	if (bloques.size() > 0) {
+
+		for (int i = 1; i <= bloques[0].posicion; i++)
+		{
+
+			listadosecciones = listadosecciones + (std::to_string(i)) + " - " + (bloques[i].nbloque) + " - " + (bloques[i].tipo) + " - " + (std::to_string(bloques[i].posicion)) + "\n";
+
+
+		}
+
+	}
+
+	return listadosecciones;
+}
+
+void CassettePlayer::AddSection(unsigned pos,std::string name,std::string tipo)
+{
+	bloques.push_back(bloque());
+	bloques[(bloques[0].posicion) + 1].nbloque = name;
+	bloques[(bloques[0].posicion) + 1].posicion = pos;
+	bloques[(bloques[0].posicion) + 1].tipo = tipo;
+	bloques[0].posicion = bloques[0].posicion + 1;
+	//TclObject options = makeTclList(cassettePlayer.getStateString());result.addListElement(getName() + ':',,options);
+}
 
 // class TapeCommand
 
@@ -650,12 +706,28 @@ void CassettePlayer::TapeCommand::execute(
 		try {
 			result = "Changing tape";
 			Filename filename(string(tokens[2].getString()), userFileContext());
-			cassettePlayer.playTape(filename, time);
+			cassettePlayer.playTape(filename, time,0);
 		} catch (MSXException& e) {
 			throw CommandException(std::move(e).getMessage());
 		}
 
-	} else if (tokens[1] == "motorcontrol" && tokens.size() == 3) {
+	}
+	else if ((tokens[1] == "section" && tokens.size() == 3) && (
+	   (std::stoi(string(tokens[2].getString()))>0))
+		&&(
+			(std::stoi(string(tokens[2].getString()))<=(bloques[0].posicion))
+				)
+		){
+		try {
+			result = "Positioning";
+			int t = std::stoi(string(tokens[2].getString()));
+			size_t posicioncinta = (bloques[t].posicion);
+			cassettePlayer.playTape(cassettePlayer.getImageName(), time, posicioncinta);
+		}
+		catch (MSXException & e) {
+			throw CommandException(std::move(e).getMessage());
+		}
+	}else if (tokens[1] == "motorcontrol" && tokens.size() == 3) {
 		if (tokens[2] == "on") {
 			cassettePlayer.setMotorControl(true, time);
 			result = "Motor control enabled.";
@@ -681,7 +753,7 @@ void CassettePlayer::TapeCommand::execute(
 			try {
 				result = "Play mode set, rewinding tape.";
 				cassettePlayer.playTape(
-					cassettePlayer.getImageName(), time);
+					cassettePlayer.getImageName(), time,0);
 			} catch (MSXException& e) {
 				throw CommandException(std::move(e).getMessage());
 			}
@@ -702,7 +774,7 @@ void CassettePlayer::TapeCommand::execute(
 			try {
 				r = "First stopping recording... ";
 				cassettePlayer.playTape(
-					cassettePlayer.getImageName(), time);
+					cassettePlayer.getImageName(), time,0);
 			} catch (MSXException& e) {
 				throw CommandException(std::move(e).getMessage());
 			}
@@ -717,11 +789,15 @@ void CassettePlayer::TapeCommand::execute(
 	} else if (tokens[1] == "getlength") {
 		result = cassettePlayer.getTapeLength(time);
 
+	}
+	else if (tokens[1] == "listsections") {
+		result = cassettePlayer.ListSections();
+
 	} else {
 		try {
 			result = "Changing tape";
 			Filename filename(string(tokens[1].getString()), userFileContext());
-			cassettePlayer.playTape(filename, time);
+			cassettePlayer.playTape(filename, time,0);
 		} catch (MSXException& e) {
 			throw CommandException(std::move(e).getMessage());
 		}
@@ -804,7 +880,11 @@ string CassettePlayer::TapeCommand::help(const vector<string>& tokens) const
 		    "cassetteplayer getlength         "
 		    ": query the total length of the tape\n"
 		    "cassetteplayer <filename>        "
-		    ": insert (a different) tape file\n";
+		    ": insert (a different) tape file\n"
+			"cassetteplayer listsections      "
+			": List selectable tape blocks\n"
+			"cassetteplayer section <number>  "
+			": Load the tape in the selected block\n";
 	}
 	return helptext;
 }
@@ -814,7 +894,7 @@ void CassettePlayer::TapeCommand::tabCompletion(vector<string>& tokens) const
 	if (tokens.size() == 2) {
 		static constexpr const char* const cmds[] = {
 			"eject", "rewind", "motorcontrol", "insert", "new",
-			"play", "getpos", "getlength",
+			"play", "getpos", "getlength","listsections","section",
 			//"record",
 		};
 		completeFileName(tokens, userFileContext(), cmds);
@@ -877,7 +957,7 @@ void CassettePlayer::serialize(Archive& ar, unsigned version)
 			}
 		}
 		try {
-			insertTape(casImage, time);
+			insertTape(casImage, time,0);
 		} catch (MSXException&) {
 			if (oldChecksum.empty()) {
 				// It's OK if we cannot reinsert an empty
