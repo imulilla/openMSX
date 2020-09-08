@@ -1,3 +1,18 @@
+#### ESTE FORK AÑADE SOPORTE AL FORMATO DE CINTA TSX ####
+Se ha añadido poder elegir el bloque a cargar de la cinta. En el caso de los .CAS se puede elegir cualquier bloque, y en el caso de los .TSX se podran elegir los bloques precedidos de un bloque "Inicio de grupo" (ID21).
+Incluye el .TSX y el .CAS del "Chicago's 30" para pruebas.
+
+Para mostrar el listado de bloques se usa el comando "cassetteplayer listsections" y para elegir el bloque "cassetteplayer seccion" mas el numero de bloque (p.e: "cassetteplayer section 2").
+Tambien incluye soporte de parches IPS dentro de un bloque "Bloque de informacion personalizada" (ID35) que se aplicará al siguiente bloque, por ahora no se puede activar/desactivar.
+
+------------------------------------------------------
+#### THIS FORK ADD SUPPORT TO TSX TAPE FORMAT ####
+It has been added to be able to choose the block to load from the tape. In the case of .CAS you can choose any block, and in the case of .TSX you can choose the blocks preceded by a block "Group start" (ID21).
+Includes the .TSX and the .CAS of the "Chicago's 30" for testing.
+
+To display the block list, use the "cassetteplayer listsections" command and to select the block, "cassetteplayer section" plus the block number (eg "cassetteplayer section 2").
+It also includes support for IPS patches within a block "Custom information block" (ID35) that will be applied to the next block, for now it cannot be activated / deactivated.
+
 ----------------------------------------------------------------------------
 openMSX - the MSX emulator that aims for perfection
 ----------------------------------------------------------------------------
