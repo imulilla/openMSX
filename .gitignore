@@ -16,3 +16,4 @@ __pycache__/
 /.vs
 /build/3rdparty
 /build/msvc/.vs/openmsx/v16
+/share/init .tcl

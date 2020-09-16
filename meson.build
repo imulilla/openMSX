@@ -161,7 +161,7 @@ hdr_config = custom_target(
 # =======
 
 main_exec = executable(
-    'openmsx',
+    'openMSX_TSXadv',
     main_sources, sources,
     hdr_version, hdr_config, hdr_components, hdr_systemfuncs,
     install : true,
