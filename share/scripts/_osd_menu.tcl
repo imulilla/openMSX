@@ -1798,7 +1798,8 @@ proc menu_create_tape_list {path} {
 		header { textexpr "Tapes $::osd_tape_path"
 			font-size 10
 			post-spacing 6 }}
-	set extensions "cas|wav|zip|gz"
+	set extensions "cas|wav|zip|gz|tsx"
+
 
 	set items [list]
 	set presentation [list]
