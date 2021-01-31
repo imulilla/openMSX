@@ -16,7 +16,7 @@ void TclParser::DEBUG_PRINT(const string& s)
 	std::cout << string(2 * level, ' ') << s << '\n';
 }
 
-static std::string_view type2string(int type)
+static constexpr std::string_view type2string(int type)
 {
 	switch (type) {
 	case TCL_TOKEN_WORD:
@@ -44,7 +44,7 @@ static std::string_view type2string(int type)
 }
 #endif
 
-static bool inRange(char c, char low, char high)
+static constexpr bool inRange(char c, char low, char high)
 {
 	unsigned t = c - low;
 	return t <= unsigned(high - low);
@@ -90,7 +90,7 @@ void TclParser::parse(const char* p, int size, ParseType type)
 	// The functions Tcl_ParseCommand() and Tcl_ParseExpr() are meant to
 	// operate on a complete command. For interactive syntax highlighting
 	// we also want to pass incomplete commands (e.g. with an opening, but
-	// not yet a closing brace). This loop tries to parse and depening on
+	// not yet a closing brace). This loop tries to parse and depending on
 	// the parse error retries with a completed command.
 	Tcl_Parse parseInfo;
 	int retryCount = 0;
@@ -122,7 +122,7 @@ void TclParser::parse(const char* p, int size, ParseType type)
 			//    'if { / 3'
 			// and that can't be solved by adding something at the
 			// end. Without the retryCount stuff we would get in an
-			// infinte loop here.
+			// infinite loop here.
 			parseStr += '0';
 		} else if (allowComplete && StringOp::startsWith(error, "missing )")) {
 			parseStr += ')';
@@ -233,7 +233,7 @@ TclParser::ParseType TclParser::guessSubType(Tcl_Token* tokens, int i)
 
 bool TclParser::isProc(Tcl_Interp* interp, std::string_view str)
 {
-	string command = strCat("openmsx::is_command_name {", str, '}');
+	auto command = tmpStrCat("openmsx::is_command_name {", str, '}');
 	if (Tcl_Eval(interp, command.c_str()) != TCL_OK) return false;
 	int result;
 	if (Tcl_GetBooleanFromObj(interp, Tcl_GetObjResult(interp), &result)
@@ -245,7 +245,7 @@ void TclParser::setColors(const char* p, int size, char c)
 {
 	int start = (p - parseStr.data()) + offset;
 	int stop = std::min(start + size, int(colors.size()));
-	for (int i = start; i < stop; ++i) {
+	for (auto i : xrange(start, stop)) {
 		colors[i] = c;
 	}
 }

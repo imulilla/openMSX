@@ -17,14 +17,14 @@ FrameSource::FrameSource(const PixelFormat& format)
 {
 }
 
-template <typename Pixel>
+template<typename Pixel>
 const Pixel* FrameSource::getLinePtr320_240(unsigned line, Pixel* buf0) const
 {
 	if (getHeight() == 240) {
 		return getLinePtr(line, 320, buf0);
 	} else {
 		assert(getHeight() == 480);
-		alignas(SSE_ALIGNMENT) Pixel buf1[320];
+		ALIGNAS_SSE Pixel buf1[320];
 		auto* line0 = getLinePtr(2 * line + 0, 320, buf0);
 		auto* line1 = getLinePtr(2 * line + 1, 320, buf1);
 		PixelOperations<Pixel> pixelOps(pixelFormat);
@@ -34,7 +34,7 @@ const Pixel* FrameSource::getLinePtr320_240(unsigned line, Pixel* buf0) const
 	}
 }
 
-template <typename Pixel>
+template<typename Pixel>
 const Pixel* FrameSource::getLinePtr640_480(unsigned line, Pixel* buf) const
 {
 	if (getHeight() == 480) {
@@ -45,7 +45,7 @@ const Pixel* FrameSource::getLinePtr640_480(unsigned line, Pixel* buf) const
 	}
 }
 
-template <typename Pixel>
+template<typename Pixel>
 const Pixel* FrameSource::getLinePtr960_720(unsigned line, Pixel* buf0) const
 {
 	if (getHeight() == 480) {
@@ -54,7 +54,7 @@ const Pixel* FrameSource::getLinePtr960_720(unsigned line, Pixel* buf0) const
 		if ((line % 3) != 1) {
 			return line0;
 		}
-		alignas(SSE_ALIGNMENT) Pixel buf1[960];
+		ALIGNAS_SSE Pixel buf1[960];
 		auto* line1 = getLinePtr(l2 + 1, 960, buf1);
 		PixelOperations<Pixel> pixelOps(pixelFormat);
 		BlendLines<Pixel> blend(pixelOps);
@@ -66,7 +66,7 @@ const Pixel* FrameSource::getLinePtr960_720(unsigned line, Pixel* buf0) const
 	}
 }
 
-template <typename Pixel>
+template<typename Pixel>
 void FrameSource::scaleLine(
 	const Pixel* in, Pixel* out,
 	unsigned inWidth, unsigned outWidth) const

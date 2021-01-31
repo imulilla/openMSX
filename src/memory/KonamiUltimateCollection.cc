@@ -1,4 +1,5 @@
 #include "KonamiUltimateCollection.hh"
+#include "ranges.hh"
 #include "serialize.hh"
 #include <vector>
 
@@ -33,7 +34,7 @@ all Konami and Konami SCC ROMs should work with "Konami" mapper in KUC.
 
 namespace openmsx {
 
-static std::vector<AmdFlash::SectorInfo> getSectorInfo()
+[[nodiscard]] static std::vector<AmdFlash::SectorInfo> getSectorInfo()
 {
 	std::vector<AmdFlash::SectorInfo> sectorInfo;
 	// 8 * 8kB
@@ -64,9 +65,7 @@ void KonamiUltimateCollection::reset(EmuTime::param time)
 	mapperReg = 0;
 	offsetReg = 0;
 	sccMode = 0;
-	for (int bank = 0; bank < 4; ++bank) {
-		bankRegs[bank] = bank;
-	}
+	ranges::iota(bankRegs, 0);
 
 	scc.reset(time);
 	dac.reset(time);

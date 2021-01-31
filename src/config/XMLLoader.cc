@@ -22,8 +22,8 @@ public:
 	void stop();
 	void doctype(string_view txt);
 
-	string_view getSystemID() const { return systemID; }
-	XMLElement& getRoot() { return root; }
+	[[nodiscard]] string_view getSystemID() const { return systemID; }
+	[[nodiscard]] XMLElement& getRoot() { return root; }
 
 private:
 	XMLElement root;
@@ -31,7 +31,7 @@ private:
 	string_view systemID;
 };
 
-XMLElement load(string_view filename, string_view systemID)
+XMLElement load(const string& filename, string_view systemID)
 {
 	MemBuffer<char> buf;
 	try {
@@ -46,7 +46,7 @@ XMLElement load(string_view filename, string_view systemID)
 
 	XMLElementParser handler;
 	try {
-		rapidsax::parse<rapidsax::trimWhitespace>(handler, buf.data());
+		rapidsax::parse<0>(handler, buf.data());
 	} catch (rapidsax::ParseError& e) {
 		throw XMLException(filename, ": Document parsing failed: ", e.what());
 	}
@@ -69,13 +69,14 @@ XMLElement load(string_view filename, string_view systemID)
 
 void XMLElementParser::start(string_view name)
 {
-	XMLElement* newElem;
-	if (!current.empty()) {
-		newElem = &current.back()->addChild(string(name));
-	} else {
-		root.setName(string(name));
-		newElem = &root;
-	}
+	XMLElement* newElem = [&] {
+		if (!current.empty()) {
+			return &current.back()->addChild(name);
+		} else {
+			root.setName(name);
+			return &root;
+		}
+	}();
 	current.push_back(newElem);
 }
 
@@ -86,7 +87,7 @@ void XMLElementParser::attribute(string_view name, string_view value)
 			"Found duplicate attribute \"", name, "\" in <",
 			current.back()->getName(), ">.");
 	}
-	current.back()->addAttribute(string(name), string(value));
+	current.back()->addAttribute(name, value);
 }
 
 void XMLElementParser::text(string_view txt)
@@ -97,7 +98,7 @@ void XMLElementParser::text(string_view txt)
 			"Mixed text+subtags in <", current.back()->getName(),
 			">: \"", txt, "\".");
 	}
-	current.back()->setData(string(txt));
+	current.back()->setData(txt);
 }
 
 void XMLElementParser::stop()

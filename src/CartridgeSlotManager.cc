@@ -9,6 +9,7 @@
 #include "unreachable.hh"
 #include "one_of.hh"
 #include "outer.hh"
+#include "ranges.hh"
 #include "StringOp.hh"
 #include "xrange.hh"
 #include <cassert>
@@ -265,14 +266,10 @@ void CartridgeSlotManager::freeSlot(
 
 bool CartridgeSlotManager::isExternalSlot(int ps, int ss, bool convert) const
 {
-	for (auto slot : xrange(MAX_SLOTS)) {
+	return ranges::any_of(xrange(MAX_SLOTS), [&](auto slot) {
 		int tmp = (convert && (slots[slot].ss == -1)) ? 0 : slots[slot].ss;
-		if (slots[slot].exists() &&
-		    (slots[slot].ps == ps) && (tmp == ss)) {
-			return true;
-		}
-	}
-	return false;
+		return slots[slot].exists() && (slots[slot].ps == ps) && (tmp == ss);
+	});
 }
 
 
@@ -308,14 +305,13 @@ void CartridgeSlotManager::CartCmd::execute(
 	//  TODO investigate whether it's a good idea to strip namespace at a
 	//       higher level for all commands. How does that interact with
 	//       the event recording feature?
-	auto pos = cartname.rfind("::");
-	if (pos != std::string_view::npos) {
+	if (auto pos = cartname.rfind("::"); pos != std::string_view::npos) {
 		cartname = cartname.substr(pos + 2);
 	}
 	if (tokens.size() == 1) {
 		// query name of cartridge
-		auto* extConf = getExtensionConfig(cartname);
-		result.addListElement(strCat(cartname, ':'),
+		const auto* extConf = getExtensionConfig(cartname);
+		result.addListElement(tmpStrCat(cartname, ':'),
 		                      extConf ? extConf->getName() : string{});
 		if (!extConf) {
 			TclObject options = makeTclList("empty");

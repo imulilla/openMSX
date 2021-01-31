@@ -6,13 +6,14 @@
 #include "one_of.hh"
 #include "serialize.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <memory>
 #include <vector>
 
 namespace openmsx {
 
-static std::vector<AmdFlash::SectorInfo> getSectorInfo(RomType type)
+[[nodiscard]] static std::vector<AmdFlash::SectorInfo> getSectorInfo(RomType type)
 {
 	switch (type) {
 	case ROM_MANBOW2:
@@ -81,7 +82,7 @@ void RomManbow2::powerUp(EmuTime::param time)
 
 void RomManbow2::reset(EmuTime::param time)
 {
-	for (int i = 0; i < 4; i++) {
+	for (auto i : xrange(4)) {
 		setRom(i, i);
 	}
 

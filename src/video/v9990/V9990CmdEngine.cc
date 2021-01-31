@@ -11,6 +11,7 @@
 #include "serialize.hh"
 #include "likely.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <iostream>
 
@@ -77,7 +78,7 @@ constexpr EDStorage SRCH_TIMING[4][3][4] = {
 	{{ d(24), d(24), d(24), d(24)}, {d(24), d(24), d(24), d(24)}, {d(24), d(24), d(24), d(24)}}  // TODO
 };
 
-static EmuDuration getTiming(const V9990CmdEngine& cmdEngine, const EDStorage table[4][3][4])
+[[nodiscard]] static EmuDuration getTiming(const V9990CmdEngine& cmdEngine, const EDStorage table[4][3][4])
 {
 	if (unlikely(cmdEngine.getBrokenTiming())) return EmuDuration();
 
@@ -103,27 +104,28 @@ static EmuDuration getTiming(const V9990CmdEngine& cmdEngine, const EDStorage ta
 //   this table is (almost) never used. So we save quite some memory (and
 //   startup time) by lazily initializing this table.
 static MemBuffer<byte> logOpLUT[4][16];
-static byte bitLUT[8][16][2][2]; // to speedup calculating logOpLUT
 
-enum { LOG_NO_T, LOG_BPP2, LOG_BPP4, LOG_BPP8 };
-
-static void initBitTab()
-{
-	for (unsigned op = 0; op < 16; ++op) {
+// to speedup calculating logOpLUT
+static constexpr auto bitLUT = [] {
+	std::array<std::array<std::array<std::array<byte, 2>, 2>, 16>, 8> result = {};
+	for (auto op : xrange(16)) {
 		unsigned tmp = op;
-		for (unsigned src = 0; src < 2; ++src) {
-			for (unsigned dst = 0; dst < 2; ++dst) {
+		for (auto src : xrange(2)) {
+			for (auto dst : xrange(2)) {
 				unsigned b = tmp & 1;
-				for (unsigned bit = 0; bit < 8; ++bit) {
-					bitLUT[bit][op][src][dst] = b << bit;
+				for (auto bit : xrange(8)) {
+					result[bit][op][src][dst] = b << bit;
 				}
 				tmp >>= 1;
 			}
 		}
 	}
-}
+	return result;
+}();
 
-static inline byte func01(unsigned op, unsigned src, unsigned dst)
+enum { LOG_NO_T, LOG_BPP2, LOG_BPP4, LOG_BPP8 };
+
+[[nodiscard]] static constexpr byte func01(unsigned op, unsigned src, unsigned dst)
 {
 	if ((src & 0x03) == 0) return dst & 0x03;
 	byte res = 0;
@@ -131,7 +133,7 @@ static inline byte func01(unsigned op, unsigned src, unsigned dst)
 	res |= bitLUT[1][op][(src & 0x02) >> 1][(dst & 0x02) >> 1];
 	return res;
 }
-static inline byte func23(unsigned op, unsigned src, unsigned dst)
+[[nodiscard]] static constexpr byte func23(unsigned op, unsigned src, unsigned dst)
 {
 	if ((src & 0x0C) == 0) return dst & 0x0C;
 	byte res = 0;
@@ -139,7 +141,7 @@ static inline byte func23(unsigned op, unsigned src, unsigned dst)
 	res |= bitLUT[3][op][(src & 0x08) >> 3][(dst & 0x08) >> 3];
 	return res;
 }
-static inline byte func45(unsigned op, unsigned src, unsigned dst)
+[[nodiscard]] static constexpr byte func45(unsigned op, unsigned src, unsigned dst)
 {
 	if ((src & 0x30) == 0) return dst & 0x30;
 	byte res = 0;
@@ -147,7 +149,7 @@ static inline byte func45(unsigned op, unsigned src, unsigned dst)
 	res |= bitLUT[5][op][(src & 0x20) >> 5][(dst & 0x20) >> 5];
 	return res;
 }
-static inline byte func67(unsigned op, unsigned src, unsigned dst)
+[[nodiscard]] static constexpr byte func67(unsigned op, unsigned src, unsigned dst)
 {
 	if ((src & 0xC0) == 0) return dst & 0xC0;
 	byte res = 0;
@@ -156,7 +158,7 @@ static inline byte func67(unsigned op, unsigned src, unsigned dst)
 	return res;
 }
 
-static inline byte func03(unsigned op, unsigned src, unsigned dst)
+[[nodiscard]] static constexpr byte func03(unsigned op, unsigned src, unsigned dst)
 {
 	if ((src & 0x0F) == 0) return dst & 0x0F;
 	byte res = 0;
@@ -166,7 +168,7 @@ static inline byte func03(unsigned op, unsigned src, unsigned dst)
 	res |= bitLUT[3][op][(src & 0x08) >> 3][(dst & 0x08) >> 3];
 	return res;
 }
-static inline byte func47(unsigned op, unsigned src, unsigned dst)
+[[nodiscard]] static constexpr byte func47(unsigned op, unsigned src, unsigned dst)
 {
 	if ((src & 0xF0) == 0) return dst & 0xF0;
 	byte res = 0;
@@ -177,7 +179,7 @@ static inline byte func47(unsigned op, unsigned src, unsigned dst)
 	return res;
 }
 
-static inline byte func07(unsigned op, unsigned src, unsigned dst)
+[[nodiscard]] static constexpr byte func07(unsigned op, unsigned src, unsigned dst)
 {
 	// if (src == 0) return dst;  // handled in fillTable8
 	byte res = 0;
@@ -192,19 +194,19 @@ static inline byte func07(unsigned op, unsigned src, unsigned dst)
 	return res;
 }
 
-static void fillTableNoT(unsigned op, byte* table)
+static constexpr void fillTableNoT(unsigned op, byte* table)
 {
-	for (unsigned dst = 0; dst < 256; ++dst) {
-		for (unsigned src = 0; src < 256; ++src) {
+	for (auto dst : xrange(256)) {
+		for (auto src : xrange(256)) {
 			table[dst * 256 + src] = func07(op, src, dst);
 		}
 	}
 }
 
-static void fillTable2(unsigned op, byte* table)
+static constexpr void fillTable2(unsigned op, byte* table)
 {
-	for (unsigned dst = 0; dst < 256; ++dst) {
-		for (unsigned src = 0; src < 256; ++src) {
+	for (auto dst : xrange(256)) {
+		for (auto src : xrange(256)) {
 			byte res = 0;
 			res |= func01(op, src, dst);
 			res |= func23(op, src, dst);
@@ -215,10 +217,10 @@ static void fillTable2(unsigned op, byte* table)
 	}
 }
 
-static void fillTable4(unsigned op, byte* table)
+static constexpr void fillTable4(unsigned op, byte* table)
 {
-	for (unsigned dst = 0; dst < 256; ++dst) {
-		for (unsigned src = 0; src < 256; ++src) {
+	for (auto dst : xrange(256)) {
+		for (auto src : xrange(256)) {
 			byte res = 0;
 			res |= func03(op, src, dst);
 			res |= func47(op, src, dst);
@@ -227,19 +229,19 @@ static void fillTable4(unsigned op, byte* table)
 	}
 }
 
-static void fillTable8(unsigned op, byte* table)
+static constexpr void fillTable8(unsigned op, byte* table)
 {
-	for (unsigned dst = 0; dst < 256; ++dst) {
+	for (auto dst : xrange(256)) {
 		{ // src == 0
 			table[dst * 256 + 0  ] = dst;
 		}
-		for (unsigned src = 1; src < 256; ++src) { // src != 0
+		for (auto src : xrange(1, 256)) { // src != 0
 			table[dst * 256 + src] = func07(op, src, dst);
 		}
 	}
 }
 
-static const byte* getLogOpImpl(unsigned mode, unsigned op)
+[[nodiscard]] static const byte* getLogOpImpl(unsigned mode, unsigned op)
 {
 	op &= 0x0f;
 	if (!logOpLUT[mode][op].data()) {
@@ -693,8 +695,6 @@ V9990CmdEngine::V9990CmdEngine(V9990& vdp_, EmuTime::param time_,
 		"v9990cmdtrace",
 		vdp.getCommandController(), "v9990cmdtrace",
 		"V9990 command tracing on/off", false);
-
-	initBitTab();
 
 	auto& cmdTimingSetting = settings.getCmdTimingSetting();
 	update(cmdTimingSetting);
@@ -1168,7 +1168,8 @@ void V9990CmdEngine::executeCMMC(EmuTime::param limit)
 		int dx = (ARG & DIX) ? -1 : 1;
 		int dy = (ARG & DIY) ? -1 : 1;
 		const byte* lut = Mode::getLogOpLUT(LOG);
-		for (unsigned i = 0; i < 8; ++i) {
+		for (auto i : xrange(8)) {
+			(void)i;
 			bool bit = (data & 0x80) != 0;
 			data <<= 1;
 
@@ -1365,7 +1366,7 @@ void V9990CmdEngine::executeBMLX(EmuTime::param limit)
 	while (engineTime < limit) {
 		engineTime += delta;
 		byte d = 0;
-		for (int i = 0; i < Mode::PIXELS_PER_BYTE; ++i) {
+		for (auto i : xrange(Mode::PIXELS_PER_BYTE)) {
 			auto src = Mode::point(vram, SX, SY, pitch);
 			d |= Mode::shift(src, SX, i) & Mode::shiftMask(i);
 			SX += dx;

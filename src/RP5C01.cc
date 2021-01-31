@@ -42,8 +42,8 @@ RP5C01::RP5C01(CommandController& commandController, SRAM& regs_,
 	: regs(regs_)
 	, modeSetting(
 		commandController,
-		((name == "Real time clock") ? "rtcmode" // bw-compat
-		                             : (name + " mode")),
+		((name == "Real time clock") ? std::string_view("rtcmode") // bw-compat
+		                             : tmpStrCat(name + " mode")),
 		"Real Time Clock mode", RP5C01::EMUTIME,
 		EnumSetting<RP5C01::RTCMode>::Map{
 			{"EmuTime",  RP5C01::EMUTIME},
@@ -186,9 +186,9 @@ void RP5C01::time2Regs()
 	regs.write(ALARM_BLOCK * 13 + 11,  leapYear);
 }
 
-static int daysInMonth(int month, unsigned leapYear)
+static constexpr int daysInMonth(int month, unsigned leapYear)
 {
-	const unsigned daysInMonths[12] = {
+	constexpr uint8_t daysInMonths[12] = {
 		31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 	};
 
@@ -247,7 +247,7 @@ void RP5C01::updateTimeRegs(EmuTime::param time)
 
 void RP5C01::resetAlarm()
 {
-	for (unsigned i = 2; i <= 8; ++i) {
+	for (auto i : xrange(2, 9)) {
 		regs.write(ALARM_BLOCK * 13 + i, 0);
 	}
 }

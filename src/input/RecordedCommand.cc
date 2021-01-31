@@ -48,7 +48,7 @@ bool RecordedCommand::needRecord(span<const TclObject> /*tokens*/) const
 	return true;
 }
 
-static std::string_view getBaseName(std::string_view str)
+[[nodiscard]] static std::string_view getBaseName(std::string_view str)
 {
 	auto pos = str.rfind("::");
 	return (pos == std::string_view::npos) ? str : str.substr(pos + 2);
@@ -59,7 +59,7 @@ void RecordedCommand::signalStateChange(const std::shared_ptr<StateChange>& even
 	auto* commandEvent = dynamic_cast<MSXCommandEvent*>(event.get());
 	if (!commandEvent) return;
 
-	auto& tokens = commandEvent->getTokens();
+	const auto& tokens = commandEvent->getTokens();
 	if (getBaseName(tokens[0].getString()) != getName()) return;
 
 	if (needRecord(tokens)) {

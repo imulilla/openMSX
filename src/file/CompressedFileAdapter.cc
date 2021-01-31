@@ -9,26 +9,30 @@ using std::string;
 namespace openmsx {
 
 struct GetURLFromDecompressed {
-	template<typename Ptr> const string& operator()(const Ptr& p) const {
+	template<typename Ptr> [[nodiscard]] const string& operator()(const Ptr& p) const {
 		return p->cachedURL;
 	}
 };
-static hash_set<std::shared_ptr<CompressedFileAdapter::Decompressed>,
+static hash_set<std::unique_ptr<CompressedFileAdapter::Decompressed>,
                 GetURLFromDecompressed, XXHasher> decompressCache;
 
 
 CompressedFileAdapter::CompressedFileAdapter(std::unique_ptr<FileBase> file_)
-	: file(std::move(file_)), pos(0)
+	: file(std::move(file_))
 {
 }
 
 CompressedFileAdapter::~CompressedFileAdapter()
 {
-	auto it = decompressCache.find(getURL());
-	decompressed.reset();
-	if (it != end(decompressCache) && it->unique()) {
-		// delete last user of Decompressed, remove from cache
-		decompressCache.erase(it);
+	if (decompressed) {
+		auto it = decompressCache.find(getURL());
+		assert(it != end(decompressCache));
+		assert(it->get() == decompressed);
+		--(*it)->useCount;
+		if ((*it)->useCount == 0) {
+			// delete last user of Decompressed, remove from cache
+			decompressCache.erase(it);
+		}
 	}
 }
 
@@ -36,19 +40,19 @@ void CompressedFileAdapter::decompress()
 {
 	if (decompressed) return;
 
-	string url = getURL();
+	const std::string& url = getURL();
 	auto it = decompressCache.find(url);
-	if (it != end(decompressCache)) {
-		decompressed = *it;
-	} else {
-		decompressed = std::make_shared<Decompressed>();
-		decompress(*file, *decompressed);
-		decompressed->cachedModificationDate = getModificationDate();
-		decompressed->cachedURL = std::move(url);
-		decompressCache.insert_noDuplicateCheck(decompressed);
+	if (it == end(decompressCache)) {
+		auto d = std::make_unique<Decompressed>();
+		decompress(*file, *d);
+		d->cachedModificationDate = getModificationDate();
+		d->cachedURL = url;
+		it = decompressCache.insert_noDuplicateCheck(std::move(d));
 	}
+	++(*it)->useCount;
+	decompressed = it->get();
 
-	// close original file after succesful decompress
+	// close original file after successful decompress
 	file.reset();
 }
 
@@ -68,7 +72,7 @@ void CompressedFileAdapter::write(const void* /*buffer*/, size_t /*num*/)
 	throw FileException("Writing to compressed files not yet supported");
 }
 
-span<uint8_t> CompressedFileAdapter::mmap()
+span<const uint8_t> CompressedFileAdapter::mmap()
 {
 	decompress();
 	return { decompressed->buf.data(), decompressed->size };
@@ -105,12 +109,12 @@ void CompressedFileAdapter::flush()
 	// nothing because writing is not supported
 }
 
-string CompressedFileAdapter::getURL() const
+const string& CompressedFileAdapter::getURL() const
 {
 	return file ? file->getURL() : decompressed->cachedURL;
 }
 
-string CompressedFileAdapter::getOriginalName()
+std::string_view CompressedFileAdapter::getOriginalName()
 {
 	decompress();
 	return decompressed->originalName;

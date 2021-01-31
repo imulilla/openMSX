@@ -20,7 +20,9 @@
 #include "DeviceConfig.hh"
 #include "XMLElement.hh"
 #include "MSXException.hh"
+#include "enumerate.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <string>
 #include <cstring>
@@ -88,15 +90,13 @@ constexpr byte CMD_Reset_ACK_REQ = 0xC0;
 constexpr byte CMD_Set_ACK_REQ   = 0xE0;
 constexpr byte CMD_MASK          = 0xE0;
 
-constexpr unsigned MAX_DEV = 8;
-
 MB89352::MB89352(const DeviceConfig& config)
 {
 	// TODO: devBusy = false;
 
 	// ALMOST COPY PASTED FROM WD33C93:
 
-	for (auto* t : config.getXML()->getChildren("target")) {
+	for (const auto* t : config.getXML()->getChildren("target")) {
 		unsigned id = t->getAttributeAsInt("id");
 		if (id >= MAX_DEV) {
 			throw MSXException(
@@ -107,7 +107,7 @@ MB89352::MB89352(const DeviceConfig& config)
 			throw MSXException("Duplicate SCSI id: ", id);
 		}
 		DeviceConfig conf(config, *t);
-		auto& type = t->getChild("type").getData();
+		const auto& type = t->getChild("type").getData();
 		if (type == "SCSIHD") {
 			dev[id] = std::make_unique<SCSIHD>(conf, buffer,
 			        SCSIDevice::MODE_SCSI2 | SCSIDevice::MODE_MEGASCSI);
@@ -154,7 +154,7 @@ void MB89352::softReset()
 {
 	isEnabled = false;
 
-	for (int i = 2; i < 15; ++i) {
+	for (auto i : xrange(2, 15)) {
 		regs[i] = 0;
 	}
 	regs[15] = 0xFF;               // un mapped
@@ -644,7 +644,7 @@ byte MB89352::getSSTS() const
 		}
 	}
 	if (phase != SCSI::BUS_FREE) {
-		result |= 0x80; // set iniciator
+		result |= 0x80; // set indiciator
 	}
 	if (isBusy) {
 		result |= 0x20; // set SPC_BSY
@@ -732,7 +732,7 @@ byte MB89352::peekRegister(byte reg) const
 
 
 // TODO duplicated in WD33C93.cc
-static std::initializer_list<enum_string<SCSI::Phase>> phaseInfo = {
+static constexpr std::initializer_list<enum_string<SCSI::Phase>> phaseInfo = {
 	{ "UNDEFINED",   SCSI::UNDEFINED   },
 	{ "BUS_FREE",    SCSI::BUS_FREE    },
 	{ "ARBITRATION", SCSI::ARBITRATION },
@@ -753,9 +753,9 @@ void MB89352::serialize(Archive& ar, unsigned /*version*/)
 {
 	ar.serialize_blob("buffer", buffer.data(), buffer.size());
 	char tag[8] = { 'd', 'e', 'v', 'i', 'c', 'e', 'X', 0 };
-	for (unsigned i = 0; i < MAX_DEV; ++i) {
+	for (auto [i, d] : enumerate(dev)) {
 		tag[6] = char('0' + i);
-		ar.serializePolymorphic(tag, *dev[i]);
+		ar.serializePolymorphic(tag, *d);
 	}
 	ar.serialize("bufIdx",       bufIdx,
 	             "msgin",        msgin,

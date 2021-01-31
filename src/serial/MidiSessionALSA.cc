@@ -19,12 +19,14 @@ public:
 			snd_seq_t& seq,
 			snd_seq_client_info_t& cinfo, snd_seq_port_info_t& pinfo);
 	~MidiOutALSA() override;
+	MidiOutALSA(const MidiOutALSA&) = delete;
+	MidiOutALSA& operator=(const MidiOutALSA&) = delete;
 
 	// Pluggable
 	void plugHelper(Connector& connector, EmuTime::param time) override;
 	void unplugHelper(EmuTime::param time) override;
-	const std::string& getName() const override;
-	std::string_view getDescription() const override;
+	[[nodiscard]] const std::string& getName() const override;
+	[[nodiscard]] std::string_view getDescription() const override;
 
 	// MidiOutDevice
 	void recvMessage(
@@ -37,6 +39,7 @@ private:
 	void connect();
 	void disconnect();
 
+private:
 	snd_seq_t& seq;
 	snd_midi_event_t* event_parser;
 	int sourcePort;
@@ -60,7 +63,8 @@ MidiOutALSA::MidiOutALSA(
 {
 }
 
-MidiOutALSA::~MidiOutALSA() {
+MidiOutALSA::~MidiOutALSA()
+{
 	if (connected) {
 		disconnect();
 	}

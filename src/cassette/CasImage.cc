@@ -105,15 +105,13 @@ void CasImage::write1()
 }
 
 // write a header signal
-void CasImage::writeHeader(int s)
+void CasImage::writeHeader(unsigned s)
 {
-	for (int i = 0; i < s; ++i) {
-		write1();
-	}
+	repeat(s, [&] { write1(); });
 }
 
 // write silence
-void CasImage::writeSilence(int s)
+void CasImage::writeSilence(unsigned s)
 {
 	output.insert(end(output), s, 0);
 }
@@ -137,7 +135,7 @@ void CasImage::writeByte(byte b)
 }
 
 // write data until a header is detected
-bool CasImage::writeData(span<byte> buf, size_t& pos)
+bool CasImage::writeData(span<const byte> buf, size_t& pos)
 {
 	bool eof = false;
 	while ((pos + 8) <= buf.size()) {

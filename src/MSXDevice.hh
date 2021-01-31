@@ -40,7 +40,7 @@ public:
 
 	/** Returns the hardwareconfig this device belongs to.
 	  */
-	const HardwareConfig& getHardwareConfig() const {
+	[[nodiscard]] const HardwareConfig& getHardwareConfig() const {
 		return deviceConfig.getHardwareConfig();
 	}
 
@@ -62,7 +62,7 @@ public:
 	 * supported in the MSX standard.
 	 * Default implementation returns 0xFF.
 	 */
-	virtual byte readIRQVector();
+	[[nodiscard]] virtual byte readIRQVector();
 
 	/**
 	 * This method is called when MSX is powered down. The default
@@ -83,7 +83,7 @@ public:
 	 * Returns a human-readable name for this device.
 	 * Default implementation is normally ok.
 	 */
-	virtual std::string getName() const;
+	[[nodiscard]] virtual std::string getName() const;
 
 	/** Returns list of name(s) of this device.
 	 * This is normally the same as getName() (but formatted as a Tcl list)
@@ -110,7 +110,7 @@ public:
 	 * Read a byte from an IO port at a certain time from this device.
 	 * The default implementation returns 255.
 	 */
-	virtual byte readIO(word port, EmuTime::param time);
+	[[nodiscard]] virtual byte readIO(word port, EmuTime::param time);
 
 	/**
 	 * Write a byte to a given IO port at a certain time to this
@@ -127,7 +127,7 @@ public:
 	 * by a debugger.
 	 * The default implementation just returns 0xFF.
 	 */
-	virtual byte peekIO(word port, EmuTime::param time) const;
+	[[nodiscard]] virtual byte peekIO(word port, EmuTime::param time) const;
 
 
 	// Memory
@@ -137,7 +137,7 @@ public:
 	 * device.
 	 * The default implementation returns 255.
 	 */
-	virtual byte readMem(word address, EmuTime::param time);
+	[[nodiscard]] virtual byte readMem(word address, EmuTime::param time);
 
 	/**
 	 * Write a given byte to a given location at a certain time
@@ -157,7 +157,7 @@ public:
 	 * The default implementation always returns a null pointer.
 	 * The start of the interval is CacheLine::SIZE aligned.
 	 */
-	virtual const byte* getReadCacheLine(word start) const;
+	[[nodiscard]] virtual const byte* getReadCacheLine(word start) const;
 
 	/**
 	 * Test that the memory in the interval [start, start +
@@ -170,7 +170,7 @@ public:
 	 * The default implementation always returns a null pointer.
 	 * The start of the interval is CacheLine::SIZE aligned.
 	 */
-	virtual byte* getWriteCacheLine(word start) const;
+	[[nodiscard]] virtual byte* getWriteCacheLine(word start) const;
 
 	/**
 	 * Read a byte from a given memory location. Reading memory
@@ -184,7 +184,7 @@ public:
 	 * cacheable you cannot read it by default, Override this
 	 * method if you want to improve this behaviour.
 	 */
-	virtual byte peekMem(word address, EmuTime::param time) const;
+	[[nodiscard]] virtual byte peekMem(word address, EmuTime::param time) const;
 
 	/** Global writes.
 	  * Some devices violate the MSX standard by ignoring the SLOT-SELECT
@@ -222,32 +222,32 @@ public:
 
 	/** Get the mother board this device belongs to
 	  */
-	MSXMotherBoard& getMotherBoard() const;
+	[[nodiscard]] MSXMotherBoard& getMotherBoard() const;
 
 	/** Get the configuration section for this device.
 	  * This was passed as a constructor argument.
 	  */
-	const XMLElement& getDeviceConfig() const {
+	[[nodiscard]] const XMLElement& getDeviceConfig() const {
 		return *deviceConfig.getXML();
 	}
-	const DeviceConfig& getDeviceConfig2() const { // TODO
+	[[nodiscard]] const DeviceConfig& getDeviceConfig2() const { // TODO
 		return deviceConfig;
 	}
 
 	/** Get the device references that are specified for this device
 	 */
-	const Devices& getReferences() const;
+	[[nodiscard]] const Devices& getReferences() const;
 
 	// convenience functions, these delegate to MSXMotherBoard
-	EmuTime::param getCurrentTime() const;
-	MSXCPU& getCPU() const;
-	MSXCPUInterface& getCPUInterface() const;
-	Scheduler& getScheduler() const;
-	CliComm& getCliComm() const;
-	Reactor& getReactor() const;
-	CommandController& getCommandController() const;
-	PluggingController& getPluggingController() const;
-	LedStatus& getLedStatus() const;
+	[[nodiscard]] EmuTime::param getCurrentTime() const;
+	[[nodiscard]] MSXCPU& getCPU() const;
+	[[nodiscard]] MSXCPUInterface& getCPUInterface() const;
+	[[nodiscard]] Scheduler& getScheduler() const;
+	[[nodiscard]] CliComm& getCliComm() const;
+	[[nodiscard]] Reactor& getReactor() const;
+	[[nodiscard]] CommandController& getCommandController() const;
+	[[nodiscard]] PluggingController& getPluggingController() const;
+	[[nodiscard]] LedStatus& getLedStatus() const;
 
 	template<typename Archive>
 	void serialize(Archive& ar, unsigned version);
@@ -279,7 +279,7 @@ protected:
 	  * to CacheLine::SIZE. Though some devices may need a stricter
 	  * alignment. In that case they must override this method.
 	  */
-	virtual unsigned getBaseSizeAlignment() const;
+	[[nodiscard]] virtual unsigned getBaseSizeAlignment() const;
 
 	/** By default we don't allow unaligned <mem> specifications in the
 	  * config file. Though for a machine like 'Victor HC-95A' is it useful
@@ -287,7 +287,7 @@ protected:
 	  * it for a select few devices: devices that promise to not call any
 	  * of the 'fillDeviceXXXCache()' methods.
 	  */
-	virtual bool allowUnaligned() const { return false; }
+	[[nodiscard]] virtual bool allowUnaligned() const { return false; }
 
 	/** @see getDeviceInfo()
 	 * Default implementation does nothing. Subclasses can override this
@@ -305,7 +305,7 @@ private:
 	void clip(unsigned start, unsigned size, Action action, Args... args);
 
 	void initName(const std::string& name);
-	void staticInit();
+	static void staticInit();
 
 	void lockDevices();
 	void unlockDevices();
@@ -328,8 +328,8 @@ private:
 	Devices references;
 	Devices referencedBy;
 
-	int ps;
-	int ss;
+	int ps = 0;
+	int ss = 0;
 };
 
 REGISTER_BASE_NAME_HELPER(MSXDevice, "Device");

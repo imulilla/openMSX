@@ -149,7 +149,7 @@ struct TextPureNoWsPred {
 };
 
 // Detect text character (PCDATA) that does not require processing when ws
-// normalizationis is enabled (anything but < \0 & space \n \r \t)
+// normalization is enabled (anything but < \0 & space \n \r \t)
 struct TextPureWithWsPred {
 	[[nodiscard]] static bool test(char ch) { return !(lutChar[uint8_t(ch)] & 0x0F); }
 };
@@ -175,7 +175,7 @@ struct AttPurePred2 {
 };
 
 // Insert coded character, using UTF8
-static inline void insertUTF8char(char*& text, uint32_t code)
+inline void insertUTF8char(char*& text, uint32_t code)
 {
 	if (code < 0x80) { // 1 byte sequence
 		text[0] = char(code);
@@ -220,7 +220,7 @@ template<char C0, char C1, char C2, char C3, char C4, char C5>
 
 
 // Skip characters until predicate evaluates to true
-template<class StopPred> static inline void skip(char*& text)
+template<typename StopPred> static inline void skip(char*& text)
 {
 	char* tmp = text;
 	while (StopPred::test(*tmp)) ++tmp;
@@ -231,7 +231,7 @@ template<class StopPred> static inline void skip(char*& text)
 // - replacing XML character entity references with proper characters
 //   (&apos; &amp; &quot; &lt; &gt; &#...;)
 // - condensing whitespace sequences to single space character
-template<class StopPred, class StopPredPure, int FLAGS>
+template<typename StopPred, class StopPredPure, int FLAGS>
 [[nodiscard]] static inline char* skipAndExpand(char*& text)
 {
 	// If entity translation, whitespace condense and whitespace
@@ -349,7 +349,7 @@ template<class StopPred, class StopPredPure, int FLAGS>
 	return dest;
 }
 
-static inline void skipBOM(char*& text)
+inline void skipBOM(char*& text)
 {
 	if (next<char(0xEF), char(0xBB), char(0xBF)>(text)) {
 		text += 3; // skip utf-8 bom

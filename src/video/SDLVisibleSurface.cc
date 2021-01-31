@@ -29,8 +29,8 @@ SDLVisibleSurface::SDLVisibleSurface(
 
 	renderer.reset(SDL_CreateRenderer(window.get(), -1, 0));
 	if (!renderer) {
-		std::string err = SDL_GetError();
-		throw InitException("Could not create renderer: " + err);
+		std::string_view err = SDL_GetError();
+		throw InitException("Could not create renderer: ", err);
 	}
 	SDL_RenderSetLogicalSize(renderer.get(), width, height);
 	setSDLRenderer(renderer.get());
@@ -39,8 +39,8 @@ SDLVisibleSurface::SDLVisibleSurface(
 		0, width, height, 32,
 		0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000));
 	if (!surface) {
-		std::string err = SDL_GetError();
-		throw InitException("Could not create surface: " + err);
+		std::string_view err = SDL_GetError();
+		throw InitException("Could not create surface: ", err);
 	}
 	setSDLSurface(surface.get());
 
@@ -48,8 +48,8 @@ SDLVisibleSurface::SDLVisibleSurface(
 		renderer.get(), SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
 		width, height));
 	if (!texture) {
-		std::string err = SDL_GetError();
-		throw InitException("Could not create texture: " + err);
+		std::string_view err = SDL_GetError();
+		throw InitException("Could not create texture: ", err);
 	}
 
 	setSDLPixelFormat(*surface->format);
@@ -118,7 +118,7 @@ void SDLVisibleSurface::saveScreenshotSDL(
 	auto [width, height] = output.getLogicalSize();
 	VLA(const void*, rowPointers, height);
 	MemBuffer<uint8_t> buffer(width * height * 3);
-	for (int i = 0; i < height; ++i) {
+	for (auto i : xrange(height)) {
 		rowPointers[i] = &buffer[width * 3 * i];
 	}
 	if (SDL_RenderReadPixels(
@@ -132,6 +132,11 @@ void SDLVisibleSurface::saveScreenshotSDL(
 void SDLVisibleSurface::clearScreen()
 {
 	SDL_FillRect(surface.get(), nullptr, 0);
+}
+
+void SDLVisibleSurface::fullScreenUpdated(bool /*fullscreen*/)
+{
+	// nothing
 }
 
 } // namespace openmsx

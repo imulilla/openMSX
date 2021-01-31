@@ -15,6 +15,7 @@
 #include "stl.hh"
 #include "unreachable.hh"
 #include "view.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <cstring>
 #include <iterator> // for back_inserter
@@ -267,7 +268,7 @@ void MSXDevice::registerSlots()
 	primaryConfig->setAttribute("slot", strCat(ps));
 	if (secondaryConfig) {
 		string slot = (ss == -1) ? "X" : strCat(ss);
-		secondaryConfig->setAttribute("slot", slot);
+		secondaryConfig->setAttribute("slot", std::move(slot));
 	} else {
 		if (ss != -1) {
 			throw MSXException(
@@ -334,7 +335,7 @@ void MSXDevice::registerPorts()
 		    (type != one_of("I", "O", "IO"))) {
 			throw MSXException("Invalid IO port specification");
 		}
-		for (unsigned port = base; port < base + num; ++port) {
+		for (auto port : xrange(base, base + num)) {
 			if (type == one_of("I", "IO")) {
 				getCPUInterface().register_IO_In(port, this);
 				inPorts.push_back(port);

@@ -553,6 +553,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomSuperLodeRunner.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomSynthesizer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomZemina126in1.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\memory\RomZemina25in1.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomZemina80in1.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomZemina90in1.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\SRAM.cc" />
@@ -810,6 +811,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\MSXS1985.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\MSXS1990.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\MSXSwitchedDevice.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\MSXToshibaTcx200x.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\MSXTurboRPause.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\PasswordCart.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\Pluggable.cc" />
@@ -1107,6 +1109,7 @@
     <None Include="$(OpenMSXSrcDir)\memory\RomSynthesizer.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomTypes.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomZemina126in1.hh" />
+    <None Include="$(OpenMSXSrcDir)\memory\RomZemina25in1.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomZemina80in1.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomZemina90in1.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\SRAM.hh" />
@@ -1461,6 +1464,7 @@
     <None Include="$(OpenMSXSrcDir)\MSXS1985.hh" />
     <None Include="$(OpenMSXSrcDir)\MSXS1990.hh" />
     <None Include="$(OpenMSXSrcDir)\MSXSwitchedDevice.hh" />
+    <None Include="$(OpenMSXSrcDir)\MSXToshibaTcx200x.hh" />
     <None Include="$(OpenMSXSrcDir)\MSXTurboRPause.hh" />
     <CustomBuild Include="$(OpenMSXSrcDir)\openmsx.hh">
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Generating config headers...</Message>

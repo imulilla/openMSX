@@ -5,11 +5,12 @@
 #include "GlobalSettings.hh"
 #include "StringSetting.hh"
 #include "likely.hh"
+#include "xrange.hh"
 #include <cassert>
 
 namespace openmsx {
 
-static std::bitset<CacheLine::SIZE> getBitSetAllTrue()
+[[nodiscard]] static std::bitset<CacheLine::SIZE> getBitSetAllTrue()
 {
 	std::bitset<CacheLine::SIZE> result;
 	result.set();
@@ -17,7 +18,7 @@ static std::bitset<CacheLine::SIZE> getBitSetAllTrue()
 }
 
 CheckedRam::CheckedRam(const DeviceConfig& config, const std::string& name,
-                       const std::string& description, unsigned size)
+                       static_string_view description, unsigned size)
 	: completely_initialized_cacheline(size / CacheLine::SIZE, false)
 	, uninitialized(size / CacheLine::SIZE, getBitSetAllTrue())
 	, ram(config, name, description, size)
@@ -61,7 +62,7 @@ byte* CheckedRam::getRWCacheLines(unsigned addr, unsigned size) const
 	// TODO optimize
 	unsigned num = size >> CacheLine::BITS;
 	unsigned first = addr >> CacheLine::BITS;
-	for (unsigned i = 0; i < num; ++i) {
+	for (auto i : xrange(num)) {
 		if (!completely_initialized_cacheline[first + i]) {
 			return nullptr;
 		}

@@ -2,6 +2,7 @@
 #define USERSETTINGS_HH
 
 #include "Command.hh"
+#include "static_string_view.hh"
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -13,14 +14,18 @@ class Setting;
 class UserSettings
 {
 public:
-	using Settings = std::vector<std::unique_ptr<Setting>>;
+	struct Info {
+		std::unique_ptr<Setting> setting;
+		StringStorage description; // because setting doesn't take ownership
+	};
+	using Settings = std::vector<Info>;
 
 	explicit UserSettings(CommandController& commandController);
 
-	void addSetting(std::unique_ptr<Setting> setting);
+	void addSetting(Info&& info);
 	void deleteSetting(Setting& setting);
-	Setting* findSetting(std::string_view name) const;
-	const Settings& getSettings() const { return settings; }
+	[[nodiscard]] Setting* findSetting(std::string_view name) const;
+	[[nodiscard]] const Settings& getSettingsInfo() const { return settings; }
 
 private:
 	class Cmd final : public Command {
@@ -28,7 +33,7 @@ private:
 		explicit Cmd(CommandController& commandController);
 		void execute(span<const TclObject> tokens,
 			     TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 		void tabCompletion(std::vector<std::string>& tokens) const override;
 
 	private:
@@ -36,12 +41,13 @@ private:
 		void destroy(span<const TclObject> tokens, TclObject& result);
 		void info   (span<const TclObject> tokens, TclObject& result);
 
-		std::unique_ptr<Setting> createString (span<const TclObject> tokens);
-		std::unique_ptr<Setting> createBoolean(span<const TclObject> tokens);
-		std::unique_ptr<Setting> createInteger(span<const TclObject> tokens);
-		std::unique_ptr<Setting> createFloat  (span<const TclObject> tokens);
+		[[nodiscard]] Info createString (span<const TclObject> tokens);
+		[[nodiscard]] Info createBoolean(span<const TclObject> tokens);
+		[[nodiscard]] Info createInteger(span<const TclObject> tokens);
+		[[nodiscard]] Info createFloat  (span<const TclObject> tokens);
+		[[nodiscard]] Info createEnum   (span<const TclObject> tokens);
 
-		std::vector<std::string_view> getSettingNames() const;
+		[[nodiscard]] std::vector<std::string_view> getSettingNames() const;
 	} userSettingCommand;
 
 	Settings settings; // unordered

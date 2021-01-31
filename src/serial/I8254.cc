@@ -1,6 +1,7 @@
 #include "I8254.hh"
 #include "EmuTime.hh"
 #include "ClockPin.hh"
+#include "enumerate.hh"
 #include "one_of.hh"
 #include "serialize.hh"
 #include "unreachable.hh"
@@ -22,8 +23,8 @@ public:
 	Counter(Scheduler& scheduler, ClockPinListener* listener,
 		EmuTime::param time);
 	void reset(EmuTime::param time);
-	byte readIO(EmuTime::param time);
-	byte peekIO(EmuTime::param time) const;
+	[[nodiscard]] byte readIO(EmuTime::param time);
+	[[nodiscard]] byte peekIO(EmuTime::param time) const;
 	void writeIO(byte value, EmuTime::param time);
 	void setGateStatus(bool status, EmuTime::param time);
 	void writeControlWord(byte value, EmuTime::param time);
@@ -55,6 +56,7 @@ private:
 	void writeLoad(word value, EmuTime::param time);
 	void advance(EmuTime::param time);
 
+private:
 	ClockPin clock;
 	ClockPin output;
 	EmuTime currentTime;
@@ -284,7 +286,7 @@ void Counter::writeIO(byte value, EmuTime::param time)
 			writeOrder = HIGH;
 			writeLatch = value;
 			if ((control & CNTR_MODE) == CNTR_M0)
-				// pauze counting when in mode 0
+				// pause counting when in mode 0
 				counting = false;
 		} else {
 			writeOrder = LOW;
@@ -506,7 +508,7 @@ void Counter::advance(EmuTime::param time)
 }
 
 
-static std::initializer_list<enum_string<Counter::ByteOrder>> byteOrderInfo = {
+static constexpr std::initializer_list<enum_string<Counter::ByteOrder>> byteOrderInfo = {
 	{ "LOW",  Counter::LOW  },
 	{ "HIGH", Counter::HIGH }
 };
@@ -538,9 +540,9 @@ template<typename Archive>
 void I8254::serialize(Archive& ar, unsigned /*version*/)
 {
 	char tag[9] = { 'c', 'o', 'u', 'n', 't', 'e', 'r', 'X', 0 };
-	for (int i = 0; i < 3; ++i) {
+	for (auto [i, cntr] : enumerate(counter)) {
 		tag[7] = char('0' + i);
-		ar.serialize(tag, *counter[i]);
+		ar.serialize(tag, *cntr);
 	}
 }
 INSTANTIATE_SERIALIZE_METHODS(I8254);

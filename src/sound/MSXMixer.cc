@@ -12,6 +12,7 @@
 #include "CommandException.hh"
 #include "AviRecorder.hh"
 #include "Filename.hh"
+#include "FileOperations.hh"
 #include "CliComm.hh"
 #include "stl.hh"
 #include "aligned.hh"
@@ -21,6 +22,7 @@
 #include "unreachable.hh"
 #include "view.hh"
 #include "vla.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -86,27 +88,27 @@ void MSXMixer::registerSound(SoundDevice& device, float volume,
 	info.device = &device;
 	info.defaultVolume = volume;
 	info.volumeSetting = std::make_unique<IntegerSetting>(
-		commandController, name + "_volume",
+		commandController, tmpStrCat(name, "_volume"),
 		"the volume of this sound chip", 75, 0, 100);
 	info.balanceSetting = std::make_unique<IntegerSetting>(
-		commandController, name + "_balance",
+		commandController, tmpStrCat(name, "_balance"),
 		"the balance of this sound chip", balance, -100, 100);
 
 	info.volumeSetting->attach(*this);
 	info.balanceSetting->attach(*this);
 
-	for (unsigned i = 0; i < numChannels; ++i) {
+	for (auto i : xrange(numChannels)) {
 		SoundDeviceInfo::ChannelSettings channelSettings;
-		string ch_name = strCat(name, "_ch", i + 1);
+		auto ch_name = tmpStrCat(name, "_ch", i + 1);
 
 		channelSettings.recordSetting = std::make_unique<StringSetting>(
-			commandController, ch_name + "_record",
+			commandController, tmpStrCat(ch_name, "_record"),
 			"filename to record this channel to",
 			std::string_view{}, Setting::DONT_SAVE);
 		channelSettings.recordSetting->attach(*this);
 
 		channelSettings.muteSetting = std::make_unique<BooleanSetting>(
-			commandController, ch_name + "_mute",
+			commandController, tmpStrCat(ch_name, "_mute"),
 			"sets mute-status of individual sound channels",
 			false, Setting::DONT_SAVE);
 		channelSettings.muteSetting->attach(*this);
@@ -292,7 +294,7 @@ static inline void mulMix2Acc(
 //  with:
 //     R = 1 - (2*pi * cut-off-frequency / samplerate)
 //  we take R = 511/512
-//   44100Hz --> cutt-off freq = 14Hz
+//   44100Hz --> cutoff freq = 14Hz
 //   22050Hz                     7Hz
 constexpr auto R = 511.0f / 512.0f;
 
@@ -418,9 +420,10 @@ void MSXMixer::generate(float* output, EmuTime::param time, unsigned samples)
 	// When samples==0, call updateBuffer() but skip all further processing
 	// (handling this as a special case allows to simplify the code below).
 	if (samples == 0) {
-		alignas(SSE_ALIGNMENT) float dummyBuf[4];
+		ALIGNAS_SSE float dummyBuf[4];
 		for (auto& info : infos) {
-			info.device->updateBuffer(0, dummyBuf, time);
+			bool ignore = info.device->updateBuffer(0, dummyBuf, time);
+			(void)ignore;
 		}
 		return;
 	}
@@ -626,7 +629,8 @@ void MSXMixer::changeRecordSetting(const Setting& setting)
 			if (s.recordSetting.get() == &setting) {
 				info.device->recordChannel(
 					channel,
-					Filename(string(s.recordSetting->getString())));
+					Filename(FileOperations::expandTilde(string(
+						s.recordSetting->getString()))));
 				return;
 			}
 			++channel;
@@ -659,8 +663,8 @@ void MSXMixer::update(const SpeedManager& /*speedManager*/)
 		// Avoid calling reInit() while recording because
 		// each call causes a small hiccup in the sound (and
 		// while recording this call anyway has no effect).
-		// This was noticable while sliding the speed slider
-		// in catapult (becuase this causes many changes in
+		// This was noticeable while sliding the speed slider
+		// in catapult (because this causes many changes in
 		// the speed setting).
 	}
 }
@@ -677,31 +681,38 @@ void MSXMixer::updateVolumeParams(SoundDeviceInfo& info)
 	int dVolume = info.volumeSetting->getInt();
 	float volume = info.defaultVolume * mVolume * dVolume / (100.0f * 100.0f);
 	int balance = info.balanceSetting->getInt();
-	float l1, r1, l2, r2;
-	if (info.device->isStereo()) {
-		if (balance < 0) {
-			float b = (balance + 100.0f) / 100.0f;
-			l1 = volume;
-			r1 = 0.0f;
-			l2 = volume * sqrtf(std::max(0.0f, 1.0f - b));
-			r2 = volume * sqrtf(std::max(0.0f,        b));
+	auto [l1, r1, l2, r2] = [&] {
+		if (info.device->isStereo()) {
+			if (balance < 0) {
+				float b = (balance + 100.0f) / 100.0f;
+				return std::tuple{
+					/*l1 =*/ volume,
+					/*r1 =*/ 0.0f,
+					/*l2 =*/ volume * sqrtf(std::max(0.0f, 1.0f - b)),
+					/*r2 =*/ volume * sqrtf(std::max(0.0f,        b))
+				};
+			} else {
+				float b = balance / 100.0f;
+				return std::tuple{
+					/*l1 =*/ volume * sqrtf(std::max(0.0f, 1.0f - b)),
+					/*r1 =*/ volume * sqrtf(std::max(0.0f,        b)),
+					/*l2 =*/ 0.0f,
+					/*r2 =*/ volume
+				};
+			}
 		} else {
-			float b = balance / 100.0f;
-			l1 = volume * sqrtf(std::max(0.0f, 1.0f - b));
-			r1 = volume * sqrtf(std::max(0.0f,        b));
-			l2 = 0.0f;
-			r2 = volume;
+			// make sure that in case of rounding errors
+			// we don't take sqrt() of negative numbers
+			float b = (balance + 100.0f) / 200.0f;
+			return std::tuple{
+				/*l1 =*/ volume * sqrtf(std::max(0.0f, 1.0f - b)),
+				/*r1 =*/ volume * sqrtf(std::max(0.0f,        b)),
+				/*l2 =*/ 0.0f, // dummy
+				/*r2 =*/ 0.0f  // dummy
+			};
 		}
-	} else {
-		// make sure that in case of rounding errors
-		// we don't take sqrt() of negative numbers
-		float b = (balance + 100.0f) / 200.0f;
-		l1 = volume * sqrtf(std::max(0.0f, 1.0f - b));
-		r1 = volume * sqrtf(std::max(0.0f,        b));
-		l2 = r2 = 0.0f; // dummy
-	}
-	float ampL, ampR;
-	std::tie(ampL, ampR) = info.device->getAmplificationFactor();
+	}();
+	auto [ampL, ampR] = info.device->getAmplificationFactor();
 	info.left1  = l1 * ampL;
 	info.right1 = r1 * ampR;
 	info.left2  = l2 * ampL;

@@ -2,7 +2,9 @@
 #include "DummyAY8910Periphery.hh"
 #include "MSXCPUInterface.hh"
 #include "CacheLine.hh"
+#include "ranges.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <vector>
 
@@ -163,7 +165,7 @@ Main features:
 
 namespace openmsx {
 
-static std::vector<AmdFlash::SectorInfo> getSectorInfo() {
+[[nodiscard]] static std::vector<AmdFlash::SectorInfo> getSectorInfo() {
 	std::vector<AmdFlash::SectorInfo> sectorInfo;
 	// 1 * 16kB
 	sectorInfo.insert(sectorInfo.end(), 1, {16 * 1024, false});
@@ -207,16 +209,12 @@ void MegaFlashRomSCCPlus::reset(EmuTime::param time)
 	configReg = 0;
 	offsetReg = 0;
 	subslotReg = 0;
-	for (int subslot = 0; subslot < 4; ++subslot) {
-		for (int bank = 0; bank < 4; ++bank) {
-			bankRegs[subslot][bank] = bank;
-		}
+	for (auto& regs : bankRegs) {
+		ranges::iota(regs, 0);
 	}
 
 	sccMode = 0;
-	for (int i = 0; i < 4; ++i) {
-		sccBanks[i] = i;
-	}
+	ranges::iota(sccBanks, 0);
 	scc.reset(time);
 
 	psgLatch = 0;
@@ -248,21 +246,22 @@ unsigned MegaFlashRomSCCPlus::getSubslot(unsigned addr) const
 unsigned MegaFlashRomSCCPlus::getFlashAddr(unsigned addr) const
 {
 	unsigned subslot = getSubslot(addr);
-	unsigned tmp;
-	if ((configReg & 0xC0) == 0x40) {
-		unsigned bank = bankRegs[subslot][addr >> 14] + offsetReg;
-		tmp = (bank * 0x4000) + (addr & 0x3FFF);
-	} else {
-		unsigned page = (addr >> 13) - 2;
-		if (page >= 4) {
-			// Bank: -2, -1, 4, 5. So not mapped in this region,
-			// returned value should not be used. But querying it
-			// anyway is easier, see start of writeMem().
-			return unsigned(-1);
+	unsigned tmp = [&] {
+		if ((configReg & 0xC0) == 0x40) {
+			unsigned bank = bankRegs[subslot][addr >> 14] + offsetReg;
+			return (bank * 0x4000) + (addr & 0x3FFF);
+		} else {
+			unsigned page = (addr >> 13) - 2;
+			if (page >= 4) {
+				// Bank: -2, -1, 4, 5. So not mapped in this region,
+				// returned value should not be used. But querying it
+				// anyway is easier, see start of writeMem().
+				return unsigned(-1);
+			}
+			unsigned bank = bankRegs[subslot][page] + offsetReg;
+			return (bank * 0x2000) + (addr & 0x1FFF);
 		}
-		unsigned bank = bankRegs[subslot][page] + offsetReg;
-		tmp = (bank * 0x2000) + (addr & 0x1FFF);
-	}
+	}();
 	return ((0x40000 * subslot) + tmp) & 0xFFFFF; // wrap at 1MB
 }
 
@@ -361,7 +360,7 @@ void MegaFlashRomSCCPlus::writeMem(word addr, byte value, EmuTime::param time)
 		// write subslot register
 		byte diff = value ^ subslotReg;
 		subslotReg = value;
-		for (int i = 0; i < 4; ++i) {
+		for (auto i : xrange(4)) {
 			if (diff & (3 << (2 * i))) {
 				invalidateDeviceRCache(0x4000 * i, 0x4000);
 			}

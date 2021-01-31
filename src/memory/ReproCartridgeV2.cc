@@ -50,7 +50,7 @@ differences:
 
 namespace openmsx {
 
-static std::vector<AmdFlash::SectorInfo> getSectorInfo()
+[[nodiscard]] static std::vector<AmdFlash::SectorInfo> getSectorInfo()
 {
 	std::vector<AmdFlash::SectorInfo> sectorInfo;
 	// 8 * 8kB
@@ -103,9 +103,7 @@ void ReproCartridgeV2::reset(EmuTime::param time)
 	setVolume(time, 0b10'000'10);
 	mapperTypeReg = 0;
 	sccMode = 0;
-	for (int bank = 0; bank < 4; ++bank) {
-		bankRegs[bank] = bank;
-	}
+	ranges::iota(bankRegs, 0);
 
 	scc.reset(time);
 	psg0x10Latch = 0;

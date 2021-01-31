@@ -22,92 +22,171 @@ public:
 	// Construction.
 	//  (copy, assign, move, destruct are default)
 	XMLElement() = default;
-	explicit XMLElement(std::string name_)
-		: name(std::move(name_)) {}
-	XMLElement(std::string name_, std::string data_)
-		: name(std::move(name_)), data(std::move(data_)) {}
+	XMLElement(XMLElement&&) = default;
+	XMLElement& operator=(const XMLElement&) = default;
+	XMLElement& operator=(XMLElement&&) = default;
+
+	//workaround msvc bug(?)
+	//XMLElement(const XMLElement&) = default;
+	XMLElement(const XMLElement& e)
+		: name(e.name), data(e.data)
+		, children(e.children), attributes(e.attributes) {}
+
+	// needed because the template below hides this version
+	XMLElement(XMLElement& x) : XMLElement(const_cast<const XMLElement&>(x)) {}
+
+	template<typename String>
+	explicit XMLElement(String&& name_)
+		: name(std::forward<String>(name_)) {}
+
+	template<typename String1, typename String2>
+	XMLElement(String1&& name_, String2&& data_)
+		: name(std::forward<String1>(name_)), data(std::forward<String2>(data_)) {}
 
 	// name
-	const std::string& getName() const { return name; }
-	void setName(std::string name_) { name = std::move(name_); }
+	[[nodiscard]] const std::string& getName() const { return name; }
 	void clearName() { name.clear(); }
 
+	template<typename String>
+	void setName(String&& name_) { name = std::forward<String>(name_); }
+
 	// data
-	const std::string& getData() const { return data; }
-	void setData(std::string data_) {
+	[[nodiscard]] const std::string& getData() const { return data; }
+
+	template<typename String>
+	void setData(String&& data_) {
 		assert(children.empty()); // no mixed-content elements
-		data = std::move(data_);
+		data = std::forward<String>(data_);
 	}
 
 	// attribute
-	void addAttribute(std::string name, std::string value);
-	void setAttribute(std::string_view name, std::string value);
+	template<typename String1, typename String2>
+	void addAttribute(String1&& attrName, String2&& value) {
+		assert(!hasAttribute(attrName));
+		attributes.emplace_back(std::forward<String1>(attrName),
+		                        std::forward<String2>(value));
+	}
+
+	template<typename String1, typename String2>
+	void setAttribute(String1&& attrName, String2&& value) {
+		auto it = getAttributeIter(attrName);
+		if (it != end(attributes)) {
+			it->second = std::forward<String2>(value);
+		} else {
+			attributes.emplace_back(std::forward<String1>(attrName),
+			                        std::forward<String2>(value));
+		}
+	}
+
 	void removeAttribute(std::string_view name);
-	bool hasAttribute(std::string_view name) const;
-	const std::string& getAttribute(std::string_view attrName) const;
-	std::string_view getAttribute(std::string_view attrName,
-	                              std::string_view defaultValue) const;
+	[[nodiscard]] bool hasAttribute(std::string_view name) const;
+	[[nodiscard]] const std::string& getAttribute(std::string_view attrName) const;
+	[[nodiscard]] std::string_view getAttribute(std::string_view attrName,
+	                                            std::string_view defaultValue) const;
 	// Returns ptr to attribute value, or nullptr when not found.
-	const std::string* findAttribute(std::string_view attrName) const;
+	[[nodiscard]] const std::string* findAttribute(std::string_view attrName) const;
 
 	// child
 	using Children = std::vector<XMLElement>;
+
 	//  note: returned XMLElement& is validated on the next addChild() call
-	XMLElement& addChild(std::string name);
-	XMLElement& addChild(std::string name, std::string data);
+	template<typename String>
+	XMLElement& addChild(String&& childName) {
+		return children.emplace_back(std::forward<String>(childName));
+	}
+
+	template<typename String1, typename String2>
+	XMLElement& addChild(String1&& childName, String2&& childData) {
+		return children.emplace_back(std::forward<String1>(childName),
+		                             std::forward<String2>(childData));
+	}
+
 	void removeChild(const XMLElement& child);
-	const Children& getChildren() const { return children; }
-	bool hasChildren() const { return !children.empty(); }
+	[[nodiscard]] const Children& getChildren() const { return children; }
+	[[nodiscard]] bool hasChildren() const { return !children.empty(); }
 
 	//
 	// Convenience functions
 	//
 
 	// attribute
-	bool getAttributeAsBool(std::string_view attrName,
-	                        bool defaultValue = false) const;
-	int getAttributeAsInt(std::string_view attrName,
-	                      int defaultValue = 0) const;
-	bool findAttributeInt(std::string_view attrName,
-	                      unsigned& result) const;
+	[[nodiscard]] bool getAttributeAsBool(std::string_view attrName,
+	                                      bool defaultValue = false) const;
+	[[nodiscard]] int getAttributeAsInt(std::string_view attrName,
+	                                    int defaultValue = 0) const;
+	[[nodiscard]] bool findAttributeInt(std::string_view attrName,
+	                                    unsigned& result) const;
 
 	// child
-	const XMLElement* findChild(std::string_view childName) const;
-	XMLElement* findChild(std::string_view childName);
-	const XMLElement& getChild(std::string_view childName) const;
-	XMLElement& getChild(std::string_view childName);
+	[[nodiscard]] const XMLElement* findChild(std::string_view childName) const;
+	[[nodiscard]] XMLElement* findChild(std::string_view childName);
+	[[nodiscard]] const XMLElement& getChild(std::string_view childName) const;
+	[[nodiscard]] XMLElement& getChild(std::string_view childName);
 
-	const XMLElement* findChildWithAttribute(
+	[[nodiscard]] const XMLElement* findChildWithAttribute(
 		std::string_view childName, std::string_view attrName,
 		std::string_view attValue) const;
-	XMLElement* findChildWithAttribute(
+	[[nodiscard]] XMLElement* findChildWithAttribute(
 		std::string_view childName, std::string_view attrName,
 		std::string_view attValue);
-	const XMLElement* findNextChild(std::string_view name,
-	                                size_t& fromIndex) const;
+	[[nodiscard]] const XMLElement* findNextChild(std::string_view name,
+	                                              size_t& fromIndex) const;
 
-	std::vector<const XMLElement*> getChildren(std::string_view childName) const;
+	[[nodiscard]] std::vector<const XMLElement*> getChildren(std::string_view childName) const;
 
-	XMLElement& getCreateChild(std::string_view childName,
-	                           std::string_view defaultValue = {});
+	template<typename String>
+	XMLElement& getCreateChild(String&& childName) {
+		if (auto* result = findChild(childName)) {
+			return *result;
+		}
+		return addChild(std::forward<String>(childName));
+	}
+
+	template<typename String1, typename String2>
+	XMLElement& getCreateChild(String1&& childName, String2&& defaultValue) {
+		if (auto* result = findChild(childName)) {
+			return *result;
+		}
+		return addChild(std::forward<String1>(childName),
+		                std::forward<String2>(defaultValue));
+	}
+
+	template<typename String1, typename String2, typename String3>
 	XMLElement& getCreateChildWithAttribute(
-		std::string_view childName, std::string_view attrName,
-		std::string_view attValue);
+		String1&& childName, String2&& attrName, String3&& attValue)
+	{
+		if (auto* result = findChildWithAttribute(childName, attrName, attValue)) {
+			return *result;
+		}
+		auto& result = addChild(std::forward<String1>(childName));
+		result.addAttribute(std::forward<String2>(attrName),
+		                    std::forward<String3>(attValue));
+		return result;
+	}
 
-	const std::string& getChildData(std::string_view childName) const;
-	std::string_view getChildData(std::string_view childName,
-	                              std::string_view defaultValue) const;
-	bool getChildDataAsBool(std::string_view childName,
-	                        bool defaultValue = false) const;
-	int getChildDataAsInt(std::string_view childName,
-	                      int defaultValue = 0) const;
-	void setChildData(std::string_view childName, std::string value);
+	[[nodiscard]] const std::string& getChildData(std::string_view childName) const;
+	[[nodiscard]] std::string_view getChildData(std::string_view childName,
+	                                            std::string_view defaultValue) const;
+	[[nodiscard]] bool getChildDataAsBool(std::string_view childName,
+	                                      bool defaultValue = false) const;
+	[[nodiscard]] int getChildDataAsInt(std::string_view childName,
+	                                    int defaultValue = 0) const;
+
+	template<typename String1, typename String2>
+	void setChildData(String1&& childName, String2&& value) {
+		if (auto* child = findChild(childName)) {
+			child->setData(std::forward<String2>(value));
+		} else {
+			addChild(std::forward<String1>(childName),
+			         std::forward<String2>(value));
+		}
+	}
 
 	void removeAllChildren();
 
 	// various
-	std::string dump() const;
-	static std::string XMLEscape(std::string_view str);
+	[[nodiscard]] std::string dump() const;
+	[[nodiscard]] static std::string XMLEscape(std::string_view str);
 
 	template<typename Archive>
 	void serialize(Archive& ar, unsigned version);
@@ -118,8 +197,8 @@ public:
 private:
 	using Attribute = std::pair<std::string, std::string>;
 	using Attributes = std::vector<Attribute>;
-	Attributes::iterator getAttributeIter(std::string_view attrName);
-	Attributes::const_iterator getAttributeIter(std::string_view attrName) const;
+	[[nodiscard]] Attributes::iterator getAttributeIter(std::string_view attrName);
+	[[nodiscard]] Attributes::const_iterator getAttributeIter(std::string_view attrName) const;
 	void dump(std::string& result, unsigned indentNum) const;
 
 	std::string name;

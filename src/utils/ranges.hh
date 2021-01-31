@@ -163,6 +163,12 @@ auto transform(InputRange&& range, OutputIter out, UnaryOperation op)
 	return std::transform(std::begin(range), std::end(range), out, op);
 }
 
+template<typename ForwardRange, typename Generator>
+void generate(ForwardRange&& range, Generator&& g)
+{
+	std::generate(std::begin(range), std::end(range), std::forward<Generator>(g));
+}
+
 template<typename ForwardRange, typename T>
 [[nodiscard]] auto remove(ForwardRange&& range, const T& value)
 {
@@ -191,6 +197,22 @@ template<typename ForwardRange, typename T>
 void fill(ForwardRange&& range, const T& value)
 {
 	std::fill(std::begin(range), std::end(range), value);
+}
+
+// part of c++20
+template<typename ForwardIt, typename T>
+constexpr void iota(ForwardIt first, ForwardIt last, T value)
+{
+    while (first != last) {
+        *first++ = value;
+        ++value;
+    }
+}
+
+template<typename ForwardRange, typename T>
+constexpr void iota(ForwardRange&& range, T&& value)
+{
+	iota(std::begin(range), std::end(range), std::forward<T>(value));
 }
 
 template<typename InputRange, typename T>

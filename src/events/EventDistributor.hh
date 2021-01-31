@@ -26,6 +26,7 @@ public:
 		CONSOLE,
 		HOTKEY,
 		MSX,
+		LOWEST, // should only be used internally in EventDistributor
 	};
 
 	explicit EventDistributor(Reactor& reactor);
@@ -34,7 +35,7 @@ public:
 	 * Registers a given object to receive certain events.
 	 * @param type The type of the events you want to receive.
 	 * @param listener Listener that will be notified when an event arrives.
-	 * @param priority Listeners have a priority, higher priority liseners
+	 * @param priority Listeners have a priority, higher priority listeners
 	 *                 can block events for lower priority listeners.
 	 */
 	void registerEventListener(EventType type, EventListener& listener,
@@ -68,8 +69,9 @@ public:
 	bool sleep(unsigned us);
 
 private:
-	bool isRegistered(EventType type, EventListener* listener) const;
+	[[nodiscard]] bool isRegistered(EventType type, EventListener* listener) const;
 
+private:
 	Reactor& reactor;
 
 	using PriorityMap = std::vector<std::pair<Priority, EventListener*>>; // sorted on priority

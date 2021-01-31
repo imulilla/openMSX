@@ -21,23 +21,22 @@ using namespace gl;
 namespace openmsx {
 
 // intersect two rectangles
-static void intersect(int xa, int ya, int wa, int ha,
-                      int xb, int yb, int wb, int hb,
-                      int& x, int& y, int& w, int& h)
+struct IntersectResult { int x, y, w, h; };
+static constexpr IntersectResult intersect(int xa, int ya, int wa, int ha,
+                                           int xb, int yb, int wb, int hb)
 {
 	int x1 = std::max<int>(xa, xb);
 	int y1 = std::max<int>(ya, yb);
 	int x2 = std::min<int>(xa + wa, xb + wb);
 	int y2 = std::min<int>(ya + ha, yb + hb);
-	x = x1;
-	y = y1;
-	w = std::max(0, x2 - x1);
-	h = std::max(0, y2 - y1);
+	int w = std::max(0, x2 - x1);
+	int h = std::max(0, y2 - y1);
+	return {x1, y1, w, h};
 }
 
 ////
 template<typename T>
-static void normalize(T& x, T& w)
+static constexpr void normalize(T& x, T& w)
 {
 	if (w < 0) {
 		w = -w;
@@ -50,6 +49,8 @@ class SDLScopedClip
 public:
 	SDLScopedClip(OutputSurface& output, vec2 xy, vec2 wh);
 	~SDLScopedClip();
+	SDLScopedClip(const SDLScopedClip&) = delete;
+	SDLScopedClip& operator=(const SDLScopedClip&) = delete;
 private:
 	SDL_Renderer* renderer;
 	std::optional<SDL_Rect> origClip;
@@ -63,17 +64,17 @@ SDLScopedClip::SDLScopedClip(OutputSurface& output, vec2 xy, vec2 wh)
 	ivec2 i_wh = round(wh); auto [w, h] = i_wh;
 	normalize(x, w); normalize(y, h);
 
-	int xn, yn, wn, hn;
-	if (SDL_RenderIsClipEnabled(renderer)) {
-		origClip.emplace();
-		SDL_RenderGetClipRect(renderer, &*origClip);
+	auto [xn, yn, wn, hn] = [&, x=x, y=y, w=w, h=h] {
+		if (SDL_RenderIsClipEnabled(renderer)) {
+			origClip.emplace();
+			SDL_RenderGetClipRect(renderer, &*origClip);
 
-		intersect(origClip->x, origClip->y, origClip->w, origClip->h,
-			  x,  y,  w,  h,
-			  xn, yn, wn, hn);
-	} else {
-		xn = x; yn = y; wn = w; hn = h;
-	}
+			return intersect(origClip->x, origClip->y, origClip->w, origClip->h,
+			                 x,  y,  w,  h);
+		} else {
+			return IntersectResult{x, y, w, h};
+		}
+	}();
 	SDL_Rect newClip = { Sint16(xn), Sint16(yn), Uint16(wn), Uint16(hn) };
 	SDL_RenderSetClipRect(renderer, &newClip);
 }
@@ -92,6 +93,8 @@ class GLScopedClip
 public:
 	GLScopedClip(OutputSurface& output, vec2 xy, vec2 wh);
 	~GLScopedClip();
+	GLScopedClip(const GLScopedClip&) = delete;
+	GLScopedClip& operator=(const GLScopedClip&) = delete;
 private:
 	std::optional<std::array<GLint, 4>> origClip; // x, y, w, h;
 };
@@ -112,10 +115,9 @@ GLScopedClip::GLScopedClip(OutputSurface& output, vec2 xy, vec2 wh)
 	if (glIsEnabled(GL_SCISSOR_TEST) == GL_TRUE) {
 		origClip.emplace();
 		glGetIntegerv(GL_SCISSOR_BOX, origClip->data());
-		int xn, yn, wn, hn;
-		intersect((*origClip)[0], (*origClip)[1], (*origClip)[2], (*origClip)[3],
-		          ix, iy, iw, ih,
-		          xn, yn, wn, hn);
+		auto [xn, yn, wn, hn] = intersect(
+			(*origClip)[0], (*origClip)[1], (*origClip)[2], (*origClip)[3],
+			ix, iy, iw, ih);
 		glScissor(xn, yn, wn, hn);
 	} else {
 		glScissor(ix, iy, iw, ih);
@@ -136,10 +138,10 @@ GLScopedClip::~GLScopedClip()
 
 ////
 
-OSDWidget::OSDWidget(Display& display_, const TclObject& name_)
+OSDWidget::OSDWidget(Display& display_, TclObject name_)
 	: display(display_)
 	, parent(nullptr)
-	, name(name_)
+	, name(std::move(name_))
 	, z(0.0)
 	, scaled(false)
 	, clip(false)

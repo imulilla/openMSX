@@ -1,6 +1,7 @@
 #ifndef CSTD_HH
 #define CSTD_HH
 
+#include "xrange.hh"
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -20,7 +21,7 @@ namespace cstd {
 // the callers from 'cstd::xxx()' to 'std::xxx()'.
 
 //
-// Various constexpr reimplementation of STL algorithms.
+// Various constexpr reimplementations of STL algorithms.
 //
 
 template<typename Iter1, typename Iter2>
@@ -90,6 +91,41 @@ template<typename InputIt1, typename InputIt2>
 	return (first1 == last1) && (first2 != last2);
 }
 
+template<typename ForwardIt, typename T>
+constexpr void replace(ForwardIt first, ForwardIt last, const T& old_value, const T& new_value)
+{
+	while (first != last) {
+		if (*first == old_value) {
+			*first = new_value;
+		}
+		++first;
+	}
+}
+template<typename ForwardRange, typename T>
+constexpr void replace(ForwardRange& range, const T& old_value, const T& new_value)
+{
+	cstd::replace(std::begin(range), std::end(range), old_value, new_value);
+}
+
+template<typename ForwardIt, typename T>
+constexpr void fill(ForwardIt first, ForwardIt last, const T& value)
+{
+	while (first != last) {
+		*first = value;
+		++first;
+	}
+}
+template<typename ForwardRange, typename T>
+constexpr void fill(ForwardRange& range, const T& value)
+{
+	cstd::fill(std::begin(range), std::end(range), value);
+}
+
+template<typename T>
+[[nodiscard]] constexpr T abs(T t)
+{
+    return (t >= 0) ? t : -t;
+}
 
 // Reimplementation of various mathematical functions. You must specify an
 // iteration count, this controls how accurate the result will be.
@@ -105,8 +141,9 @@ template<int, int> [[nodiscard]] constexpr double log10(double x) { return std::
 template<int>      [[nodiscard]] constexpr double exp  (double x) { return std::exp  (x); }
 template<int>      [[nodiscard]] constexpr double exp2 (double x) { return    ::exp2 (x); } // see log2, but apparently no need to use exp(log(2) * x) here?!
 template<int, int> [[nodiscard]] constexpr double pow(double x, double y) { return std::pow(x, y); }
-[[nodiscard]] inline constexpr double round(double x) { return ::round(x); } // should be std::round(), see above
-[[nodiscard]] inline constexpr float  round(float  x) { return ::round(x); }
+[[nodiscard]] constexpr double round(double x) { return ::round(x); } // should be std::round(), see above
+[[nodiscard]] constexpr float  round(float  x) { return ::round(x); }
+[[nodiscard]] constexpr double sqrt (double x) { return ::sqrt (x); }
 
 #else
 
@@ -140,10 +177,10 @@ template<int ITERATIONS>
 	double y = 1.0;
 	double t = f;
 	double n = 1.0;
-	for (int k = 2; k < (2 + ITERATIONS); ++k) {
+	for (auto k : xrange(ITERATIONS)) {
 		y += t / n;
 		t *= f;
-		n *= k;
+		n *= k + 2;
 	}
 
 	// Approximate exp(i) by squaring.
@@ -284,10 +321,10 @@ template<int E_ITERATIONS, int L_ITERATIONS>
 		++a;
 	}
 	double y = 0.0;
-	for (int i = 0; i < L_ITERATIONS; ++i) {
+	repeat(L_ITERATIONS, [&] {
 		auto ey = cstd::exp<E_ITERATIONS>(y);
 		y = y + 2.0 * (x - ey) / (x + ey);
-	}
+	});
 	return y - a;
 }
 
@@ -325,6 +362,18 @@ template<int ITERATIONS>
 {
 	return (x >= 0) ?  int( x + 0.5f)
 	                : -int(-x + 0.5f);
+}
+
+[[nodiscard]] constexpr double sqrt(double x)
+{
+    assert(x >= 0.0);
+    double curr = x;
+    double prev = 0.0;
+    while (curr != prev) {
+        prev = curr;
+        curr = 0.5 * (curr + x / curr);
+    }
+    return curr;
 }
 
 #endif

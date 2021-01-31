@@ -12,6 +12,7 @@
 #include "ranges.hh"
 #include "serialize.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <memory>
 
@@ -155,7 +156,7 @@ void MSXCPU::invalidateMemCacheSlot()
 	ranges::fill(slots, 0);
 
 	// nullptr: means not a valid entry and not yet attempted to fill this entry
-	for (int i = 0; i < 16; ++i) {
+	for (auto i : xrange(16)) {
 		ranges::fill(slotReadLines[i], nullptr);
 		ranges::fill(slotWriteLines[i], nullptr);
 	}
@@ -189,8 +190,8 @@ void MSXCPU::invalidateAllSlotsRWCache(word start, unsigned size)
 	std::fill_n(cpuReadLines  + first, num, nullptr); // nullptr: means not a valid entry and not
 	std::fill_n(cpuWriteLines + first, num, nullptr); //   yet attempted to fill this entry
 
-	for (int i = 0; i < 16; ++i) {
-		std::fill_n(slotReadLines[i] + first, num, nullptr);
+	for (auto i : xrange(16)) {
+		std::fill_n(slotReadLines [i] + first, num, nullptr);
 		std::fill_n(slotWriteLines[i] + first, num, nullptr);
 	}
 }
@@ -215,16 +216,14 @@ void MSXCPU::setRWCache(unsigned start, unsigned size, const byte* rData, byte* 
 	if (SUB_START && WRITE) wData -= start;
 
 	// select between 'active' or 'shadow' cache lines
-	const byte** readLines;
-	      byte** writeLines;
-	if (slot == slots[page]) {
-		auto cache = z80Active ? z80->getCacheLines() : r800->getCacheLines();
-		readLines  = cache.first;
-		writeLines = cache.second;
-	} else {
-		readLines  = slotReadLines [slot];
-		writeLines = slotWriteLines[slot];
-	}
+	auto [readLines, writeLines] = [&] {
+		if (slot == slots[page]) {
+			return z80Active ? z80->getCacheLines() : r800->getCacheLines();
+		} else {
+			return std::pair{slotReadLines [slot],
+			                 slotWriteLines[slot]};
+		}
+	}();
 
 	unsigned first = start / CacheLine::SIZE;
 	readLines     += first;
@@ -233,16 +232,16 @@ void MSXCPU::setRWCache(unsigned start, unsigned size, const byte* rData, byte* 
 	disallowWrite += first;
 	unsigned num = size / CacheLine::SIZE;
 
-	static const auto NON_CACHEABLE = reinterpret_cast<byte*>(1);
-	for (unsigned i = 0; i < num; ++i) {
+	static auto* const NON_CACHEABLE = reinterpret_cast<byte*>(1);
+	for (auto i : xrange(num)) {
 		if (READ)  readLines [i] = disallowRead [i] ? NON_CACHEABLE : rData;
 		if (WRITE) writeLines[i] = disallowWrite[i] ? NON_CACHEABLE : wData;
 	}
 }
 
-static void extendForAlignment(unsigned& start, unsigned& size)
+static constexpr void extendForAlignment(unsigned& start, unsigned& size)
 {
-	static constexpr unsigned MASK = ~(CacheLine::LOW); // not CacheLine::HIGH because 0x0000ff00 != 0xffffff00
+	constexpr unsigned MASK = ~(CacheLine::LOW); // not CacheLine::HIGH because 0x0000ff00 != 0xffffff00
 
 	auto end = start + size;
 	start &= MASK;                            // round down to cacheline
@@ -423,7 +422,7 @@ string MSXCPU::CPUFreqInfoTopic::help(const vector<string>& /*tokens*/) const
 
 // class Debuggable
 
-constexpr const char* const CPU_REGS_DESC =
+constexpr static_string_view CPU_REGS_DESC =
 	"Registers of the active CPU (Z80 or R800).\n"
 	"Each byte in this debuggable represents one 8 bit register:\n"
 	"  0 ->  A      1 ->  F      2 -> B       3 -> C\n"

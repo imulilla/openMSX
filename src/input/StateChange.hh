@@ -13,9 +13,9 @@ namespace openmsx {
 class StateChange
 {
 public:
-	virtual ~StateChange() = default; // must be polymorhpic
+	virtual ~StateChange() = default; // must be polymorphic
 
-	EmuTime::param getTime() const
+	[[nodiscard]] EmuTime::param getTime() const
 	{
 		return time;
 	}

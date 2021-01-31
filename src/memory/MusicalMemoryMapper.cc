@@ -1,6 +1,8 @@
 #include "MusicalMemoryMapper.hh"
 #include "SN76489.hh"
+#include "enumerate.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <memory>
 
 namespace openmsx {
@@ -26,8 +28,8 @@ void MusicalMemoryMapper::reset(EmuTime::param time)
 
 	// MMM inits the page registers to 3, 2, 1, 0 instead of zeroes, so we
 	// don't call the superclass implementation.
-	for (unsigned page = 0; page < 4; page++) {
-		registers[page] = 3 - page;
+	for (auto [page, reg] : enumerate(registers)) {
+		reg = byte(3 - page);
 	}
 
 	// Note: The actual SN76489AN chip does not have a reset pin. I assume
@@ -128,17 +130,17 @@ void MusicalMemoryMapper::updateControlReg(byte value)
 
 		// Invalidate pages for which register access changes.
 		byte regAccessBefore = 0;
-		for (unsigned page = 0; page < 4; page++) {
+		for (auto page : xrange(4)) {
 			regAccessBefore |= registerAccessAt(0x4000 * page) << page;
 		}
 		controlReg = value;
 		byte regAccessAfter = 0;
-		for (unsigned page = 0; page < 4; page++) {
+		for (auto page : xrange(4)) {
 			regAccessAfter |= registerAccessAt(0x4000 * page) << page;
 		}
 		invalidate |= regAccessBefore ^ regAccessAfter;
 
-		for (unsigned page = 0; page < 4; page++) {
+		for (auto page : xrange(4)) {
 			if ((invalidate >> page) & 1) {
 				invalidateDeviceRWCache(0x4000 * page, 0x4000);
 			}

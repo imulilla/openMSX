@@ -2,6 +2,7 @@
 #include "RawFrame.hh"
 #include "Math.hh"
 #include "PixelFormat.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <cstdint>
 #ifdef __SSE2__
@@ -45,12 +46,12 @@ static inline void yuv2rgb_sse2(
 	// This routine calculates 32x2 RGBA pixels. Each output pixel uses a
 	// unique corresponding input Y value, but a group of 2x2 ouput pixels
 	// shares the same U and V input value.
-	auto* u    = reinterpret_cast<const __m128i*>(u_);
-	auto* v    = reinterpret_cast<const __m128i*>(v_);
-	auto* y0   = reinterpret_cast<const __m128i*>(y0_);
-	auto* y1   = reinterpret_cast<const __m128i*>(y1_);
-	auto* out0 = reinterpret_cast<      __m128i*>(out0_);
-	auto* out1 = reinterpret_cast<      __m128i*>(out1_);
+	const auto* u    = reinterpret_cast<const __m128i*>(u_);
+	const auto* v    = reinterpret_cast<const __m128i*>(v_);
+	const auto* y0   = reinterpret_cast<const __m128i*>(y0_);
+	const auto* y1   = reinterpret_cast<const __m128i*>(y1_);
+	      auto* out0 = reinterpret_cast<      __m128i*>(out0_);
+	      auto* out1 = reinterpret_cast<      __m128i*>(out1_);
 
 	// constants
 	const __m128i ZERO    = _mm_setzero_si128();
@@ -267,10 +268,10 @@ struct Coefs {
 	int y [256];
 };
 
-static constexpr Coefs getCoefs()
+[[nodiscard]] static constexpr Coefs getCoefs()
 {
 	Coefs coefs = {};
-	for (int i = 0; i < 256; ++i) {
+	for (auto i : xrange(256)) {
 		coefs.gu[i] = -COEF_GU * (i - 128);
 		coefs.gv[i] = -COEF_GV * (i - 128);
 		coefs.bu[i] =  COEF_BU * (i - 128);
@@ -281,8 +282,8 @@ static constexpr Coefs getCoefs()
 }
 
 template<typename Pixel>
-static inline Pixel calc(const PixelFormat& format,
-                         int y, int ruv, int guv, int buv)
+[[nodiscard]] static inline Pixel calc(
+	const PixelFormat& format, int y, int ruv, int guv, int buv)
 {
 	uint8_t r = Math::clipIntToByte((y + ruv) >> PREC);
 	uint8_t g = Math::clipIntToByte((y + guv) >> PREC);

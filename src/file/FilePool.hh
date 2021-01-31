@@ -5,6 +5,7 @@
 #include "FilePoolCore.hh"
 #include "StringSetting.hh"
 #include "Observer.hh"
+#include <string_view>
 
 namespace openmsx {
 
@@ -22,17 +23,17 @@ public:
 	 * If found it returns the (already opened) file,
 	 * if not found it returns nullptr.
 	 */
-	File getFile(FileType fileType, const Sha1Sum& sha1sum);
+	[[nodiscard]] File getFile(FileType fileType, const Sha1Sum& sha1sum);
 
 	/** Calculate sha1sum for the given File object.
 	 * If possible the result is retrieved from cache, avoiding the
 	 * relatively expensive calculation.
 	 */
-	Sha1Sum getSha1Sum(File& file);
+	[[nodiscard]] Sha1Sum getSha1Sum(File& file);
 
 private:
-	FilePoolCore::Directories getDirectories() const;
-	void reportProgress(const std::string& message);
+	[[nodiscard]] FilePoolCore::Directories getDirectories() const;
+	void reportProgress(std::string_view message);
 
 	// Observer<Setting>
 	void update(const Setting& setting) override;

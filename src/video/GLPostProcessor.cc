@@ -5,15 +5,16 @@
 #include "FloatSetting.hh"
 #include "OutputSurface.hh"
 #include "RawFrame.hh"
-#include "Math.hh"
 #include "InitException.hh"
 #include "gl_transform.hh"
 #include "random.hh"
 #include "ranges.hh"
 #include "stl.hh"
 #include "vla.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <cstdint>
+#include <numeric>
 
 using namespace gl;
 
@@ -29,7 +30,7 @@ GLPostProcessor::GLPostProcessor(
 	, noiseTextureB(true, true)
 	, height(height_)
 {
-	scaleAlgorithm = static_cast<RenderSettings::ScaleAlgorithm>(-1); // not a valid scaler
+	scaleAlgorithm = RenderSettings::NO_SCALER;
 
 	frameCounter = 0;
 	noiseX = noiseY = 0.0f;
@@ -37,13 +38,13 @@ GLPostProcessor::GLPostProcessor(
 	initBuffers();
 
 	storedFrame = false;
-	for (int i = 0; i < 2; ++i) {
+	for (auto i : xrange(2)) {
 		colorTex[i].bind();
 		colorTex[i].setInterpolation(true);
 		auto [w, h] = screen.getLogicalSize();
 		glTexImage2D(GL_TEXTURE_2D,     // target
 			     0,                 // level
-			     GL_RGB8,           // internal format
+			     GL_RGB,            // internal format
 			     w,                 // width
 			     h,                 // height
 			     0,                 // border
@@ -75,34 +76,14 @@ GLPostProcessor::~GLPostProcessor()
 
 void GLPostProcessor::initBuffers()
 {
-	const vec2 pos[4] = {
-		vec2(-1, 1), vec2(-1,-1), vec2( 1,-1), vec2( 1, 1)
+	// combined positions and texture coordinates
+	static const vec2 pos_tex[4 + 4] = {
+		vec2(-1, 1), vec2(-1,-1), vec2( 1,-1), vec2( 1, 1), // pos
+		vec2( 0, 1), vec2( 0, 0), vec2( 1, 0), vec2( 1, 1), // tex
 	};
-	const vec2 tex[4] = {
-		vec2( 0, 1), vec2( 0, 0), vec2( 1, 0), vec2( 1, 1)
-	};
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[0].get());
-	glBufferData(GL_ARRAY_BUFFER, sizeof(pos), pos, GL_STATIC_DRAW);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[1].get());
-	glBufferData(GL_ARRAY_BUFFER, sizeof(tex), tex, GL_STATIC_DRAW);
-
-	vao.bind();
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[0].get());
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-	glEnableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[1].get());
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-	glEnableVertexAttribArray(1);
-	vao.unbind();
-
-	glowVAO.bind();
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[0].get());
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-	glEnableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[1].get());
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-	glEnableVertexAttribArray(1);
-	glowVAO.unbind();
+	glBindBuffer(GL_ARRAY_BUFFER, vbo.get());
+	glBufferData(GL_ARRAY_BUFFER, sizeof(pos_tex), pos_tex, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void GLPostProcessor::createRegions()
@@ -112,7 +93,7 @@ void GLPostProcessor::createRegions()
 	const unsigned srcHeight = paintFrame->getHeight();
 	const unsigned dstHeight = screen.getLogicalHeight();
 
-	unsigned g = Math::gcd(srcHeight, dstHeight);
+	unsigned g = std::gcd(srcHeight, dstHeight);
 	unsigned srcStep = srcHeight / g;
 	unsigned dstStep = dstHeight / g;
 
@@ -198,21 +179,18 @@ void GLPostProcessor::paint(OutputSurface& /*output*/)
 		fbo[frameCounter & 1].push();
 	}
 
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-
 	for (auto& r : regions) {
 		//fprintf(stderr, "post processing lines %d-%d: %d\n",
 		//	r.srcStartY, r.srcEndY, r.lineWidth);
 		auto it = find_if_unguarded(textures,
 		                  EqualTupleValue<0>(r.lineWidth));
-		auto superImpose = superImposeVideoFrame
-		                 ? &superImposeTex : nullptr;
+		auto* superImpose = superImposeVideoFrame
+		                  ? &superImposeTex : nullptr;
 		currScaler->scaleImage(
 			it->second.tex, superImpose,
 			r.srcStartY, r.srcEndY, r.lineWidth, // src
 			r.dstStartY, r.dstEndY, scrnWidth,   // dst
 			paintFrame->getHeight()); // dst
-		//GLUtil::checkGLError("GLPostProcessor::paint");
 	}
 
 	drawNoise();
@@ -228,6 +206,12 @@ void GLPostProcessor::paint(OutputSurface& /*output*/)
 		if (deform == RenderSettings::DEFORM_3D) {
 			drawMonitor3D();
 		} else {
+			float x1 = (320.0f - float(horStretch)) / (2.0f * 320.0f);
+			float x2 = 1.0f - x1;
+			vec2 tex[4] = {
+				vec2(x1, 1), vec2(x1, 0), vec2(x2, 0), vec2(x2, 1)
+			};
+
 			gl::context->progTex.activate();
 			glUniform4f(gl::context->unifTexColor,
 			            1.0f, 1.0f, 1.0f, 1.0f);
@@ -235,26 +219,26 @@ void GLPostProcessor::paint(OutputSurface& /*output*/)
 			glUniformMatrix4fv(gl::context->unifTexMvp,
 			                   1, GL_FALSE, &I[0][0]);
 
-			vao.bind();
-			if (horStretch != 320.0f) {
-				float x1 = (320.0f - float(horStretch)) / (2.0f * 320.0f);
-				float x2 = 1.0f - x1;
-				vec2 tex[4] = {
-					vec2(x1, 1), vec2(x1, 0), vec2(x2, 0), vec2(x2, 1)
-				};
-				glBindBuffer(GL_ARRAY_BUFFER, stretchVBO.get());
-				glBufferData(GL_ARRAY_BUFFER, sizeof(tex), tex, GL_STATIC_DRAW);
-			} else {
-				glBindBuffer(GL_ARRAY_BUFFER, vbo[1].get());
-			}
+			glBindBuffer(GL_ARRAY_BUFFER, vbo.get());
+			glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+			glEnableVertexAttribArray(0);
+
+			glBindBuffer(GL_ARRAY_BUFFER, stretchVBO.get());
+			glBufferData(GL_ARRAY_BUFFER, sizeof(tex), tex, GL_STREAM_DRAW);
 			glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+			glEnableVertexAttribArray(1);
+
 			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-			vao.unbind();
+
+			glDisableVertexAttribArray(1);
+			glDisableVertexAttribArray(0);
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
 		storedFrame = true;
 	} else {
 		storedFrame = false;
 	}
+	//gl::checkGLError("GLPostProcessor::paint");
 }
 
 std::unique_ptr<RawFrame> GLPostProcessor::rotateFrames(
@@ -312,7 +296,7 @@ void GLPostProcessor::uploadFrame()
 			0,                 // offset y
 			w,                 // width
 			h,                 // height
-			GL_BGRA,           // format
+			GL_RGBA,           // format
 			GL_UNSIGNED_BYTE,  // type
 			const_cast<RawFrame*>(superImposeVideoFrame)->getLinePtrDirect<unsigned>(0)); // data
 	}
@@ -338,12 +322,11 @@ void GLPostProcessor::uploadBlock(
 	tex.bind();
 
 	// upload data
-	uint32_t* mapped;
 	pbo.bind();
-	mapped = pbo.mapWrite();
-	for (unsigned y = srcStartY; y < srcEndY; ++y) {
+	uint32_t* mapped = pbo.mapWrite();
+	for (auto y : xrange(srcStartY, srcEndY)) {
 		auto* dest = mapped + y * lineWidth;
-		auto* data = paintFrame->getLinePtr(y, lineWidth, dest);
+		const auto* data = paintFrame->getLinePtr(y, lineWidth, dest);
 		if (data != dest) {
 			memcpy(dest, data, lineWidth * sizeof(uint32_t));
 		}
@@ -364,7 +347,7 @@ void GLPostProcessor::uploadBlock(
 		srcStartY,           // offset y
 		lineWidth,           // width
 		srcEndY - srcStartY, // height
-		GL_BGRA,             // format
+		GL_RGBA,             // format
 		GL_UNSIGNED_BYTE,    // type
 		pbo.getOffset(0, srcStartY)); // data
 	pbo.unbind();
@@ -387,9 +370,22 @@ void GLPostProcessor::drawGlow(int glow)
 	            1.0f, 1.0f, 1.0f, glow * 31 / 3200.0f);
 	mat4 I;
 	glUniformMatrix4fv(gl::context->unifTexMvp, 1, GL_FALSE, &I[0][0]);
-	glowVAO.bind();
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo.get());
+
+	const vec2* offset = nullptr;
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, offset); // pos
+	offset += 4; // see initBuffers()
+	glEnableVertexAttribArray(0);
+
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, offset); // tex
+	glEnableVertexAttribArray(1);
+
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	glowVAO.unbind();
+
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glDisable(GL_BLEND);
 }
 
@@ -399,42 +395,55 @@ void GLPostProcessor::preCalcNoise(float factor)
 	GLbyte buf2[256 * 256];
 	auto& generator = global_urng(); // fast (non-cryptographic) random numbers
 	std::normal_distribution<float> distribution(0.0f, 1.0f);
-	for (int i = 0; i < 256 * 256; ++i) {
+	for (auto i : xrange(256 * 256)) {
 		float r = distribution(generator);
-		int s = Math::clip<-255, 255>(roundf(r * factor));
+		int s = std::clamp(int(roundf(r * factor)), -255, 255);
 		buf1[i] = (s > 0) ?  s : 0;
 		buf2[i] = (s < 0) ? -s : 0;
 	}
 
+	// GL_LUMINANCE is no longer supported in newer openGL versions
+	auto format = (OPENGL_VERSION >= OPENGL_3_3) ? GL_RED : GL_LUMINANCE;
 	noiseTextureA.bind();
 	glTexImage2D(
 		GL_TEXTURE_2D,    // target
 		0,                // level
-		GL_RED,           // internal format
+		format,           // internal format
 		256,              // width
 		256,              // height
 		0,                // border
-		GL_RED,           // format
+		format,           // format
 		GL_UNSIGNED_BYTE, // type
 		buf1);            // data
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+#if OPENGL_VERSION >= OPENGL_3_3
+	GLint swizzleMask1[] = {GL_RED, GL_RED, GL_RED, GL_ONE};
+	glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask1);
+#endif
 
 	noiseTextureB.bind();
 	glTexImage2D(
 		GL_TEXTURE_2D,    // target
 		0,                // level
-		GL_RED,           // internal format
+		format,           // internal format
 		256,              // width
 		256,              // height
 		0,                // border
-		GL_RED,           // format
+		format,           // format
 		GL_UNSIGNED_BYTE, // type
 		buf2);            // data
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+#if OPENGL_VERSION >= OPENGL_3_3
+	GLint swizzleMask2[] = {GL_RED, GL_RED, GL_RED, GL_ONE};
+	glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask2);
+#endif
+}
 
-	const vec2 pos[8][4] = {
+void GLPostProcessor::drawNoise()
+{
+	if (renderSettings.getNoise() == 0.0f) return;
+
+	// Rotate and mirror noise texture in consecutive frames to avoid
+	// seeing 'patterns' in the noise.
+	static const vec2 pos[8][4] = {
 		{ { -1, -1 }, {  1, -1 }, {  1,  1 }, { -1,  1 } },
 		{ { -1,  1 }, {  1,  1 }, {  1, -1 }, { -1, -1 } },
 		{ { -1,  1 }, { -1, -1 }, {  1, -1 }, {  1,  1 } },
@@ -444,16 +453,6 @@ void GLPostProcessor::preCalcNoise(float factor)
 		{ {  1, -1 }, {  1,  1 }, { -1,  1 }, { -1, -1 } },
 		{ { -1, -1 }, { -1,  1 }, {  1,  1 }, {  1, -1 } }
 	};
-	glBindBuffer(GL_ARRAY_BUFFER, noiseVBO[0].get());
-	glBufferData(GL_ARRAY_BUFFER, sizeof(pos), pos, GL_STATIC_DRAW);
-}
-
-void GLPostProcessor::drawNoise()
-{
-	if (renderSettings.getNoise() == 0.0f) return;
-
-	// Rotate and mirror noise texture in consecutive frames to avoid
-	// seeing 'patterns' in the noise.
 	vec2 noise(noiseX, noiseY);
 	const vec2 tex[4] = {
 		noise + vec2(0.0f, 1.875f),
@@ -461,23 +460,19 @@ void GLPostProcessor::drawNoise()
 		noise + vec2(2.0f, 0.0f  ),
 		noise + vec2(0.0f, 0.0f  )
 	};
-	unsigned seq = frameCounter & 7;
 
 	gl::context->progTex.activate();
+
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
 	glUniform4f(gl::context->unifTexColor, 1.0f, 1.0f, 1.0f, 1.0f);
 	mat4 I;
 	glUniformMatrix4fv(gl::context->unifTexMvp, 1, GL_FALSE, &I[0][0]);
 
-	noiseVAO.bind();
-	glBindBuffer(GL_ARRAY_BUFFER, noiseVBO[0].get());
-	vec2* base = nullptr;
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, base + seq * 4);
+	unsigned seq = frameCounter & 7;
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, pos[seq]);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, tex);
 	glEnableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, noiseVBO[1].get());
-	glBufferData(GL_ARRAY_BUFFER, sizeof(tex), tex, GL_STATIC_DRAW);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
 	glEnableVertexAttribArray(1);
 
 	noiseTextureA.bind();
@@ -485,8 +480,9 @@ void GLPostProcessor::drawNoise()
 	glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
 	noiseTextureB.bind();
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	noiseVAO.unbind();
 
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(0);
 	glBlendEquation(GL_FUNC_ADD); // restore default
 	glDisable(GL_BLEND);
 }
@@ -509,8 +505,8 @@ void GLPostProcessor::preCalcMonitor3D(float width)
 	float s = width / 320.0f;
 	float b = (320.0f - width) / (2.0f * 320.0f);
 
-	for (int sx = 0; sx < GRID_SIZE1; ++sx) {
-		for (int sy = 0; sy < GRID_SIZE1; ++sy) {
+	for (auto sx : xrange(GRID_SIZE1)) {
+		for (auto sy : xrange(GRID_SIZE1)) {
 			Vertex& v = vertices[sx][sy];
 			float x = (sx - GRID_SIZE2) / GRID_SIZE2;
 			float y = (sy - GRID_SIZE2) / GRID_SIZE2;
@@ -526,8 +522,8 @@ void GLPostProcessor::preCalcMonitor3D(float width)
 	uint16_t indices[NUM_INDICES];
 
 	uint16_t* ind = indices;
-	for (int y = 0; y < GRID_SIZE; ++y) {
-		for (int x = 0; x < GRID_SIZE1; ++x) {
+	for (auto y : xrange(GRID_SIZE)) {
+		for (auto x : xrange(GRID_SIZE1)) {
 			*ind++ = (y + 0) * GRID_SIZE1 + x;
 			*ind++ = (y + 1) * GRID_SIZE1 + x;
 		}
@@ -536,43 +532,32 @@ void GLPostProcessor::preCalcMonitor3D(float width)
 	}
 	assert((ind - indices) == NUM_INDICES + 2);
 	ind = indices;
-	for (int y = 0; y < (GRID_SIZE - 1); ++y) {
+	repeat(GRID_SIZE - 1, [&] {
 		ind += 2 * GRID_SIZE1;
 		// repeat prev and next index to restart strip
 		ind[0] = ind[-1];
 		ind[1] = ind[ 2];
 		ind += 2;
-	}
+	});
 
 	// upload calculated values to buffers
-	monitor3DVAO.bind();
 	glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer.get());
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices,
 	             GL_STATIC_DRAW);
-	char* base = nullptr;
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-	                      base);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-	                      base + sizeof(vec3));
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-	                      base + sizeof(vec3) + sizeof(vec3));
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glEnableVertexAttribArray(2);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer.get());
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices,
 	             GL_STATIC_DRAW);
-	monitor3DVAO.unbind();
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 	// calculate transformation matrices
 	mat4 proj = frustum(-1, 1, -1, 1, 1, 10);
 	mat4 tran = translate(vec3(0.0f, 0.4f, -2.0f));
-	mat4 rotx = rotateX(radians(-10.0f));
+	mat4 rotX = rotateX(radians(-10.0f));
 	mat4 scal = scale(vec3(2.2f, 2.2f, 2.2f));
 
-	mat3 normal = mat3(rotx);
-	mat4 mvp = proj * tran * rotx * scal;
+	mat3 normal = mat3(rotX);
+	mat4 mvp = proj * tran * rotX * scal;
 
 	// set uniforms
 	monitor3DProg.activate();
@@ -586,9 +571,27 @@ void GLPostProcessor::preCalcMonitor3D(float width)
 void GLPostProcessor::drawMonitor3D()
 {
 	monitor3DProg.activate();
-	monitor3DVAO.bind();
+
+	char* base = nullptr;
+	glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer.get());
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer.get());
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+	                      base);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+	                      base + sizeof(vec3));
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+	                      base + sizeof(vec3) + sizeof(vec3));
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(2);
+
 	glDrawElements(GL_TRIANGLE_STRIP, NUM_INDICES, GL_UNSIGNED_SHORT, nullptr);
-	monitor3DVAO.unbind();
+	glDisableVertexAttribArray(2);
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 } // namespace openmsx

@@ -55,7 +55,7 @@ template<typename T> struct ClassLoader;
 /** Store association between polymorphic class (base- or subclass) and
  *  the list of constructor arguments.
  * Specializations of this class should store the constructor arguments
- * as a 'using type = tupple<...>'.
+ * as a 'using type = tuple<...>'.
  */
 template<typename T> struct PolymorphicConstructorArgs;
 
@@ -191,6 +191,9 @@ template<typename Archive>
 class PolymorphicSaverRegistry
 {
 public:
+	PolymorphicSaverRegistry(const PolymorphicSaverRegistry&) = delete;
+	PolymorphicSaverRegistry& operator=(const PolymorphicSaverRegistry&) = delete;
+
 	static PolymorphicSaverRegistry& instance();
 
 	template<typename T> void registerClass(const char* name)
@@ -215,6 +218,7 @@ public:
 private:
 	PolymorphicSaverRegistry() = default;
 	~PolymorphicSaverRegistry() = default;
+
 	void registerHelper(const std::type_info& type,
 	                    std::unique_ptr<PolymorphicSaverBase<Archive>> saver);
 	static void save(Archive& ar, const void* t,
@@ -231,6 +235,9 @@ template<typename Archive>
 class PolymorphicLoaderRegistry
 {
 public:
+	PolymorphicLoaderRegistry(const PolymorphicLoaderRegistry&) = delete;
+	PolymorphicLoaderRegistry& operator=(const PolymorphicLoaderRegistry&) = delete;
+
 	static PolymorphicLoaderRegistry& instance();
 
 	template<typename T> void registerClass(const char* name)
@@ -248,6 +255,7 @@ public:
 private:
 	PolymorphicLoaderRegistry() = default;
 	~PolymorphicLoaderRegistry() = default;
+
 	void registerHelper(
 		const char* name,
 		std::unique_ptr<PolymorphicLoaderBase<Archive>> loader);
@@ -260,6 +268,9 @@ template<typename Archive>
 class PolymorphicInitializerRegistry
 {
 public:
+	PolymorphicInitializerRegistry(const PolymorphicInitializerRegistry&) = delete;
+	PolymorphicInitializerRegistry& operator=(const PolymorphicInitializerRegistry&) = delete;
+
 	static PolymorphicInitializerRegistry& instance();
 
 	template<typename T> void registerClass(const char* name)
@@ -277,6 +288,7 @@ public:
 private:
 	PolymorphicInitializerRegistry() = default;
 	~PolymorphicInitializerRegistry() = default;
+
 	void registerHelper(
 		const char* name,
 		std::unique_ptr<PolymorphicInitializerBase<Archive>> initializer);

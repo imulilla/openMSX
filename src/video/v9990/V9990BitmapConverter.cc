@@ -1,7 +1,6 @@
 #include "V9990BitmapConverter.hh"
 #include "V9990VRAM.hh"
 #include "V9990.hh"
-#include "Math.hh"
 #include "unreachable.hh"
 #include "build-info.hh"
 #include "components.hh"
@@ -10,7 +9,7 @@
 
 namespace openmsx {
 
-template <class Pixel>
+template<typename Pixel>
 V9990BitmapConverter<Pixel>::V9990BitmapConverter(
 		V9990& vdp_,
 		const Pixel* palette64_,  const int16_t* palette64_32768_,
@@ -37,14 +36,14 @@ static inline void draw_YJK_YUV_PAL(
 	int u = (data[2] & 7) + ((data[3] & 3) << 3) - ((data[3] & 4) << 3);
 	int v = (data[0] & 7) + ((data[1] & 3) << 3) - ((data[1] & 4) << 3);
 
-	for (int i = SKIP ? firstX : 0; i < 4; ++i) {
+	for (auto i : xrange(SKIP ? firstX : 0, 4)) {
 		if (PAL && (data[i] & 0x08)) {
 			*out++ = color.lookup64(data[i] >> 4);
 		} else {
 			int y = (data[i] & 0xF8) >> 3;
-			int r = Math::clip<0, 31>(y + u);
-			int g = Math::clip<0, 31>((5 * y - 2 * u - v) / 4);
-			int b = Math::clip<0, 31>(y + v);
+			int r = std::clamp(y + u,                   0, 31);
+			int g = std::clamp((5 * y - 2 * u - v) / 4, 0, 31);
+			int b = std::clamp(y + v,                   0, 31);
 			// The only difference between YUV and YJK is that
 			// green and blue are swapped.
 			if (YJK) std::swap(g, b);
@@ -288,9 +287,9 @@ public:
 	}
 
 	void set64Offset(size_t offset) { palette64 += offset; }
-	Pixel lookup64   (size_t idx) const { return palette64   [idx]; }
-	Pixel lookup256  (size_t idx) const { return palette256  [idx]; }
-	Pixel lookup32768(size_t idx) const { return palette32768[idx]; }
+	[[nodiscard]] Pixel lookup64   (size_t idx) const { return palette64   [idx]; }
+	[[nodiscard]] Pixel lookup256  (size_t idx) const { return palette256  [idx]; }
+	[[nodiscard]] Pixel lookup32768(size_t idx) const { return palette32768[idx]; }
 
 private:
 	const Pixel* palette64;
@@ -310,9 +309,9 @@ public:
 	}
 
 	void set64Offset(size_t offset) { palette64_32768 += offset; }
-	int16_t lookup64   (size_t idx) const { return palette64_32768 [idx]; }
-	int16_t lookup256  (size_t idx) const { return palette256_32768[idx]; }
-	int16_t lookup32768(size_t idx) const { return int16_t(idx); }
+	[[nodiscard]] int16_t lookup64   (size_t idx) const { return palette64_32768 [idx]; }
+	[[nodiscard]] int16_t lookup256  (size_t idx) const { return palette256_32768[idx]; }
+	[[nodiscard]] int16_t lookup32768(size_t idx) const { return int16_t(idx); }
 
 private:
 	const int16_t* palette64_32768;
@@ -386,7 +385,7 @@ public:
 
 		unsigned attrY = vram.readVRAMBx(attrAddr + 0) +
 		                (vram.readVRAMBx(attrAddr + 2) & 1) * 256;
-		++attrY; // one line later
+		attrY += vdp.isInterlaced() ? 2 : 1; // 1 or 2 lines later
 		unsigned cursorLine = (displayY - attrY) & 511;
 		if (cursorLine >= 32) return;
 
@@ -415,10 +414,10 @@ public:
 		if (attr & 0x20) color ^= 0x7fff;
 	}
 
-	bool isVisible() const {
+	[[nodiscard]] bool isVisible() const {
 		return x != unsigned(-1);
 	}
-	bool dot() const {
+	[[nodiscard]] bool dot() const {
 		return (x == 0) && (pattern & 0x80000000);
 	}
 	void shift() {
@@ -436,7 +435,7 @@ public:
 	bool doXor;
 };
 
-template <class Pixel>
+template<typename Pixel>
 void V9990BitmapConverter<Pixel>::convertLine(
 	Pixel* linePtr, unsigned x, unsigned y, int nrPixels,
 	int cursorY, bool drawCursors)
@@ -459,7 +458,7 @@ void V9990BitmapConverter<Pixel>::convertLine(
 		// TODO probably goes wrong when startX != 0
 		// TODO investigate dual palette in B4 and higher modes
 		// TODO check X-roll behavior
-		for (int i = 0; i < nrPixels; ++i) {
+		for (auto i : xrange(nrPixels)) {
 			if (cursor0.dot()) {
 				if (cursor0.doXor) {
 					buf[i] ^= 0x7fff;
@@ -479,7 +478,7 @@ void V9990BitmapConverter<Pixel>::convertLine(
 		}
 
 		// copy buffer to destination, translate from V9990 to host colors
-		for (int i = 0; i < nrPixels; ++i) {
+		for (auto i : xrange(nrPixels)) {
 			linePtr[i] = palette32768[buf[i]];
 		}
 	} else {

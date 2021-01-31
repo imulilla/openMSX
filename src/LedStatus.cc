@@ -3,11 +3,12 @@
 #include "ReadOnlySetting.hh"
 #include "CommandController.hh"
 #include "Timer.hh"
+#include "xrange.hh"
 #include <memory>
 
 namespace openmsx {
 
-static std::string getLedName(LedStatus::Led led)
+[[nodiscard]] static std::string getLedName(LedStatus::Led led)
 {
 	static constexpr const char* const names[LedStatus::NUM_LEDS] = {
 		"power", "caps", "kana", "pause", "turbo", "FDD"
@@ -24,12 +25,12 @@ LedStatus::LedStatus(
 	, interp(commandController.getInterpreter())
 {
 	lastTime = Timer::getTime();
-	for (int i = 0; i < NUM_LEDS; ++i) {
+	for (auto i : xrange(int(NUM_LEDS))) {
 		ledValue[i] = false;
 		std::string name = getLedName(static_cast<Led>(i));
 		ledStatus[i] = std::make_unique<ReadOnlySetting>(
-			commandController, "led_" + name,
-			"Current status for LED: " + name,
+			commandController, tmpStrCat("led_", name),
+			"Current status for LED",
 			TclObject("off"));
 	}
 }
@@ -68,7 +69,7 @@ void LedStatus::handleEvent(Led led) noexcept
 
 void LedStatus::executeRT()
 {
-	for (int i = 0; i < NUM_LEDS; ++i) {
+	for (auto i : xrange(int(NUM_LEDS))) {
 		if (ledValue[i] != ledStatus[i]->getValue().getBoolean(interp)) {
 			handleEvent(static_cast<Led>(i));
 		}

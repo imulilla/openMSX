@@ -1,6 +1,7 @@
 #include "HexDump.hh"
 #include "likely.hh"
 #include "strCat.hh"
+#include "xrange.hh"
 #include <algorithm>
 #include <cassert>
 
@@ -9,13 +10,13 @@ namespace HexDump {
 using std::string;
 using openmsx::MemBuffer;
 
-static char encode2(uint8_t x)
+[[nodiscard]] static constexpr char encode2(uint8_t x)
 {
 	return (x < 10) ? (x + '0') : (x - 10 + 'A');
 }
-static string encode(uint8_t x)
+[[nodiscard]] static auto encode(uint8_t x)
 {
-	return strCat(encode2(x >> 4), encode2(x & 15));
+	return tmpStrCat(encode2(x >> 4), encode2(x & 15));
 }
 string encode(const uint8_t* input, size_t len, bool newlines)
 {
@@ -23,7 +24,7 @@ string encode(const uint8_t* input, size_t len, bool newlines)
 	while (len) {
 		if (newlines && !ret.empty()) ret += '\n';
 		int t = int(std::min<size_t>(16, len));
-		for (int i = 0; i < t; ++i) {
+		for (auto i : xrange(t)) {
 			ret += encode(*input++);
 			if (i != (t - 1)) ret += ' ';
 		}
@@ -32,7 +33,7 @@ string encode(const uint8_t* input, size_t len, bool newlines)
 	return ret;
 }
 
-static int decode(char x)
+[[nodiscard]] static constexpr int decode(char x)
 {
 	if (('0' <= x) && (x <= '9')) {
 		return x - '0';

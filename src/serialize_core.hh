@@ -4,6 +4,7 @@
 #include "serialize_constr.hh"
 #include "serialize_meta.hh"
 #include "one_of.hh"
+#include "xrange.hh"
 #include <string>
 #include <type_traits>
 #include <cassert>
@@ -37,7 +38,7 @@ template<> struct is_primitive<std::string>        : std::true_type {};
 // method on the class. For some classes we cannot extend the source code. So
 // we need an alternative, non-intrusive, way to make those classes
 // serializable.
-template <typename Archive, typename T>
+template<typename Archive, typename T>
 void serialize(Archive& ar, T& t, unsigned version)
 {
 	// By default use the serialize() member. But this function can
@@ -45,7 +46,7 @@ void serialize(Archive& ar, T& t, unsigned version)
 	t.serialize(ar, version);
 }
 
-template <typename Archive, typename T1, typename T2>
+template<typename Archive, typename T1, typename T2>
 void serialize(Archive& ar, std::pair<T1, T2>& p, unsigned /*version*/)
 {
 	ar.serialize("first",  p.first,
@@ -62,7 +63,7 @@ template<typename T1, typename T2> struct SerializeClassVersion<std::pair<T1, T2
  *
  * For serialization of enums to work you have to specialize the
  * serialize_as_enum struct for that specific enum. This has a double purpose:
- *  - let the framework know this type should be traited as an enum
+ *  - let the framework know this type should be treated as an enum
  *  - define a mapping between enum values and string representations
  *
  * The serialize_as_enum class has the following members:
@@ -76,7 +77,7 @@ template<typename T1, typename T2> struct SerializeClassVersion<std::pair<T1, T2
  *      convert from string back to enum value
  *
  * If the enum has all consecutive values, starting from zero (as is the case
- * if you don't explicity mention the numeric values in the enum definition),
+ * if you don't explicitly mention the numeric values in the enum definition),
  * you can use the SERIALIZE_ENUM macro as a convenient way to define a
  * specialization of serialize_as_enum:
 
@@ -124,7 +125,7 @@ private:
 
 #define SERIALIZE_ENUM(TYPE,INFO) \
 template<> struct serialize_as_enum< TYPE > : serialize_as_enum_impl< TYPE > { \
-	serialize_as_enum() : serialize_as_enum_impl< TYPE >( INFO ) {} \
+	serialize_as_enum() : serialize_as_enum_impl<TYPE>(INFO) {} \
 };
 
 /////////////
@@ -137,7 +138,7 @@ template<> struct serialize_as_enum< TYPE > : serialize_as_enum_impl< TYPE > { \
 // a reference to this first object.
 //
 // By default all pointer types are treated as pointer, but also smart pointer
-// can be traited as such. Though only unique_ptr<T> is implemented ATM.
+// can be treated as such. Though only unique_ptr<T> is implemented ATM.
 //
 // The serialize_as_pointer class has the following members:
 //  - static bool value
@@ -213,7 +214,7 @@ template<typename T> struct serialize_as_pointer<std::shared_ptr<T>>
 //  - int size
 //      The size of the collection, -1 for variable sized collections.
 //      Fixed sized collections can be serialized slightly more efficient
-//      becuase we don't need to explicitly store the size.
+//      because we don't need to explicitly store the size.
 //  - using value_type = ...
 //      The type stored in the collection (only homogeneous collections are
 //      supported).
@@ -676,9 +677,10 @@ template<typename TC> struct CollectionLoader
 		sac::prepare(tc, n);
 		auto it = sac::output(tc);
 		CollectionLoaderHelper<sac> loadOneElement;
-		for (int i = 0; i < n; ++i, ++it) {
+		repeat(n, [&] {
 			loadOneElement(ar, args, it, id);
-		}
+			++it;
+		});
 	}
 };
 template<typename T> struct Loader

@@ -52,11 +52,13 @@ GlobalCommandControllerBase::~GlobalCommandControllerBase()
 {
 	// GlobalCommandController destructor must have run before
 	// we can check this.
+#ifdef DEBUG
 	assert(commands.empty());
+#endif
 	assert(commandCompleters.empty());
 }
 
-void GlobalCommandController::registerProxyCommand(const string& name)
+void GlobalCommandController::registerProxyCommand(std::string_view name)
 {
 	auto it = proxyCommandMap.find(name);
 	if (it == end(proxyCommandMap)) {
@@ -126,19 +128,24 @@ Interpreter& GlobalCommandController::getInterpreter()
 }
 
 void GlobalCommandController::registerCommand(
-	Command& command, const string& str)
+	Command& command, zstring_view str)
 {
+#ifdef DEBUG
 	assert(!commands.contains(str));
 	commands.emplace_noDuplicateCheck(str, &command);
+#endif
 	interpreter.registerCommand(str, command);
 }
 
 void GlobalCommandController::unregisterCommand(
 	Command& command, string_view str)
 {
+	(void)str;
+#ifdef DEBUG
 	assert(commands.contains(str));
 	assert(commands[str] == &command);
 	commands.erase(str);
+#endif
 	interpreter.unregisterCommand(command);
 }
 
@@ -171,14 +178,10 @@ void GlobalCommandController::unregisterSetting(Setting& setting)
 	getSettingsManager().unregisterSetting(setting);
 }
 
-bool GlobalCommandController::hasCommand(string_view command) const
+static vector<string> split(string_view str, const char delimiter)
 {
-	return commands.contains(command);
-}
+	vector<string> tokens;
 
-void GlobalCommandController::split(string_view str, vector<string>& tokens,
-                                    const char delimiter)
-{
 	enum ParseState {Alpha, BackSlash, Quote};
 	ParseState state = Alpha;
 
@@ -212,9 +215,10 @@ void GlobalCommandController::split(string_view str, vector<string>& tokens,
 				break;
 		}
 	}
+	return tokens;
 }
 
-string GlobalCommandController::removeEscaping(const string& str)
+static string removeEscaping(const string& str)
 {
 	enum ParseState {Alpha, BackSlash, Quote};
 	ParseState state = Alpha;
@@ -247,11 +251,10 @@ string GlobalCommandController::removeEscaping(const string& str)
 	return result;
 }
 
-vector<string> GlobalCommandController::removeEscaping(
-	const vector<string>& input, bool keepLastIfEmpty)
+static vector<string> removeEscaping(const vector<string>& input, bool keepLastIfEmpty)
 {
 	vector<string> result;
-	for (auto& s : input) {
+	for (const auto& s : input) {
 		if (!s.empty()) {
 			result.push_back(removeEscaping(s));
 		}
@@ -262,7 +265,7 @@ vector<string> GlobalCommandController::removeEscaping(
 	return result;
 }
 
-static string escapeChars(const string& str, const string& chars)
+static string escapeChars(const string& str, string_view chars)
 {
 	string result;
 	for (auto chr : str) {
@@ -275,8 +278,7 @@ static string escapeChars(const string& str, const string& chars)
 	return result;
 }
 
-string GlobalCommandController::addEscaping(const string& str, bool quote,
-                                            bool finished)
+static string addEscaping(const string& str, bool quote, bool finished)
 {
 	if (str.empty() && finished) {
 		quote = true;
@@ -293,13 +295,13 @@ string GlobalCommandController::addEscaping(const string& str, bool quote,
 	return result;
 }
 
-bool GlobalCommandController::isComplete(const string& command)
+bool GlobalCommandController::isComplete(zstring_view command)
 {
 	return interpreter.isComplete(command);
 }
 
 TclObject GlobalCommandController::executeCommand(
-	const string& command, CliConnection* connection_)
+	zstring_view command, CliConnection* connection_)
 {
 	ScopedAssign sa(connection, connection_);
 	return interpreter.execute(command);
@@ -329,8 +331,7 @@ string GlobalCommandController::tabCompletion(string_view command)
 	string_view post = command.substr(last);
 
 	// split command string in tokens
-	vector<string> originalTokens;
-	split(post, originalTokens, ' ');
+	vector<string> originalTokens = split(post, ' ');
 	if (originalTokens.empty()) {
 		originalTokens.emplace_back();
 	}
@@ -399,7 +400,7 @@ void GlobalCommandController::tabCompletion(vector<string>& tokens)
 		string_view cmd = tokens.front();
 		if (StringOp::startsWith(cmd, "::")) cmd.remove_prefix(2); // drop leading ::
 
-		if (auto v = lookup(commandCompleters, cmd)) {
+		if (auto* v = lookup(commandCompleters, cmd)) {
 			(*v)->tabCompletion(tokens);
 		} else {
 			TclObject command = makeTclList("openmsx::tabcompletion");
@@ -461,7 +462,7 @@ void GlobalCommandController::HelpCmd::execute(
 		break;
 	}
 	default: {
-		if (auto v = lookup(controller.commandCompleters, tokens[1].getString())) {
+		if (const auto* v = lookup(controller.commandCompleters, tokens[1].getString())) {
 			auto tokens2 = to_vector(view::transform(
 				view::drop(tokens, 1),
 				[](auto& t) { return string(t.getString()); }));

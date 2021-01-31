@@ -27,7 +27,7 @@ Otherwise, the mapper is enabled and the flash is readonly.
 
 namespace openmsx {
 
-static std::vector<AmdFlash::SectorInfo> getSectorInfo()
+[[nodiscard]] static std::vector<AmdFlash::SectorInfo> getSectorInfo()
 {
 	std::vector<AmdFlash::SectorInfo> sectorInfo;
 	// 8 * 8kB
@@ -70,9 +70,7 @@ void ReproCartridgeV1::reset(EmuTime::param time)
 	flashRomWriteEnabled = false;
 	mainBankReg = 0;
 	sccMode = 0;
-	for (int bank = 0; bank < 4; ++bank) {
-		bankRegs[bank] = bank;
-	}
+	ranges::iota(bankRegs, 0);
 
 	scc.reset(time);
 	psgLatch = 0;

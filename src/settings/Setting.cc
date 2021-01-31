@@ -22,8 +22,8 @@ BaseSetting::BaseSetting(string_view name)
 {
 }
 
-BaseSetting::BaseSetting(const TclObject& name)
-	: fullName(name)
+BaseSetting::BaseSetting(TclObject name)
+	: fullName(std::move(name))
 	, baseName(fullName)
 {
 }
@@ -38,7 +38,7 @@ void BaseSetting::info(TclObject& result) const
 // class Setting
 
 Setting::Setting(CommandController& commandController_,
-                 string_view name, string_view description_,
+                 string_view name, static_string_view description_,
                  const TclObject& initialValue, SaveSetting save_)
 	: BaseSetting(name)
 	, commandController(commandController_)
@@ -122,7 +122,7 @@ void Setting::notify() const
 		// check for non-saveable value
 		// (mechanism can be generalize later when needed)
 		if (val == dontSaveValue) val = getRestoreValue();
-		elem.setData(string(val.getString()));
+		elem.setData(val.getString());
 	}
 }
 

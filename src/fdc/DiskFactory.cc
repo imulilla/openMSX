@@ -21,7 +21,7 @@ DiskFactory::DiskFactory(Reactor& reactor_)
 	: reactor(reactor_)
 	, syncDirAsDSKSetting(
 		reactor.getCommandController(), "DirAsDSKmode",
-		"type of syncronisation between host directory and dir-as-dsk diskimage",
+		"type of synchronisation between host directory and dir-as-dsk diskimage",
 		DirAsDSK::SYNC_FULL, EnumSetting<DirAsDSK::SyncMode>::Map{
 			{"read_only", DirAsDSK::SYNC_READONLY},
 			{"full",      DirAsDSK::SYNC_FULL}})
@@ -94,13 +94,14 @@ std::unique_ptr<Disk> DiskFactory::createDisk(
 			// likely more descriptive.
 			throw e;
 		}
-		unsigned num;
-		try {
-			num = StringOp::fast_stou(std::string_view(diskImage).substr(pos + 1));
-		} catch (std::invalid_argument&) {
-			// not a valid partion number, throw previous exception
-			throw e;
-		}
+		unsigned num = [&] {
+			auto n = StringOp::stringToBase<10, unsigned>(std::string_view(diskImage).substr(pos + 1));
+			if (!n) {
+				// not a valid partion number, throw previous exception
+				throw e;
+			}
+			return *n;
+		}();
 		SectorAccessibleDisk& disk = *wholeDisk;
 		return std::make_unique<DiskPartition>(disk, num, std::move(wholeDisk));
 	}

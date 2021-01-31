@@ -25,9 +25,9 @@ public:
 	virtual ~Renderer() = default;
 
 	/** See VDP::getPostProcessor. */
-	virtual PostProcessor* getPostProcessor() const = 0;
+	[[nodiscard]] virtual PostProcessor* getPostProcessor() const = 0;
 
-	/** Reinitialise Renderer state.
+	/** Reinitialize Renderer state.
 	  */
 	virtual void reInit() = 0;
 

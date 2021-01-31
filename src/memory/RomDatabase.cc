@@ -47,10 +47,10 @@ public:
 	void stop();
 	void doctype(string_view txt);
 
-	string_view getSystemID() const { return systemID; }
+	[[nodiscard]] string_view getSystemID() const { return systemID; }
 
 private:
-	String32 cIndex(string_view str);
+	[[nodiscard]] String32 cIndex(string_view str);
 	void addEntries();
 	void addAllEntries();
 
@@ -324,16 +324,17 @@ void DBParser::text(string_view txt)
 	case COUNTRY:
 		country = cIndex(txt);
 		break;
-	case GENMSXID:
-		try {
-			genMSXid = StringOp::fast_stou(txt);
-		} catch (std::invalid_argument&) {
+	case GENMSXID: {
+		auto g = StringOp::stringToBase<10, unsigned>(txt);
+		if (!g) {
 			cliComm.printWarning(
 				"Ignoring bad Generation MSX id (genmsxid) "
-				"in entry with title '", title,
+				"in entry with title '", fromString32(bufStart, title),
 				": ", txt);
 		}
+		genMSXid = *g;
 		break;
+	}
 	case ORIGINAL:
 		dumps.back().origData = cIndex(txt);
 		break;
@@ -344,7 +345,13 @@ void DBParser::text(string_view txt)
 		startVal = txt;
 		break;
 	case HASH:
-		dumps.back().hash = Sha1Sum(txt);
+		try {
+			dumps.back().hash = Sha1Sum(txt);
+		} catch (MSXException& e) {
+			cliComm.printWarning(
+				"Ignoring bad dump for '", fromString32(bufStart, title),
+				"': ", e.getMessage());
+		}
 		break;
 	case DUMP_REMARK:
 	case DUMP_TEXT:
@@ -570,7 +577,7 @@ RomDatabase::RomDatabase(CliComm& cliComm)
 	size_t bufferSize = 0;
 	for (auto& p : paths) {
 		try {
-			auto& f = files.emplace_back(FileOperations::join(p, "softwaredb.xml"));
+			auto& f = files.emplace_back(p + "/softwaredb.xml");
 			bufferSize += f.getSize() + rapidsax::EXTRA_BUFFER_SPACE;
 		} catch (MSXException& /*e*/) {
 			// Ignore. It's not unusual the DB in the user

@@ -15,7 +15,7 @@ namespace openmsx {
 
 /** Utility class for converting VRAM contents to host pixels.
   */
-template <class Pixel>
+template<typename Pixel>
 class SpriteConverter
 {
 public:
@@ -139,7 +139,7 @@ public:
 	  * @param maxX Maximum X coordinate to draw (exclusive).
 	  * @param pixelPtr Pointer to memory to draw to.
 	  */
-	template <unsigned MODE>
+	template<unsigned MODE>
 	void drawMode2(int absLine, int minX, int maxX,
 	               Pixel* __restrict pixelPtr) __restrict
 	{

@@ -37,13 +37,13 @@ MSXMultiMemDevice::~MSXMultiMemDevice()
 	assert(empty());
 }
 
-static bool isInside(unsigned x, unsigned start, unsigned size)
+static constexpr bool isInside(unsigned x, unsigned start, unsigned size)
 {
 	return (x - start) < size;
 }
 
-static bool overlap(unsigned start1, unsigned size1,
-                    unsigned start2, unsigned size2)
+static constexpr bool overlap(unsigned start1, unsigned size1,
+                              unsigned start2, unsigned size2)
 {
 	return (isInside(start1,             start2, size2)) ||
 	       (isInside(start1 + size1 - 1, start2, size2));
@@ -81,7 +81,7 @@ std::string MSXMultiMemDevice::getName() const
 }
 void MSXMultiMemDevice::getNameList(TclObject& result) const
 {
-	for (auto& r : ranges) {
+	for (const auto& r : ranges) {
 		const auto& name = r.device->getName();
 		if (!name.empty()) {
 			result.addListElement(name);
@@ -91,7 +91,7 @@ void MSXMultiMemDevice::getNameList(TclObject& result) const
 
 const MSXMultiMemDevice::Range& MSXMultiMemDevice::searchRange(unsigned address) const
 {
-	for (auto& r : ranges) {
+	for (const auto& r : ranges) {
 		if (isInside(address, r.base, r.size)) {
 			return r;
 		}
@@ -122,7 +122,7 @@ void MSXMultiMemDevice::writeMem(word address, byte value, EmuTime::param time)
 const byte* MSXMultiMemDevice::getReadCacheLine(word start) const
 {
 	assert((start & CacheLine::HIGH) == start); // start is aligned
-	// Because start is aligned we don't need to wory about the begin
+	// Because start is aligned we don't need to worry about the begin
 	// address of the range. But we must make sure the end of the range
 	// doesn't only fill a partial cacheline.
 	const auto& range = searchRange(start);

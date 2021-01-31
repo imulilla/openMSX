@@ -9,6 +9,7 @@
 #include "stl.hh"
 #include "stringsp.hh" // for strncasecmp
 #include "view.hh"
+#include "xrange.hh"
 #include <cstring> // for memcpy, memcmp
 #include <cstdlib> // for atoi
 #include <cctype> // for isspace
@@ -435,7 +436,7 @@ size_t OggReader::frameNo(ogg_packet* packet) const
 void OggReader::readMetadata(th_comment& tc)
 {
 	char* metadata = nullptr;
-	for (int i = 0; i < tc.comments; ++i) {
+	for (auto i : xrange(tc.comments)) {
 		if (!strncasecmp(tc.user_comments[i], "location=",
 				 strlen("location="))) {
 			metadata = tc.user_comments[i] + strlen("location=");
@@ -801,7 +802,7 @@ size_t OggReader::bisection(
 	size_t frame, size_t sample,
 	size_t maxOffset, size_t maxSamples, size_t maxFrames)
 {
-	// Defined to be a power-of-two such that the arthmetic can be done faster.
+	// Defined to be a power-of-two such that the calculations can be done faster.
 	// Note that the sample-number is in the range of: 1..(44100*60*60)
 	constexpr uint64_t SHIFT = 0x20000000ull;
 

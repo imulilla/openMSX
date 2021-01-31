@@ -7,7 +7,7 @@ using std::string;
 
 namespace openmsx {
 
-span<uint8_t> FileBase::mmap()
+span<const uint8_t> FileBase::mmap()
 {
 	auto size = getSize();
 	if (mmapBuf.empty()) {
@@ -55,10 +55,10 @@ string FileBase::getLocalReference()
 	return {};
 }
 
-string FileBase::getOriginalName()
+std::string_view FileBase::getOriginalName()
 {
 	// default implementation just returns filename portion of URL
-	return string(FileOperations::getFilename(getURL()));
+	return FileOperations::getFilename(getURL());
 }
 
 } // namespace openmsx

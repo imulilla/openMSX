@@ -31,6 +31,7 @@
 #include "RomNettouYakyuu.hh"
 #include "RomGameMaster2.hh"
 #include "RomHalnote.hh"
+#include "RomZemina25in1.hh"
 #include "RomZemina80in1.hh"
 #include "RomZemina90in1.hh"
 #include "RomZemina126in1.hh"
@@ -58,7 +59,9 @@
 #include "DeviceConfig.hh"
 #include "XMLElement.hh"
 #include "MSXException.hh"
+#include "enumerate.hh"
 #include "one_of.hh"
+#include "xrange.hh"
 #include <memory>
 
 using std::make_unique;
@@ -68,7 +71,7 @@ using std::unique_ptr;
 
 namespace openmsx::RomFactory {
 
-static RomType guessRomType(const Rom& rom)
+[[nodiscard]] static RomType guessRomType(const Rom& rom)
 {
 	int size = rom.getSize();
 	if (size == 0) {
@@ -100,13 +103,13 @@ static RomType guessRomType(const Rom& rom)
 	} else {
 		//  GameCartridges do their bankswitching by using the Z80
 		//  instruction ld(nn),a in the middle of program code. The
-		//  adress nn depends upon the GameCartridge mappertype used.
+		//  address nn depends upon the GameCartridge mappertype used.
 		//  To guess which mapper it is, we will look how much writes
 		//  with this instruction to the mapper-registers-addresses
 		//  occur.
 
-		unsigned typeGuess[ROM_END_OF_UNORDERED_LIST] = {}; // 0-initialized
-		for (int i = 0; i < size - 3; ++i) {
+		unsigned typeGuess[ROM_LAST] = {}; // 0-initialized
+		for (auto i : xrange(size - 3)) {
 			if (data[i] == 0x32) {
 				word value = data[i + 1] + (data[i + 2] << 8);
 				switch (value) {
@@ -116,8 +119,6 @@ static RomType guessRomType(const Rom& rom)
 					typeGuess[ROM_KONAMI_SCC]++;
 					break;
 				case 0x4000:
-					typeGuess[ROM_KONAMI]++;
-					break;
 				case 0x8000:
 				case 0xa000:
 					typeGuess[ROM_KONAMI]++;
@@ -144,9 +145,9 @@ static RomType guessRomType(const Rom& rom)
 		}
 		if (typeGuess[ROM_ASCII8]) typeGuess[ROM_ASCII8]--; // -1 -> max_int
 		RomType type = ROM_GENERIC_8KB;
-		for (int i = 0; i < ROM_END_OF_UNORDERED_LIST; ++i) {
-			// debug: fprintf(stderr, "%d: %d\n", i, typeGuess[i]);
-			if (typeGuess[i] && (typeGuess[i] >= typeGuess[type])) {
+		for (auto [i, tg] : enumerate(typeGuess)) {
+			// debug: fprintf(stderr, "%d: %d\n", i, tg);
+			if (tg && (tg >= typeGuess[type])) {
 				type = static_cast<RomType>(i);
 			}
 		}
@@ -159,39 +160,41 @@ unique_ptr<MSXDevice> create(const DeviceConfig& config)
 	Rom rom(config.getAttribute("id"), "rom", config);
 
 	// Get specified mapper type from the config.
-	RomType type;
-	// if no type is mentioned, we assume 'mirrored' which works for most
-	// plain ROMs...
-	std::string_view typestr = config.getChildData("mappertype", "Mirrored");
-	if (typestr == "auto") {
-		// First check whether the (possibly patched) SHA1 is in the DB
-		const RomInfo* romInfo = config.getReactor().getSoftwareDatabase().fetchRomInfo(rom.getSHA1());
-		// If not found, try the original SHA1 in the DB
-		if (!romInfo) {
-			romInfo = config.getReactor().getSoftwareDatabase().fetchRomInfo(rom.getOriginalSHA1());
-		}
-		// If still not found, guess the mapper type
-		if (!romInfo) {
-			auto machineType = config.getMotherBoard().getMachineType();
-			if (machineType == "Coleco") {
-				if (rom.getSize() == one_of(128*1024u, 256*1024u, 512*1024u, 1024*1024u)) {
-					type = ROM_COLECOMEGACART;
+	RomType type = [&] {
+		// if no type is mentioned, we assume 'mirrored' which works for most
+		// plain ROMs...
+		std::string_view typestr = config.getChildData("mappertype", "Mirrored");
+		if (typestr == "auto") {
+			// First check whether the (possibly patched) SHA1 is in the DB
+			const RomInfo* romInfo = config.getReactor().getSoftwareDatabase().fetchRomInfo(rom.getSHA1());
+			// If not found, try the original SHA1 in the DB
+			if (!romInfo) {
+				romInfo = config.getReactor().getSoftwareDatabase().fetchRomInfo(rom.getOriginalSHA1());
+			}
+			// If still not found, guess the mapper type
+			if (!romInfo) {
+				auto machineType = config.getMotherBoard().getMachineType();
+				if (machineType == "Coleco") {
+					if (rom.getSize() == one_of(128*1024u, 256*1024u, 512*1024u, 1024*1024u)) {
+						return ROM_COLECOMEGACART;
+					} else {
+						return ROM_PAGE23;
+					}
 				} else {
-					type = ROM_PAGE23;
+					return guessRomType(rom);
 				}
 			} else {
-				type = guessRomType(rom);
+				return romInfo->getRomType();
 			}
 		} else {
-			type = romInfo->getRomType();
+			// Use mapper type from config, even if this overrides DB.
+			auto t = RomInfo::nameToRomType(typestr);
+			if (t == ROM_UNKNOWN) {
+				throw MSXException("Unknown mappertype: ", typestr);
+			}
+			return t;
 		}
-	} else {
-		// Use mapper type from config, even if this overrides DB.
-		type = RomInfo::nameToRomType(typestr);
-		if (type == ROM_UNKNOWN) {
-			throw MSXException("Unknown mappertype: ", typestr);
-		}
-	}
+	}();
 
 	// Store actual detected mapper type in config (override the possible
 	// 'auto' value). This way we're sure that on savestate/loadstate we're
@@ -200,33 +203,21 @@ unique_ptr<MSXDevice> create(const DeviceConfig& config)
 	// We do it at this point so that constructors used below can use this
 	// information for warning messages etc.
 	auto& writableConfig = const_cast<XMLElement&>(*config.getXML());
-	writableConfig.setChildData("mappertype", string(RomInfo::romTypeToName(type)));
+	writableConfig.setChildData("mappertype", RomInfo::romTypeToName(type));
 
 	unique_ptr<MSXRom> result;
 	switch (type) {
 	case ROM_MIRRORED:
-		result = make_unique<RomPlain>(
-			config, move(rom), RomPlain::MIRRORED);
-		break;
-	case ROM_NORMAL:
-		result = make_unique<RomPlain>(
-			config, move(rom), RomPlain::NOT_MIRRORED);
-		break;
 	case ROM_MIRRORED0000:
 	case ROM_MIRRORED4000:
 	case ROM_MIRRORED8000:
 	case ROM_MIRROREDC000:
-		result = make_unique<RomPlain>(
-			config, move(rom), RomPlain::MIRRORED,
-			(type & 7) * 0x2000);
-		break;
+	case ROM_NORMAL:
 	case ROM_NORMAL0000:
 	case ROM_NORMAL4000:
 	case ROM_NORMAL8000:
 	case ROM_NORMALC000:
-		result = make_unique<RomPlain>(
-			config, move(rom), RomPlain::NOT_MIRRORED,
-			(type & 7) * 0x2000);
+		result = make_unique<RomPlain>(config, move(rom), type);
 		break;
 	case ROM_PAGE0:
 	case ROM_PAGE1:
@@ -238,7 +229,7 @@ unique_ptr<MSXDevice> create(const DeviceConfig& config)
 	case ROM_PAGE23:
 	case ROM_PAGE123:
 	case ROM_PAGE0123:
-		result = make_unique<RomPageNN>(config, move(rom), type & 0xF);
+		result = make_unique<RomPageNN>(config, move(rom), type);
 		break;
 	case ROM_DRAM:
 		result = make_unique<RomDRAM>(config, move(rom));
@@ -347,6 +338,9 @@ unique_ptr<MSXDevice> create(const DeviceConfig& config)
 		break;
 	case ROM_HALNOTE:
 		result = make_unique<RomHalnote>(config, move(rom));
+		break;
+	case ROM_ZEMINA25IN1:
+		result = make_unique<RomZemina25in1>(config, move(rom));
 		break;
 	case ROM_ZEMINA80IN1:
 		result = make_unique<RomZemina80in1>(config, move(rom));

@@ -146,21 +146,20 @@ void InputEventGenerator::setNewOsdControlButtonState(
 void InputEventGenerator::triggerOsdControlEventsFromJoystickAxisMotion(
 	unsigned axis, int value, const EventPtr& origEvent)
 {
-	unsigned neg_button, pos_button;
-	switch (axis) {
-	case 0:
-		neg_button = 1 << OsdControlEvent::LEFT_BUTTON;
-		pos_button = 1 << OsdControlEvent::RIGHT_BUTTON;
-		break; // axis 0
-	case 1:
-		neg_button = 1 << OsdControlEvent::UP_BUTTON;
-		pos_button = 1 << OsdControlEvent::DOWN_BUTTON;
-		break;
-	default:
-		// Ignore all other axis (3D joysticks and flight joysticks may
-		// have more than 2 axis)
-		return;
-	}
+	auto [neg_button, pos_button] = [&] {
+		switch (axis) {
+		case 0:
+			return std::pair{1u << OsdControlEvent::LEFT_BUTTON,
+			                 1u << OsdControlEvent::RIGHT_BUTTON};
+		case 1:
+			return std::pair{1u << OsdControlEvent::UP_BUTTON,
+			                 1u << OsdControlEvent::DOWN_BUTTON};
+		default:
+			// Ignore all other axis (3D joysticks and flight joysticks may
+			// have more than 2 axis)
+			return std::pair{0u, 0u};
+		}
+	}();
 
 	if (value > 0) {
 		// release negative button, press positive button
@@ -235,7 +234,7 @@ void InputEventGenerator::triggerOsdControlEventsFromKeyEvent(
 	}
 }
 
-static Uint16 normalizeModifier(SDL_Keycode sym, Uint16 mod)
+static constexpr Uint16 normalizeModifier(SDL_Keycode sym, Uint16 mod)
 {
 	// Apparently modifier-keys also have the corresponding
 	// modifier attribute set. See here for a discussion:
@@ -291,7 +290,7 @@ void InputEventGenerator::handle(const SDL_Event& evt)
 		// buttons. It has however up to 6 virtual buttons that can be
 		// mapped to SDL keyboard events. Two of these virtual buttons
 		// will be mapped to keys SDLK_WORLD_93 and 94 and are
-		// interpeted here as joystick buttons (respectively button 0
+		// interpreted here as joystick buttons (respectively button 0
 		// and 1).
 		// TODO Android code should be rewritten for SDL2
 		/*if (PLATFORM_ANDROID && evt.key.keysym.sym == SDLK_WORLD_93) {
@@ -427,7 +426,7 @@ void InputEventGenerator::updateGrab(bool grab)
 
 int InputEventGenerator::signalEvent(const std::shared_ptr<const Event>& event)
 {
-	auto& focusEvent = checked_cast<const FocusEvent&>(*event);
+	const auto& focusEvent = checked_cast<const FocusEvent&>(*event);
 	switch (escapeGrabState) {
 		case ESCAPE_GRAB_WAIT_CMD:
 			// nothing

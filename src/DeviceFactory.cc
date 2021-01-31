@@ -31,6 +31,7 @@
 #include "MSXKanji.hh"
 #include "MSXBunsetsu.hh"
 #include "MSXMemoryMapper.hh"
+#include "MSXToshibaTcx200x.hh"
 #include "MegaFlashRomSCCPlusSD.hh"
 #include "MusicalMemoryMapper.hh"
 #include "Carnivore2.hh"
@@ -93,7 +94,7 @@ using std::unique_ptr;
 
 namespace openmsx {
 
-static unique_ptr<MSXDevice> createWD2793BasedFDC(const DeviceConfig& conf)
+[[nodiscard]] static unique_ptr<MSXDevice> createWD2793BasedFDC(const DeviceConfig& conf)
 {
 	const XMLElement* styleEl = conf.findChild("connectionstyle");
 	std::string type;
@@ -219,6 +220,8 @@ unique_ptr<MSXDevice> DeviceFactory::create(const DeviceConfig& conf)
 		result = make_unique<NationalFDC>(conf);
 	} else if (type == "TC8566AF") {
 		result = make_unique<TurboRFDC>(conf);
+	} else if (type == "ToshibaTCX-200x") {
+		result = make_unique<MSXToshibaTcx200x>(conf);
 	} else if (type == "SVIFDC") {
 		result = make_unique<SVIFDC>(conf);
 	} else if (type == "BeerIDE") {
@@ -293,10 +296,10 @@ unique_ptr<MSXDevice> DeviceFactory::create(const DeviceConfig& conf)
 	return result;
 }
 
-static XMLElement createConfig(std::string name, std::string id)
+[[nodiscard]] static XMLElement createConfig(std::string_view name, std::string_view id)
 {
-	XMLElement config(std::move(name));
-	config.addAttribute("id", std::move(id));
+	XMLElement config(name);
+	config.addAttribute("id", id);
 	return config;
 }
 

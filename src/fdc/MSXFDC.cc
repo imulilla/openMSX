@@ -3,6 +3,7 @@
 #include "Rom.hh"
 #include "XMLElement.hh"
 #include "MSXException.hh"
+#include "enumerate.hh"
 #include "serialize.hh"
 #include <memory>
 
@@ -29,12 +30,12 @@ MSXFDC::MSXFDC(const DeviceConfig& config, const std::string& romId, bool needRO
 	bool signalsNeedMotorOn = !styleEl || (styleEl->getData() == "Philips");
 	EmuDuration motorTimeout = EmuDuration::msec(timeout);
 	int i = 0;
-	for ( ; i < numDrives; ++i) {
+	for (/**/; i < numDrives; ++i) {
 		drives[i] = std::make_unique<RealDrive>(
 			getMotherBoard(), motorTimeout, signalsNeedMotorOn,
 			!singleSided, trackMode);
 	}
-	for ( ; i < 4; ++i) {
+	for (/**/; i < 4; ++i) {
 		drives[i] = std::make_unique<DummyDrive>();
 	}
 }
@@ -74,8 +75,8 @@ void MSXFDC::serialize(Archive& ar, unsigned /*version*/)
 	// Destroying and reconstructing the drives is not an option because
 	// DriveMultiplexer already has pointers to the drives.
 	char tag[7] = { 'd', 'r', 'i', 'v', 'e', 'X', 0 };
-	for (int i = 0; i < 4; ++i) {
-		if (auto drive = dynamic_cast<RealDrive*>(drives[i].get())) {
+	for (auto [i, drv] : enumerate(drives)) {
+		if (auto* drive = dynamic_cast<RealDrive*>(drv.get())) {
 			tag[5] = char('a' + i);
 			ar.serialize(tag, *drive);
 		}

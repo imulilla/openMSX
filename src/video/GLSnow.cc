@@ -19,27 +19,31 @@ GLSnow::GLSnow(Display& display_)
 	auto& generator = global_urng(); // fast (non-cryptographic) random numbers
 	std::uniform_int_distribution<int> distribution(0, 255);
 	byte buf[128 * 128];
-	for (auto& b : buf) {
-		b = distribution(generator);
-	}
+	ranges::generate(buf, [&] { return distribution(generator); });
+#if OPENGL_VERSION < OPENGL_3_3
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, 128, 128, 0,
+	             GL_LUMINANCE, GL_UNSIGNED_BYTE, buf);
+#else
+	// GL_LUMINANCE no longer supported in newer versions
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 128, 128, 0,
 	             GL_RED, GL_UNSIGNED_BYTE, buf);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+	GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_ONE};
+	glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+#endif
 
-	const vec2 pos[8][4] = {
-		{ { -1, -1 }, {  1, -1 }, {  1,  1 }, { -1,  1 } },
-		{ { -1,  1 }, {  1,  1 }, {  1, -1 }, { -1, -1 } },
-		{ { -1,  1 }, { -1, -1 }, {  1, -1 }, {  1,  1 } },
-		{ {  1,  1 }, {  1, -1 }, { -1, -1 }, { -1,  1 } },
-		{ {  1,  1 }, { -1,  1 }, { -1, -1 }, {  1, -1 } },
-		{ {  1, -1 }, { -1, -1 }, { -1,  1 }, {  1,  1 } },
-		{ {  1, -1 }, {  1,  1 }, { -1,  1 }, { -1, -1 } },
-		{ { -1, -1 }, { -1,  1 }, {  1,  1 }, {  1, -1 } }
+	static const vec2 pos[8][4] = {
+		{{-1, -1}, { 1, -1}, { 1,  1}, {-1,  1}},
+		{{-1,  1}, { 1,  1}, { 1, -1}, {-1, -1}},
+		{{-1,  1}, {-1, -1}, { 1, -1}, { 1,  1}},
+		{{ 1,  1}, { 1, -1}, {-1, -1}, {-1,  1}},
+		{{ 1,  1}, {-1,  1}, {-1, -1}, { 1, -1}},
+		{{ 1, -1}, {-1, -1}, {-1,  1}, { 1,  1}},
+		{{ 1, -1}, { 1,  1}, {-1,  1}, {-1, -1}},
+		{{-1, -1}, {-1,  1}, { 1,  1}, { 1, -1}},
 	};
 	glBindBuffer(GL_ARRAY_BUFFER, vbo[0].get());
 	glBufferData(GL_ARRAY_BUFFER, sizeof(pos), pos, GL_STATIC_DRAW);
-
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void GLSnow::paint(OutputSurface& /*output*/)
@@ -62,18 +66,21 @@ void GLSnow::paint(OutputSurface& /*output*/)
 	mat4 I;
 	glUniformMatrix4fv(gl::context->unifTexMvp, 1, GL_FALSE, &I[0][0]);
 
-	vao.bind();
 	glBindBuffer(GL_ARRAY_BUFFER, vbo[0].get());
-	vec2* base = nullptr;
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, base + cnt * 4);
+	const vec2* base = nullptr;
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, base + 4 * cnt);
 	glEnableVertexAttribArray(0);
+
 	glBindBuffer(GL_ARRAY_BUFFER, vbo[1].get());
-	glBufferData(GL_ARRAY_BUFFER, sizeof(tex), tex, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(tex), tex, GL_STREAM_DRAW);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
 	glEnableVertexAttribArray(1);
+
 	noiseTexture.bind();
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	vao.unbind();
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	display.repaintDelayed(100 * 1000); // 10fps
 }

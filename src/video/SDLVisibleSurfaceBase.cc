@@ -24,7 +24,7 @@ SDLVisibleSurfaceBase::~SDLVisibleSurfaceBase()
 	}
 }
 
-// TODO: The video subsystem is not de-inited on errors.
+// TODO: The video subsystem is not de-initialized on errors.
 //       While it would be consistent to do so, doing it in this class is
 //       not ideal since the init doesn't happen here.
 void SDLVisibleSurfaceBase::createSurface(int width, int height, unsigned flags)
@@ -32,7 +32,10 @@ void SDLVisibleSurfaceBase::createSurface(int width, int height, unsigned flags)
 	if (getDisplay().getRenderSettings().getFullScreen()) {
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	}
+#ifdef __APPLE__
+	// See SDLGLVisibleSurface::setViewPort() for why only macos (for now).
 	flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
 
 	assert(!window);
 	window.reset(SDL_CreateWindow(
@@ -96,11 +99,12 @@ bool SDLVisibleSurfaceBase::setFullScreen(bool fullscreen)
 		return true;
 	}
 
-	// in win32, toggling full screen requires opening a new SDL screen
-	// in Linux calling the SDL_WM_ToggleFullScreen usually works fine
-	// We now always create a new screen to make the code on both OSes
-	// more similar (we had a windows-only bug because of this difference)
-	return false;
+	if (SDL_SetWindowFullscreen(window.get(),
+			fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) != 0) {
+		return false; // error, try re-creating the window
+	}
+	fullScreenUpdated(fullscreen);
+	return true; // success
 }
 
 } // namespace openmsx

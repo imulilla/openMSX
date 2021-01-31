@@ -25,6 +25,7 @@
 #include "ranges.hh"
 #include "stl.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -96,11 +97,9 @@ MSXCPUInterface::MSXCPUInterface(MSXMotherBoard& motherBoard_)
 	ranges::fill(IO_In,  dummyDevice.get());
 	ranges::fill(IO_Out, dummyDevice.get());
 	ranges::fill(visibleDevices, dummyDevice.get());
-	for (int primSlot = 0; primSlot < 4; ++primSlot) {
-		for (int secSlot = 0; secSlot < 4; ++secSlot) {
-			for (int page = 0; page < 4; ++page) {
-				slotLayout[primSlot][secSlot][page] = dummyDevice.get();
-			}
+	for (auto& sub1 : slotLayout) {
+		for (auto& sub2 : sub1) {
+			ranges::fill(sub2, dummyDevice.get());
 		}
 	}
 
@@ -117,7 +116,7 @@ MSXCPUInterface::MSXCPUInterface(MSXMotherBoard& motherBoard_)
 		// TODO also MSX2+ needs (slightly different) VDPIODelay
 		delayDevice = DeviceFactory::createVDPIODelay(
 			*motherBoard.getMachineConfig(), *this);
-		for (int port = 0x98; port <= 0x9B; ++port) {
+		for (auto port : xrange(0x98, 0x9c)) {
 			assert(IO_In [port] == dummyDevice.get());
 			assert(IO_Out[port] == dummyDevice.get());
 			IO_In [port] = delayDevice.get();
@@ -145,7 +144,7 @@ MSXCPUInterface::~MSXCPUInterface()
 	removeAllWatchPoints();
 
 	if (delayDevice) {
-		for (int port = 0x98; port <= 0x9B; ++port) {
+		for (auto port : xrange(0x98, 0x9c)) {
 			assert(IO_In [port] == delayDevice.get());
 			assert(IO_Out[port] == delayDevice.get());
 			IO_In [port] = dummyDevice.get();
@@ -156,7 +155,7 @@ MSXCPUInterface::~MSXCPUInterface()
 	msxcpu.setInterface(nullptr);
 
 	#ifndef NDEBUG
-	for (int port = 0; port < 256; ++port) {
+	for (auto port : xrange(256)) {
 		if (IO_In[port] != dummyDevice.get()) {
 			std::cout << "In-port " << port << " still registered "
 			          << IO_In[port]->getName() << '\n';
@@ -168,10 +167,10 @@ MSXCPUInterface::~MSXCPUInterface()
 			UNREACHABLE;
 		}
 	}
-	for (int primSlot = 0; primSlot < 4; ++primSlot) {
+	for (auto primSlot : xrange(4)) {
 		assert(!isExpanded(primSlot));
-		for (int secSlot = 0; secSlot < 4; ++secSlot) {
-			for (int page = 0; page < 4; ++page) {
+		for (auto secSlot : xrange(4)) {
+			for (auto page : xrange(4)) {
 				assert(slotLayout[primSlot][secSlot][page] == dummyDevice.get());
 			}
 		}
@@ -245,7 +244,7 @@ void MSXCPUInterface::writeMemSlow(word address, byte value, EmuTime::param time
 void MSXCPUInterface::setExpanded(int ps)
 {
 	if (expanded[ps] == 0) {
-		for (int page = 0; page < 4; ++page) {
+		for (auto page : xrange(4)) {
 			if (slotLayout[ps][0][page] != dummyDevice.get()) {
 				throw MSXException("Can't expand slot because "
 				                   "it's already in use.");
@@ -266,12 +265,12 @@ void MSXCPUInterface::testUnsetExpanded(
 	if (expanded[ps] != 1) return; // ok, still expanded after this
 
 	std::vector<MSXDevice*> inUse;
-	for (int ss = 0; ss < 4; ++ss) {
-		for (int page = 0; page < 4; ++page) {
+	for (auto ss : xrange(4)) {
+		for (auto page : xrange(4)) {
 			MSXDevice* device = slotLayout[ps][ss][page];
 			std::vector<MSXDevice*> devices;
 			std::vector<MSXDevice*>::iterator end_devices;
-			if (auto memDev = dynamic_cast<MSXMultiMemDevice*>(device)) {
+			if (auto* memDev = dynamic_cast<MSXMultiMemDevice*>(device)) {
 				devices = memDev->getDevices();
 				ranges::sort(devices); // for set_difference()
 				end_devices = ranges::unique(devices);
@@ -325,7 +324,7 @@ void MSXCPUInterface::changeExpanded(bool newExpanded)
 MSXDevice*& MSXCPUInterface::getDevicePtr(byte port, bool isIn)
 {
 	MSXDevice** devicePtr = isIn ? &IO_In[port] : &IO_Out[port];
-	while (auto watch = dynamic_cast<MSXWatchIODevice*>(*devicePtr)) {
+	while (auto* watch = dynamic_cast<MSXWatchIODevice*>(*devicePtr)) {
 		devicePtr = &watch->getDevicePtr();
 	}
 	if (*devicePtr == delayDevice.get()) {
@@ -366,7 +365,7 @@ void MSXCPUInterface::register_IO(int port, bool isIn,
 		// first, replace DummyDevice
 		devicePtr = device;
 	} else {
-		if (auto multi = dynamic_cast<MSXMultiIODevice*>(devicePtr)) {
+		if (auto* multi = dynamic_cast<MSXMultiIODevice*>(devicePtr)) {
 			// third or more, add to existing MultiIO device
 			multi->addDevice(device);
 		} else {
@@ -387,7 +386,7 @@ void MSXCPUInterface::register_IO(int port, bool isIn,
 
 void MSXCPUInterface::unregister_IO(MSXDevice*& devicePtr, MSXDevice* device)
 {
-	if (auto multi = dynamic_cast<MSXMultiIODevice*>(devicePtr)) {
+	if (auto* multi = dynamic_cast<MSXMultiIODevice*>(devicePtr)) {
 		// remove from MultiIO device
 		multi->removeDevice(device);
 		auto& devices = multi->getDevices();
@@ -448,7 +447,7 @@ void MSXCPUInterface::testRegisterSlot(
 		// partial page
 		if (slot == dummyDevice.get()) {
 			// first, ok
-		} else if (auto multi = dynamic_cast<MSXMultiMemDevice*>(slot)) {
+		} else if (auto* multi = dynamic_cast<MSXMultiMemDevice*>(slot)) {
 			// second (or more), check for overlap
 			if (!multi->canAdd(base, size)) {
 				reportMemOverlap(ps, ss, *slot, device);
@@ -647,7 +646,7 @@ void MSXCPUInterface::fillWCache(unsigned start, unsigned size, byte* wData, int
 
 void MSXCPUInterface::reset()
 {
-	for (int i = 0; i < 4; ++i) {
+	for (auto i : xrange(4)) {
 		setSubSlot(i, 0);
 	}
 	setPrimarySlots(initialPrimarySlots);
@@ -794,10 +793,10 @@ void MSXCPUInterface::removeBreakPoint(const BreakPoint& bp)
 }
 void MSXCPUInterface::removeBreakPoint(unsigned id)
 {
-	auto it = ranges::find_if(breakPoints,
+	if (auto it = ranges::find_if(breakPoints,
 		[&](const BreakPoint& i) { return i.getId() == id; });
-	// could be ==end for a breakpoint that removes itself AND has the -once flag set
-	if (it != breakPoints.end()) {
+	    // could be ==end for a breakpoint that removes itself AND has the -once flag set
+	    it != breakPoints.end()) {
 		breakPoints.erase(it);
 	}
 }
@@ -828,6 +827,19 @@ void MSXCPUInterface::checkBreakPoints(
 	}
 }
 
+static void registerIOWatch(WatchPoint& watchPoint, MSXDevice** devices)
+{
+	assert(dynamic_cast<WatchIO*>(&watchPoint));
+	auto& ioWatch = static_cast<WatchIO&>(watchPoint);
+	unsigned beginPort = ioWatch.getBeginAddress();
+	unsigned endPort   = ioWatch.getEndAddress();
+	assert(beginPort <= endPort);
+	assert(endPort < 0x100);
+	for (unsigned port = beginPort; port <= endPort; ++port) {
+		ioWatch.getDevice(port).getDevicePtr() = devices[port];
+		devices[port] = &ioWatch.getDevice(port);
+	}
+}
 
 void MSXCPUInterface::setWatchPoint(const shared_ptr<WatchPoint>& watchPoint)
 {
@@ -849,13 +861,33 @@ void MSXCPUInterface::setWatchPoint(const shared_ptr<WatchPoint>& watchPoint)
 	}
 }
 
+static void unregisterIOWatch(WatchPoint& watchPoint, MSXDevice** devices)
+{
+	assert(dynamic_cast<WatchIO*>(&watchPoint));
+	auto& ioWatch = static_cast<WatchIO&>(watchPoint);
+	unsigned beginPort = ioWatch.getBeginAddress();
+	unsigned endPort   = ioWatch.getEndAddress();
+	assert(beginPort <= endPort);
+	assert(endPort < 0x100);
+
+	for (unsigned port = beginPort; port <= endPort; ++port) {
+		// find pointer to watchpoint
+		MSXDevice** prev = &devices[port];
+		while (*prev != &ioWatch.getDevice(port)) {
+			prev = &checked_cast<MSXWatchIODevice*>(*prev)->getDevicePtr();
+		}
+		// remove watchpoint from chain
+		*prev = checked_cast<MSXWatchIODevice*>(*prev)->getDevicePtr();
+	}
+}
+
 void MSXCPUInterface::removeWatchPoint(shared_ptr<WatchPoint> watchPoint)
 {
 	// Pass shared_ptr by value to keep the object alive for the duration
 	// of this function, otherwise it gets deleted as soon as it's removed
 	// from the watchPoints collection.
-	auto it = ranges::find(watchPoints, watchPoint);
-	if (it != end(watchPoints)) {
+	if (auto it = ranges::find(watchPoints, watchPoint);
+	    it != end(watchPoints)) {
 		// remove before calling updateMemWatch()
 		watchPoints.erase(it);
 		WatchPoint::Type type = watchPoint->getType();
@@ -889,45 +921,11 @@ void MSXCPUInterface::removeCondition(const DebugCondition& cond)
 
 void MSXCPUInterface::removeCondition(unsigned id)
 {
-	auto it = ranges::find_if(conditions,
+	if (auto it = ranges::find_if(conditions,
 		[&](DebugCondition& e) { return e.getId() == id; });
-	// could be ==end for a condition that removes itself AND has the -once flag set
-	if (it != conditions.end()) {
+	    // could be ==end for a condition that removes itself AND has the -once flag set
+	    it != conditions.end()) {
 		conditions.erase(it);
-	}
-}
-
-void MSXCPUInterface::registerIOWatch(WatchPoint& watchPoint, MSXDevice** devices)
-{
-	assert(dynamic_cast<WatchIO*>(&watchPoint));
-	auto& ioWatch = static_cast<WatchIO&>(watchPoint);
-	unsigned beginPort = ioWatch.getBeginAddress();
-	unsigned endPort   = ioWatch.getEndAddress();
-	assert(beginPort <= endPort);
-	assert(endPort < 0x100);
-	for (unsigned port = beginPort; port <= endPort; ++port) {
-		ioWatch.getDevice(port).getDevicePtr() = devices[port];
-		devices[port] = &ioWatch.getDevice(port);
-	}
-}
-
-void MSXCPUInterface::unregisterIOWatch(WatchPoint& watchPoint, MSXDevice** devices)
-{
-	assert(dynamic_cast<WatchIO*>(&watchPoint));
-	auto& ioWatch = static_cast<WatchIO&>(watchPoint);
-	unsigned beginPort = ioWatch.getBeginAddress();
-	unsigned endPort   = ioWatch.getEndAddress();
-	assert(beginPort <= endPort);
-	assert(endPort < 0x100);
-
-	for (unsigned port = beginPort; port <= endPort; ++port) {
-		// find pointer to watchpoint
-		MSXDevice** prev = &devices[port];
-		while (*prev != &ioWatch.getDevice(port)) {
-			prev = &checked_cast<MSXWatchIODevice*>(*prev)->getDevicePtr();
-		}
-		// remove watchpoint from chain
-		*prev = checked_cast<MSXWatchIODevice*>(*prev)->getDevicePtr();
 	}
 }
 
@@ -935,7 +933,7 @@ void MSXCPUInterface::updateMemWatch(WatchPoint::Type type)
 {
 	std::bitset<CacheLine::SIZE>* watchSet =
 		(type == WatchPoint::READ_MEM) ? readWatchSet : writeWatchSet;
-	for (unsigned i = 0; i < CacheLine::NUM; ++i) {
+	for (auto i : xrange(CacheLine::NUM)) {
 		watchSet[i].reset();
 	}
 	for (auto& w : watchPoints) {
@@ -950,7 +948,7 @@ void MSXCPUInterface::updateMemWatch(WatchPoint::Type type)
 			}
 		}
 	}
-	for (unsigned i = 0; i < CacheLine::NUM; ++i) {
+	for (auto i : xrange(CacheLine::NUM)) {
 		if (readWatchSet [i].any()) {
 			disallowReadCache [i] |=  MEMORY_WATCH_BIT;
 		} else {
@@ -1225,7 +1223,7 @@ void MSXCPUInterface::IOInfo::helper(
 	if (port >= 256) {
 		throw CommandException("Port must be in range 0..255");
 	}
-	result = devices[port]->getName();
+	devices[port]->getNameList(result);
 }
 void MSXCPUInterface::IInfo::execute(
 	span<const TclObject> tokens, TclObject& result) const
@@ -1254,7 +1252,7 @@ void MSXCPUInterface::serialize(Archive& ar, unsigned /*version*/)
 	// primary and 4 secondary slot select registers
 	byte prim = 0;
 	if (!ar.isLoader()) {
-		for (int i = 0; i < 4; ++i) {
+		for (auto i : xrange(4)) {
 			prim |= primarySlotState[i] << (2 * i);
 		}
 	}
@@ -1262,7 +1260,7 @@ void MSXCPUInterface::serialize(Archive& ar, unsigned /*version*/)
 	             "subSlotRegs",  subSlotRegister);
 	if (ar.isLoader()) {
 		setPrimarySlots(prim);
-		for (int i = 0; i < 4; ++i) {
+		for (auto i : xrange(4)) {
 			setSubSlot(i, subSlotRegister[i]);
 		}
 	}

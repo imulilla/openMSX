@@ -23,6 +23,7 @@
 #include "serialize_stl.hh"
 #include "serialize_constr.hh"
 #include "strCat.hh"
+#include "view.hh"
 #include <functional>
 #include <memory>
 #include <utility>
@@ -39,9 +40,9 @@ public:
 	            DiskChanger& diskChanger);
 	void execute(span<const TclObject> tokens,
 	             TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
-	bool needRecord(span<const TclObject> tokens) const /*override*/;
+	[[nodiscard]] bool needRecord(span<const TclObject> tokens) const /*override*/;
 private:
 	DiskChanger& diskChanger;
 };
@@ -59,7 +60,7 @@ DiskChanger::DiskChanger(MSXMotherBoard& board,
 	, driveName(std::move(driveName_))
 	, doubleSidedDrive(doubleSidedDrive_)
 {
-	init(strCat(board.getMachineID(), "::"), createCmd);
+	init(tmpStrCat(board.getMachineID(), "::"), createCmd);
 }
 
 DiskChanger::DiskChanger(Reactor& reactor_, string driveName_)
@@ -73,7 +74,7 @@ DiskChanger::DiskChanger(Reactor& reactor_, string driveName_)
 	init({}, true);
 }
 
-void DiskChanger::init(const string& prefix, bool createCmd)
+void DiskChanger::init(std::string_view prefix, bool createCmd)
 {
 	if (createCmd) createCommand();
 	ejectDisk();
@@ -142,7 +143,7 @@ void DiskChanger::signalStateChange(const std::shared_ptr<StateChange>& event)
 	auto* commandEvent = dynamic_cast<MSXCommandEvent*>(event.get());
 	if (!commandEvent) return;
 
-	auto& tokens = commandEvent->getTokens();
+	const auto& tokens = commandEvent->getTokens();
 	if (tokens[0] == getDriveName()) {
 		if (tokens[1] == "eject") {
 			ejectDisk();
@@ -157,7 +158,7 @@ void DiskChanger::stopReplay(EmuTime::param /*time*/)
 	// nothing
 }
 
-int DiskChanger::insertDisk(std::string_view filename)
+int DiskChanger::insertDisk(const std::string& filename)
 {
 	TclObject args[] = { TclObject("dummy"), TclObject(filename) };
 	try {
@@ -173,9 +174,9 @@ void DiskChanger::insertDisk(span<const TclObject> args)
 	string diskImage = FileOperations::getConventionalPath(string(args[1].getString()));
 	auto& diskFactory = reactor.getDiskFactory();
 	std::unique_ptr<Disk> newDisk(diskFactory.createDisk(diskImage, *this));
-	for (size_t i = 2; i < args.size(); ++i) {
+	for (const auto& arg : view::drop(args, 2)) {
 		newDisk->applyPatch(Filename(
-			string(args[i].getString()), userFileContext()));
+			arg.getString(), userFileContext()));
 	}
 
 	// no errors, only now replace original disk
@@ -209,7 +210,7 @@ DiskCommand::DiskCommand(CommandController& commandController_,
 void DiskCommand::execute(span<const TclObject> tokens, TclObject& result)
 {
 	if (tokens.size() == 1) {
-		result.addListElement(diskChanger.getDriveName() + ':',
+		result.addListElement(tmpStrCat(diskChanger.getDriveName(), ':'),
 		                      diskChanger.getDiskName().getResolved());
 
 		TclObject options;
@@ -254,7 +255,7 @@ void DiskCommand::execute(span<const TclObject> tokens, TclObject& result)
 		}
 		try {
 			vector<string> args = { diskChanger.getDriveName() };
-			for (size_t i = firstFileToken; i < tokens.size(); ++i) {
+			for (size_t i = firstFileToken; i < tokens.size(); ++i) { // 'i' changes in loop
 				std::string_view option = tokens[i].getString();
 				if (option == "-ips") {
 					if (++i == tokens.size()) {

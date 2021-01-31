@@ -9,10 +9,10 @@
 namespace openmsx {
 
 class RenderSettings;
-template <class Pixel> class Blur_1on3;
-template <class Pixel> class PolyLineScaler;
+template<typename Pixel> class Blur_1on3;
+template<typename Pixel> class PolyLineScaler;
 
-template <class Pixel>
+template<typename Pixel>
 class Simple3xScaler final : public Scaler3<Pixel>
 {
 public:
@@ -31,11 +31,11 @@ private:
 		FrameSource& src, unsigned srcStartY, unsigned srcEndY,
 		ScalerOutput<Pixel>& dst, unsigned dstStartY, unsigned dstEndY) override;
 	void scale2x1to9x3(FrameSource& src,
-		unsigned srcstarty, unsigned srcendy, unsigned srcwidth,
-		ScalerOutput<Pixel>& dst, unsigned dststarty, unsigned dstendy) override;
+		unsigned srcStartY, unsigned srcEndY, unsigned srcwidth,
+		ScalerOutput<Pixel>& dst, unsigned dstStartY, unsigned dstEndY) override;
 	void scale2x2to9x3(FrameSource& src,
-		unsigned srcstarty, unsigned srcendy, unsigned srcwidth,
-		ScalerOutput<Pixel>& dst, unsigned dststarty, unsigned dstendy) override;
+		unsigned srcStartY, unsigned srcEndY, unsigned srcwidth,
+		ScalerOutput<Pixel>& dst, unsigned dstStartY, unsigned dstEndY) override;
 	void scale1x1to3x3(FrameSource& src,
 		unsigned srcStartY, unsigned srcEndY, unsigned srcWidth,
 		ScalerOutput<Pixel>& dst, unsigned dstStartY, unsigned dstEndY) override;
@@ -76,6 +76,7 @@ private:
 		ScalerOutput<Pixel>& dst, unsigned dstStartY, unsigned dstEndY,
 		PolyLineScaler<Pixel>& scale);
 
+private:
 	PixelOperations<Pixel> pixelOps;
 	Scanline<Pixel> scanline;
 

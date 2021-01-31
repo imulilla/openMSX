@@ -14,16 +14,16 @@ using namespace openmsx;
 
 namespace gl {
 
-/*
-void checkGLError(const string& prefix)
+void checkGLError(std::string_view prefix)
 {
 	GLenum error = glGetError();
 	if (error != GL_NO_ERROR) {
-		string err = (char*)gluErrorString(error);
-		std::cerr << "GL error: " << prefix << ": " << err << '\n';
+		// TODO this needs glu, but atm we don't link against glu (in windows)
+		//string err = (const char*)gluErrorString(error);
+		std::cerr << "GL error: " << prefix << ": " << int(error) << '\n';
+		assert(false);
 	}
 }
-*/
 
 
 // class Texture
@@ -78,11 +78,11 @@ void ColorTexture::resize(GLsizei width_, GLsizei height_)
 	glTexImage2D(
 		GL_TEXTURE_2D,    // target
 		0,                // level
-		GL_RGBA8,         // internal format
+		GL_RGBA,          // internal format
 		width,            // width
 		height,           // height
 		0,                // border
-		GL_BGRA,          // format
+		GL_RGBA,          // format
 		GL_UNSIGNED_BYTE, // type
 		nullptr);         // data
 }
@@ -127,22 +127,25 @@ void FrameBufferObject::pop()
 
 // class Shader
 
-Shader::Shader(GLenum type, const string& filename)
-{
-	init(type, {}, filename);
-}
-
-Shader::Shader(GLenum type, const string& header, const string& filename)
-{
-	init(type, header, filename);
-}
-
-void Shader::init(GLenum type, const string& header, const string& filename)
+void Shader::init(GLenum type, std::string_view header, std::string_view filename)
 {
 	// Load shader source.
-	string source = "#version 330\n" + header;
+	string source;
+	if (OPENGL_VERSION == OPENGL_ES_2_0) {
+		source += "#version 100\n";
+		if (type == GL_FRAGMENT_SHADER) {
+			source += "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
+				"  precision highp float;\n"
+				"#else\n"
+				"  precision mediump float;\n"
+				"#endif\n";
+		}
+	} else {
+		source += "#version 110\n";
+	}
+	source += header;
 	try {
-		File file(systemFileContext().resolve("shaders/" + filename));
+		File file(systemFileContext().resolve(tmpStrCat("shaders/", filename)));
 		auto mmap = file.mmap();
 		source.append(reinterpret_cast<const char*>(mmap.data()),
 		              mmap.size());
@@ -172,9 +175,9 @@ void Shader::init(GLenum type, const string& header, const string& filename)
 	if (!ok || (!Version::RELEASE && infoLogLength > 1)) {
 		VLA(GLchar, infoLog, infoLogLength);
 		glGetShaderInfoLog(handle, infoLogLength, nullptr, infoLog);
-		fprintf(stderr, "%s(s) compiling shader \"%s\":\n%s",
-			ok ? "Warning" : "Error", filename.c_str(),
-			infoLogLength > 1 ? infoLog : "(no details available)\n");
+		std::cerr << (ok ? "Warning" : "Error") << "(s) compiling shader \""
+		          << filename << "\":\n"
+			  << (infoLogLength > 1 ? infoLog : "(no details available)\n");
 	}
 }
 
@@ -189,32 +192,6 @@ bool Shader::isOK() const
 	GLint compileStatus = GL_FALSE;
 	glGetShaderiv(handle, GL_COMPILE_STATUS, &compileStatus);
 	return compileStatus == GL_TRUE;
-}
-
-
-// class VertexShader
-
-VertexShader::VertexShader(const string& filename)
-	: Shader(GL_VERTEX_SHADER, filename)
-{
-}
-
-VertexShader::VertexShader(const string& header, const string& filename)
-	: Shader(GL_VERTEX_SHADER, header, filename)
-{
-}
-
-
-// class FragmentShader
-
-FragmentShader::FragmentShader(const string& filename)
-	: Shader(GL_FRAGMENT_SHADER, filename)
-{
-}
-
-FragmentShader::FragmentShader(const string& header, const string& filename)
-	: Shader(GL_FRAGMENT_SHADER, header, filename)
-{
 }
 
 
@@ -319,20 +296,6 @@ BufferObject::BufferObject()
 BufferObject::~BufferObject()
 {
 	glDeleteBuffers(1, &bufferId); // ok to delete 0-buffer
-}
-
-
-// class VertexArray
-
-VertexArray::VertexArray()
-{
-	glGenVertexArrays(1, &bufferId);
-}
-
-VertexArray::~VertexArray()
-{
-	unbind();
-	glDeleteVertexArrays(1, &bufferId); // ok to delete 0-buffer
 }
 
 } // namespace gl

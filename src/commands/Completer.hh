@@ -17,11 +17,11 @@ class TclObject;
 class Completer
 {
 public:
-	const std::string& getName() const { return theName; }
+	[[nodiscard]] const std::string& getName() const { return theName; }
 
 	/** Print help for this command.
 	  */
-	virtual std::string help(const std::vector<std::string>& tokens) const = 0;
+	[[nodiscard]] virtual std::string help(const std::vector<std::string>& tokens) const = 0;
 
 	/** Attempt tab completion for this command.
 	  * @param tokens Tokenized command line;
@@ -30,7 +30,7 @@ public:
 	  */
 	virtual void tabCompletion(std::vector<std::string>& tokens) const = 0;
 
-	virtual Interpreter& getInterpreter() const = 0;
+	[[nodiscard]] virtual Interpreter& getInterpreter() const = 0;
 
 	template<typename ITER>
 	static void completeString(std::vector<std::string>& tokens,

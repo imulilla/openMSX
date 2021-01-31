@@ -17,12 +17,13 @@ namespace openmsx {
 class CompareSha1 {
 public:
 	CompareSha1(const FilePoolCore::Pool& pool_) : pool(pool_) {}
-	template<typename X, typename Y> bool operator()(const X& x, const Y& y) const {
+	template<typename X, typename Y>
+	[[nodiscard]] bool operator()(const X& x, const Y& y) const {
 		return get(x) < get(y);
 	}
 private:
-	const Sha1Sum& get(const Sha1Sum& sum) const { return sum; }
-	const Sha1Sum& get(FilePoolCore::Index idx) const { return pool[idx].sum; }
+	[[nodiscard]] const Sha1Sum& get(const Sha1Sum& sum) const { return sum; }
+	[[nodiscard]] const Sha1Sum& get(FilePoolCore::Index idx) const { return pool[idx].sum; }
 private:
 	const FilePoolCore::Pool& pool;
 };
@@ -30,7 +31,7 @@ private:
 
 FilePoolCore::FilePoolCore(string filecache_,
                            std::function<Directories()> getDirectories_,
-                           std::function<void(const string&)> reportProgress_)
+                           std::function<void(std::string_view)> reportProgress_)
 	: filecache(std::move(filecache_))
 	, getDirectories(getDirectories_)
 	, reportProgress(reportProgress_)
@@ -62,8 +63,7 @@ void FilePoolCore::insert(const Sha1Sum& sum, time_t time, const string& filenam
 FilePoolCore::Sha1Index::iterator FilePoolCore::getSha1Iterator(Index idx, Entry& entry)
 {
 	// There can be multiple entries for the same sha1, look for the specific one.
-	auto [b, e] = ranges::equal_range(sha1Index, entry.sum, CompareSha1(pool));
-	while (b != e) {
+	for (auto [b, e] = ranges::equal_range(sha1Index, entry.sum, CompareSha1(pool)); b != e; ++b) {
 		if (*b == idx) {
 			return b;
 		}
@@ -125,7 +125,7 @@ bool FilePoolCore::adjustSha1(Index idx, Entry& entry, const Sha1Sum& newSum)
 
 time_t FilePoolCore::Entry::getTime()
 {
-	if (time == time_t(-1)) {
+	if (time == Date::INVALID_TIME_T) {
 		time = Date::fromString(timeStr);
 	}
 	return time;
@@ -238,7 +238,7 @@ void FilePoolCore::writeSha1sums()
 		if (entry.timeStr) {
 			file << entry.timeStr;
 		} else {
-			assert(entry.time != time_t(-1));
+			assert(entry.time != Date::INVALID_TIME_T);
 			file << Date::toString(entry.time);
 		}
 		file << "  " << entry.filename << '\n';
@@ -258,7 +258,7 @@ File FilePoolCore::getFile(FileType fileType, const Sha1Sum& sha1sum)
 
 	for (auto& [path, types] : getDirectories()) {
 		if ((types & fileType) != FileType::NONE) {
-			result = scanDirectory(sha1sum, FileOperations::expandTilde(path), path, progress);
+			result = scanDirectory(sha1sum, FileOperations::expandTilde(string(path)), path, progress);
 			if (result.is_open()) return result;
 		}
 	}
@@ -282,12 +282,12 @@ Sha1Sum FilePoolCore::calcSha1sum(File& file)
 	bool everShowedProgress = false;
 
 	auto report = [&](size_t percentage) {
-		reportProgress(strCat("Calculating SHA1 sum for ", file.getOriginalName(),
-		                      "... ", percentage, '%'));
+		reportProgress(tmpStrCat("Calculating SHA1 sum for ", file.getOriginalName(),
+		                         "... ", percentage, '%'));
 	};
 	// Loop over all-but-the last blocks. For small files this loop is skipped.
 	while (remaining > STEP_SIZE) {
-		sha1.update(&data[done], STEP_SIZE);
+		sha1.update({&data[done], STEP_SIZE});
 		done += STEP_SIZE;
 		remaining -= STEP_SIZE;
 
@@ -300,7 +300,7 @@ Sha1Sum FilePoolCore::calcSha1sum(File& file)
 	}
 	// last block
 	if (remaining) {
-		sha1.update(&data[done], remaining);
+		sha1.update({&data[done], remaining});
 	}
 	if (everShowedProgress) {
 		report(100);
@@ -317,7 +317,7 @@ File FilePoolCore::getFromPool(const Sha1Sum& sha1sum)
 	while (i != last) {
 		auto it = begin(sha1Index) + i;
 		auto& entry = pool[*it];
-		if (entry.getTime() == time_t(-1)) {
+		if (entry.getTime() == Date::INVALID_TIME_T) {
 			// Invalid time/date format. Remove from
 			// database and continue searching.
 			remove(it);
@@ -325,7 +325,7 @@ File FilePoolCore::getFromPool(const Sha1Sum& sha1sum)
 			continue;
 		}
 		try {
-			File file(entry.filename);
+			File file(string(entry.filename));
 			auto newTime = file.getModificationDate();
 			if (entry.getTime() == newTime) {
 				// When modification time is unchanged, assume
@@ -361,7 +361,7 @@ File FilePoolCore::getFromPool(const Sha1Sum& sha1sum)
 }
 
 File FilePoolCore::scanDirectory(
-	const Sha1Sum& sha1sum, const string& directory, const string& poolPath,
+	const Sha1Sum& sha1sum, const string& directory, std::string_view poolPath,
 	ScanProgress& progress)
 {
 	File result;
@@ -381,7 +381,7 @@ File FilePoolCore::scanDirectory(
 }
 
 File FilePoolCore::scanFile(const Sha1Sum& sha1sum, const string& filename,
-                            const FileOperations::Stat& st, const string& poolPath,
+                            const FileOperations::Stat& st, std::string_view poolPath,
                             ScanProgress& progress)
 {
 	++progress.amountScanned;
@@ -389,7 +389,7 @@ File FilePoolCore::scanFile(const Sha1Sum& sha1sum, const string& filename,
 	auto now = Timer::getTime();
 	if (now > (progress.lastTime + 250'000)) { // 4Hz
 		progress.lastTime = now;
-		reportProgress(strCat(
+		reportProgress(tmpStrCat(
 		        "Searching for file with sha1sum ", sha1sum.toString(),
 		        "...\nIndexing filepool ", poolPath, ": [",
 		        progress.amountScanned, "]: ",
@@ -397,8 +397,7 @@ File FilePoolCore::scanFile(const Sha1Sum& sha1sum, const string& filename,
 	}
 
 	auto time = FileOperations::getModificationDate(st);
-	auto [idx, entry] = findInDatabase(filename);
-	if (idx == Index(-1)) {
+	if (auto [idx, entry] = findInDatabase(filename); idx == Index(-1)) {
 		// not in pool
 		try {
 			File file(filename);
@@ -445,7 +444,7 @@ std::pair<FilePoolCore::Index, FilePoolCore::Entry*> FilePoolCore::findInDatabas
 	Index idx = *it;
 	auto& entry = pool[idx];
 	assert(entry.filename == filename);
-	if (entry.getTime() == time_t(-1)) {
+	if (entry.getTime() == Date::INVALID_TIME_T) {
 		// invalid date/time string, remove from db
 		remove(idx, entry);
 		return {Index(-1), nullptr};
@@ -456,7 +455,7 @@ std::pair<FilePoolCore::Index, FilePoolCore::Entry*> FilePoolCore::findInDatabas
 Sha1Sum FilePoolCore::getSha1Sum(File& file)
 {
 	auto time = file.getModificationDate();
-	const auto& filename = file.getURL();
+	const std::string& filename = file.getURL();
 
 	auto [idx, entry] = findInDatabase(filename);
 	if (idx != Index(-1)) {

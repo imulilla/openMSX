@@ -29,6 +29,7 @@
 #include "stl.hh"
 #include "unreachable.hh"
 #include "view.hh"
+#include "xrange.hh"
 #include <cassert>
 
 using std::string;
@@ -49,10 +50,10 @@ Display::Display(Reactor& reactor_)
 	, switchInProgress(false)
 {
 	frameDurationSum = 0;
-	for (unsigned i = 0; i < NUM_FRAME_DURATIONS; ++i) {
+	repeat(NUM_FRAME_DURATIONS, [&] {
 		frameDurations.addFront(20);
 		frameDurationSum += 20;
-	}
+	});
 	prevTimeStamp = Timer::getTime();
 
 	EventDistributor& eventDistributor = reactor.getEventDistributor();
@@ -146,7 +147,7 @@ void Display::detach(VideoSystemChangeListener& listener)
 
 Layer* Display::findActiveLayer() const
 {
-	for (auto& l : layers) {
+	for (auto* l : layers) {
 		if (l->getZ() == Layer::Z_MSX_ACTIVE) {
 			return l;
 		}
@@ -181,7 +182,7 @@ void Display::executeRT()
 int Display::signalEvent(const std::shared_ptr<const Event>& event)
 {
 	if (event->getType() == OPENMSX_FINISH_FRAME_EVENT) {
-		auto& ffe = checked_cast<const FinishFrameEvent&>(*event);
+		const auto& ffe = checked_cast<const FinishFrameEvent&>(*event);
 		if (ffe.needRender()) {
 			videoSystem->repaint();
 			reactor.getEventDistributor().distributeEvent(
@@ -201,7 +202,7 @@ int Display::signalEvent(const std::shared_ptr<const Event>& event)
 		// the background, because Android takes away all graphics resources
 		// from the app. It simply destroys the entire graphics context.
 		// Though, a repaint() must happen within the focus-lost event
-		// so that the SDL Android port realises that the graphix context
+		// so that the SDL Android port realizes that the graphics context
 		// is gone and will re-build it again on the first flush to the
 		// surface after the focus has been regained.
 
@@ -212,7 +213,7 @@ int Display::signalEvent(const std::shared_ptr<const Event>& event)
 		// -When gaining the focus, this repaint does nothing as
 		//  the renderFrozen flag is still false
 		videoSystem->repaint();
-		auto& focusEvent = checked_cast<const FocusEvent&>(*event);
+		const auto& focusEvent = checked_cast<const FocusEvent&>(*event);
 		ad_printf("Setting renderFrozen to %d", !focusEvent.getGain());
 		renderFrozen = !focusEvent.getGain();
 	}
@@ -458,7 +459,7 @@ void Display::ScreenShotCmd::execute(span<const TclObject> tokens, TclObject& re
 				"Failed to take screenshot: ", e.getMessage());
 		}
 	} else {
-		auto videoLayer = dynamic_cast<VideoLayer*>(
+		auto* videoLayer = dynamic_cast<VideoLayer*>(
 			display.findActiveLayer());
 		if (!videoLayer) {
 			throw CommandException(

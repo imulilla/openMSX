@@ -142,7 +142,14 @@ int Interpreter::outputProc(ClientData clientData, const char* buf,
 	return toWrite;
 }
 
-void Interpreter::registerCommand(const string& name, Command& command)
+bool Interpreter::hasCommand(zstring_view name) const
+{
+	// Note: these are not only the commands registered via
+	// registerCommand(), but all commands know to this Tcl-interpreter.
+	return Tcl_FindCommand(interp, name.c_str(), nullptr, 0);
+}
+
+void Interpreter::registerCommand(zstring_view name, Command& command)
 {
 	auto token = Tcl_CreateObjCommand(
 		interp, name.c_str(), commandProc,
@@ -167,7 +174,7 @@ int Interpreter::commandProc(ClientData clientData, Tcl_Interp* interp,
 		TclObject result;
 		try {
 			if (!command.isAllowedInEmptyMachine()) {
-				if (auto controller =
+				if (auto* controller =
 					dynamic_cast<MSXCommandController*>(
 						&command.getCommandController())) {
 					if (!controller->getMSXMotherBoard().getMachineConfig()) {
@@ -198,12 +205,12 @@ TclObject Interpreter::getCommandNames()
 	return execute("openmsx::all_command_names");
 }
 
-bool Interpreter::isComplete(const string& command) const
+bool Interpreter::isComplete(zstring_view command) const
 {
 	return Tcl_CommandComplete(command.c_str()) != 0;
 }
 
-TclObject Interpreter::execute(const string& command)
+TclObject Interpreter::execute(zstring_view command)
 {
 	int success = Tcl_Eval(interp, command.c_str());
 	if (success != TCL_OK) {
@@ -212,7 +219,7 @@ TclObject Interpreter::execute(const string& command)
 	return TclObject(Tcl_GetObjResult(interp));
 }
 
-TclObject Interpreter::executeFile(const string& filename)
+TclObject Interpreter::executeFile(zstring_view filename)
 {
 	int success = Tcl_EvalFile(interp, filename.c_str());
 	if (success != TCL_OK) {
@@ -252,11 +259,10 @@ void Interpreter::unsetVariable(const char* name)
 
 static TclObject getSafeValue(BaseSetting& setting)
 {
-	try {
-		return setting.getValue();
-	} catch (MSXException&) {
-		return TclObject(0); // 'safe' value, see comment in registerSetting()
+	if (auto val = setting.getOptionalValue()) {
+		return *val;
 	}
+	return TclObject(0); // 'safe' value, see comment in registerSetting()
 }
 void Interpreter::registerSetting(BaseSetting& variable)
 {
@@ -430,12 +436,12 @@ char* Interpreter::traceProc(ClientData clientData, Tcl_Interp* interp,
 
 void Interpreter::createNamespace(const std::string& name)
 {
-	execute(strCat("namespace eval ", name, " {}"));
+	execute(tmpStrCat("namespace eval ", name, " {}"));
 }
 
 void Interpreter::deleteNamespace(const std::string& name)
 {
-	execute("namespace delete " + name);
+	execute(tmpStrCat("namespace delete ", name));
 }
 
 void Interpreter::poll()

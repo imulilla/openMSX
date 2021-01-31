@@ -1,10 +1,14 @@
 #include "NowindHost.hh"
 #include "DiskContainer.hh"
+#include "FileOperations.hh"
+#include "MSXException.hh"
 #include "SectorAccessibleDisk.hh"
+#include "enumerate.hh"
+#include "one_of.hh"
 #include "serialize.hh"
 #include "serialize_stl.hh"
-#include "one_of.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -267,7 +271,9 @@ void NowindHost::DSKCHG()
 		send(255); // changed
 		// read first FAT sector (contains media descriptor)
 		SectorBuffer sectorBuffer;
-		if (disk->readSectors(&sectorBuffer, 1, 1)) {
+		try {
+			disk->readSectors(&sectorBuffer, 1, 1);
+		} catch (MSXException&) {
 			// TODO read error
 			sectorBuffer.raw[0] = 0;
 		}
@@ -281,7 +287,7 @@ void NowindHost::DSKCHG()
 
 void NowindHost::DRIVES()
 {
-	// at least one drive (MSXDOS1 cannot handle 0 drives)
+	// at least one drive (MSX-DOS1 cannot handle 0 drives)
 	byte numberOfDrives = std::max<byte>(1, byte(drives.size()));
 
 	byte reg_a = cmdData[7];
@@ -291,9 +297,9 @@ void NowindHost::DRIVES()
 	send(numberOfDrives);
 
 	romdisk = 255; // no romdisk
-	for (size_t i = 0; i < drives.size(); ++i) {
-		if (drives[i]->isRomdisk()) {
-			romdisk = i;
+	for (auto [i, drv] : enumerate(drives)) {
+		if (drv->isRomdisk()) {
+			romdisk = byte(i);
 			break;
 		}
 	}
@@ -342,8 +348,8 @@ unsigned NowindHost::getStartAddress() const
 }
 unsigned NowindHost::getCurrentAddress() const
 {
-	unsigned startAdress = getStartAddress();
-	return startAdress + transfered;
+	unsigned startAddress = getStartAddress();
+	return startAddress + transferred;
 }
 
 
@@ -352,20 +358,22 @@ void NowindHost::diskReadInit(SectorAccessibleDisk& disk)
 	unsigned sectorAmount = getSectorAmount();
 	buffer.resize(sectorAmount);
 	unsigned startSector = getStartSector();
-	if (disk.readSectors(buffer.data(), startSector, sectorAmount)) {
+	try {
+		disk.readSectors(buffer.data(), startSector, sectorAmount);
+	} catch (MSXException&) {
 		// read error
 		state = STATE_SYNC1;
 		return;
 	}
 
-	transfered = 0;
+	transferred = 0;
 	retryCount = 0;
 	doDiskRead1();
 }
 
 void NowindHost::doDiskRead1()
 {
-	unsigned bytesLeft = unsigned(buffer.size() * SECTOR_SIZE) - transfered;
+	unsigned bytesLeft = unsigned(buffer.size() * SECTOR_SIZE) - transferred;
 	if (bytesLeft == 0) {
 		sendHeader();
 		send(0x01); // end of receive-loop
@@ -408,11 +416,11 @@ void NowindHost::doDiskRead2()
 	byte tail1 = extraData[0];
 	byte tail2 = extraData[1];
 	if ((tail1 == 0xAF) && (tail2 == 0x07)) {
-		transfered += transferSize;
+		transferred += transferSize;
 		retryCount = 0;
 
 		unsigned address = getCurrentAddress();
-		size_t bytesLeft = (buffer.size() * SECTOR_SIZE) - transfered;
+		size_t bytesLeft = (buffer.size() * SECTOR_SIZE) - transferred;
 		if ((address == 0x8000) && (bytesLeft > 0)) {
 			sendHeader();
 			send(0x01); // end of receive-loop
@@ -444,8 +452,8 @@ void NowindHost::transferSectors(unsigned transferAddress, unsigned amount)
 	send16(transferAddress);
 	send16(amount);
 
-	auto* bufferPointer = buffer[0].raw + transfered;
-	for (unsigned i = 0; i < amount; ++i) {
+	auto* bufferPointer = buffer[0].raw + transferred;
+	for (auto i : xrange(amount)) {
 		send(bufferPointer[i]);
 	}
 	send(0xAF);
@@ -460,7 +468,7 @@ void NowindHost::transferSectorsBackwards(unsigned transferAddress, unsigned amo
 	send16(transferAddress + amount);
 	send(amount / 64);
 
-	auto* bufferPointer = buffer[0].raw + transfered;
+	auto* bufferPointer = buffer[0].raw + transferred;
 	for (int i = amount - 1; i >= 0; --i) {
 		send(bufferPointer[i]);
 	}
@@ -481,19 +489,21 @@ void NowindHost::diskWriteInit(SectorAccessibleDisk& disk)
 
 	unsigned sectorAmount = std::min(128u, getSectorAmount());
 	buffer.resize(sectorAmount);
-	transfered = 0;
+	transferred = 0;
 	doDiskWrite1();
 }
 
 void NowindHost::doDiskWrite1()
 {
-	unsigned bytesLeft = unsigned(buffer.size() * SECTOR_SIZE) - transfered;
+	unsigned bytesLeft = unsigned(buffer.size() * SECTOR_SIZE) - transferred;
 	if (bytesLeft == 0) {
 		// All data transferred!
 		auto sectorAmount = unsigned(buffer.size());
 		unsigned startSector = getStartSector();
 		if (auto* disk = getDisk()) {
-			if (disk->writeSectors(&buffer[0], startSector, sectorAmount)) {
+			try {
+				disk->writeSectors(&buffer[0], startSector, sectorAmount);
+			} catch (MSXException&) {
 				// TODO write error
 			}
 		}
@@ -527,8 +537,8 @@ void NowindHost::doDiskWrite1()
 void NowindHost::doDiskWrite2()
 {
 	assert(recvCount == (transferSize + 2));
-	auto* buf = buffer[0].raw + transfered;
-	for (unsigned i = 0; i < transferSize; ++i) {
+	auto* buf = buffer[0].raw + transferred;
+	for (auto i : xrange(transferSize)) {
 		buf[i] = extraData[i + 1];
 	}
 
@@ -536,10 +546,10 @@ void NowindHost::doDiskWrite2()
 	byte seq2 = extraData[transferSize + 1];
 	if ((seq1 == 0xaa) && (seq2 == 0xaa)) {
 		// good block received
-		transfered += transferSize;
+		transferred += transferSize;
 
 		unsigned address = getCurrentAddress();
-		size_t bytesLeft = (buffer.size() * SECTOR_SIZE) - transfered;
+		size_t bytesLeft = (buffer.size() * SECTOR_SIZE) - transferred;
 		if ((address == 0x8000) && (bytesLeft > 0)) {
 			sendHeader();
 			send(254); // more data for page 2/3
@@ -566,7 +576,7 @@ unsigned NowindHost::getFCB() const
 string NowindHost::extractName(int begin, int end) const
 {
 	string result;
-	for (int i = begin; i < end; ++i) {
+	for (auto i : xrange(begin, end)) {
 		char c = extraData[i];
 		if (c == ' ') break;
 		result += char(toupper(c));
@@ -577,9 +587,9 @@ string NowindHost::extractName(int begin, int end) const
 int NowindHost::getDeviceNum() const
 {
 	unsigned fcb = getFCB();
-	for (unsigned i = 0; i < MAX_DEVICES; ++i) {
-		if (devices[i].fs && devices[i].fcb == fcb) {
-			return i;
+	for (auto [i, dev] : enumerate(devices)) {
+		if (dev.fs && dev.fcb == fcb) {
+			return int(i);
 		}
 	}
 	return -1;
@@ -587,17 +597,14 @@ int NowindHost::getDeviceNum() const
 
 int NowindHost::getFreeDeviceNum()
 {
-	int dev = getDeviceNum();
-	if (dev != -1) {
+	if (int dev = getDeviceNum(); dev != -1) {
 		// There already was a device open with this fcb address,
 		// reuse that device.
 		return dev;
 	}
 	// Search for free device.
-	for (unsigned i = 0; i < MAX_DEVICES; ++i) {
-		if (!devices[i].fs) {
-			return i;
-		}
+	for (auto [i, dev] : enumerate(devices)) {
+		if (!dev.fs) return int(i);
 	}
 	// All devices are in use. This can't happen when the MSX software
 	// functions correctly. We'll simply reuse the first device. It would
@@ -725,7 +732,7 @@ unsigned NowindHost::readHelper1(unsigned dev, char* buf)
 
 void NowindHost::readHelper2(unsigned len, const char* buf)
 {
-	for (unsigned i = 0; i < len; ++i) {
+	for (auto i : xrange(len)) {
 		send(buf[i]);
 	}
 	if (len < 256) {
@@ -736,7 +743,7 @@ void NowindHost::readHelper2(unsigned len, const char* buf)
 
 // strips a string from outer double-quotes and anything outside them
 // ie: 'pre("foo")bar' will result in 'foo'
-static std::string_view stripquotes(std::string_view str)
+static constexpr std::string_view stripquotes(std::string_view str)
 {
 	auto first = str.find_first_of('\"');
 	if (first == string::npos) {
@@ -759,13 +766,13 @@ void NowindHost::callImage(const string& filename)
 		// invalid drive number
 		return;
 	}
-	if (drives[num]->insertDisk(stripquotes(filename))) {
+	if (drives[num]->insertDisk(FileOperations::expandTilde(string(stripquotes(filename))))) {
 		// TODO error handling
 	}
 }
 
 
-static std::initializer_list<enum_string<NowindHost::State>> stateInfo = {
+static constexpr std::initializer_list<enum_string<NowindHost::State>> stateInfo = {
 	{ "SYNC1",     NowindHost::STATE_SYNC1     },
 	{ "SYNC2",     NowindHost::STATE_SYNC2     },
 	{ "COMMAND",   NowindHost::STATE_COMMAND   },
@@ -795,7 +802,7 @@ void NowindHost::serialize(Archive& ar, unsigned /*version*/)
 	ar.serialize("buffer", tmp);
 	memcpy(bufRaw, tmp.data(), bufSize);
 
-	ar.serialize("transfered",          transfered,
+	ar.serialize("transfered",          transferred, // for bw compat, keep typo in serialize name
 	             "retryCount",          retryCount,
 	             "transferSize",        transferSize,
 	             "romdisk",             romdisk,

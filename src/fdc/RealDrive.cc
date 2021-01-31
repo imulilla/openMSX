@@ -4,7 +4,7 @@
 #include "MSXMotherBoard.hh"
 #include "Reactor.hh"
 #include "LedStatus.hh"
-#include "CommandController.hh"
+#include "MSXCommandController.hh"
 #include "CliComm.hh"
 #include "GlobalSettings.hh"
 #include "MSXException.hh"
@@ -44,7 +44,7 @@ RealDrive::RealDrive(MSXMotherBoard& motherBoard_, EmuDuration::param motorTimeo
 	(*drivesInUse)[i] = true;
 	string driveName = "diskX"; driveName[4] = char('a' + i);
 
-	if (motherBoard.getCommandController().hasCommand(driveName)) {
+	if (motherBoard.getMSXCommandController().hasCommand(driveName)) {
 		throw MSXException("Duplicated drive name: ", driveName);
 	}
 	motherBoard.getMSXCliComm().update(CliComm::HARDWARE, driveName, "add");
@@ -133,7 +133,7 @@ std::optional<unsigned> RealDrive::getDiskReadTrack() const
 	// Translate head-position to track number on disk.
 	// Normally this is a 1-to-1 mapping, but on the Yamaha-FD-03 the head
 	// moves 4 steps for every track on disk. This means it can be
-	// inbetween disk tracks so that it can't read valid data.
+	// between disk tracks so that it can't read valid data.
 	switch (trackMode) {
 	case DiskDrive::TrackMode::NORMAL:
 		return headPos;
@@ -259,7 +259,7 @@ void RealDrive::setMotor(bool status, EmuTime::param time)
 bool RealDrive::getMotor() const
 {
 	// note: currently unused because of the implementation in DriveMultiplexer
-	// note: currently returns the actual motor status, could be differnt from the
+	// note: currently returns the actual motor status, could be different from the
 	//       last set status because of 'syncMotorTimeout'.
 	return motorStatus;
 }
@@ -385,7 +385,7 @@ byte RealDrive::readTrackByte(int idx)
 	return trackValid ? track.read(idx) : 0;
 }
 
-static inline unsigned divUp(unsigned a, unsigned b)
+static constexpr unsigned divUp(unsigned a, unsigned b)
 {
 	return (a + b - 1) / b;
 }
@@ -403,7 +403,9 @@ EmuTime RealDrive::getNextSector(EmuTime::param time, RawTrack::Sector& sector)
 	// distance is only 3 bytes or less we need to skip to the next sector
 	// header. IOW we need a sector header that's at least 4 bytes removed
 	// from the current position.
-	if (!track.decodeNextSector(idx + 4, sector)) {
+	if (auto s = track.decodeNextSector(idx + 4)) {
+		sector = *s;
+	} else {
 		return EmuTime::infinity();
 	}
 	int sectorAngle = divUp(sector.addrIdx * TICKS_PER_ROTATION, trackLen);

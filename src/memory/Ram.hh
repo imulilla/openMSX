@@ -3,6 +3,7 @@
 
 #include "MemBuffer.hh"
 #include "openmsx.hh"
+#include "static_string_view.hh"
 #include <string>
 #include <memory>
 
@@ -17,24 +18,24 @@ class Ram
 public:
 	/** Create Ram object with an associated debuggable. */
 	Ram(const DeviceConfig& config, const std::string& name,
-	    const std::string& description, unsigned size);
+	    static_string_view description, unsigned size);
 
 	/** Create Ram object without debuggable. */
 	Ram(const XMLElement& xml, unsigned size);
 
 	~Ram();
 
-	const byte& operator[](unsigned addr) const {
+	[[nodiscard]] const byte& operator[](unsigned addr) const {
 		return ram[addr];
 	}
-	byte& operator[](unsigned addr) {
+	[[nodiscard]] byte& operator[](unsigned addr) {
 		return ram[addr];
 	}
-	unsigned getSize() const {
+	[[nodiscard]] unsigned getSize() const {
 		return size;
 	}
 
-	const std::string& getName() const;
+	[[nodiscard]] const std::string& getName() const;
 	void clear(byte c = 0xff);
 
 	template<typename Archive>

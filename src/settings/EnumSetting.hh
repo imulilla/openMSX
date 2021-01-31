@@ -18,10 +18,10 @@ protected:
 	using BaseMap = std::vector<std::pair<std::string, int>>;
 	explicit EnumSettingBase(BaseMap&& m);
 
-	int fromStringBase(std::string_view str) const;
-	std::string_view toStringBase(int value) const;
+	[[nodiscard]] int fromStringBase(std::string_view str) const;
+	[[nodiscard]] std::string_view toStringBase(int value) const;
 
-	std::vector<std::string_view> getPossibleValues() const;
+	[[nodiscard]] std::vector<std::string_view> getPossibleValues() const;
 	void additionalInfoBase(TclObject& result) const;
 	void tabCompletionBase(std::vector<std::string>& tokens) const;
 
@@ -35,16 +35,16 @@ public:
 	using Map = std::vector<std::pair<std::string, T>>;
 
 	EnumSetting(CommandController& commandController, std::string_view name,
-	            std::string_view description, T initialValue,
+	            static_string_view description, T initialValue,
 	            Map&& map_, SaveSetting save = SAVE);
 
-	std::string_view getTypeString() const override;
+	[[nodiscard]] std::string_view getTypeString() const override;
 	void additionalInfo(TclObject& result) const override;
 	void tabCompletion(std::vector<std::string>& tokens) const override;
 
-	T getEnum() const noexcept;
+	[[nodiscard]] T getEnum() const noexcept;
 	void setEnum(T e);
-	std::string_view getString() const;
+	[[nodiscard]] std::string_view getString() const;
 
 private:
 	std::string_view toString(T e) const;
@@ -54,18 +54,18 @@ private:
 //-------------
 
 
-template <typename T>
+template<typename T>
 EnumSetting<T>::EnumSetting(
 		CommandController& commandController_, std::string_view name,
-		std::string_view description_, T initialValue,
+		static_string_view description_, T initialValue,
 		Map&& map, SaveSetting save_)
 	: EnumSettingBase(BaseMap(std::move_iterator(begin(map)),
 	                          std::move_iterator(end(map))))
 	, Setting(commandController_, name, description_,
-	          TclObject(toString(initialValue)), save_)
+	          TclObject(EnumSettingBase::toStringBase(static_cast<int>(initialValue))), save_)
 {
 	setChecker([this](TclObject& newValue) {
-		fromStringBase(newValue.getString()); // may throw
+		(void)fromStringBase(newValue.getString()); // may throw
 	});
 	init();
 }

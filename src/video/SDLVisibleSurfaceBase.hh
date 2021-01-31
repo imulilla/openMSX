@@ -19,7 +19,9 @@ public:
 protected:
 	using VisibleSurface::VisibleSurface;
 	void createSurface(int width, int height, unsigned flags);
+	virtual void fullScreenUpdated(bool fullscreen) = 0;
 
+protected:
 	SDLSubSystemInitializer<SDL_INIT_VIDEO> videoSubSystem;
 	SDLWindowPtr window;
 

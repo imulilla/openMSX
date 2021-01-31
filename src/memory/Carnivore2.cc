@@ -3,10 +3,12 @@
 #include "IDEDeviceFactory.hh"
 #include "MSXCPU.hh"
 #include "one_of.hh"
+#include "ranges.hh"
+#include "xrange.hh"
 
 namespace openmsx {
 
-static std::vector<AmdFlash::SectorInfo> getSectorInfo()
+[[nodiscard]] static std::vector<AmdFlash::SectorInfo> getSectorInfo()
 {
 	std::vector<AmdFlash::SectorInfo> sectorInfo;
 	// 8 * 8kB
@@ -70,7 +72,7 @@ void Carnivore2::reset(EmuTime::param time)
 	// multi-mapper
 	scc.reset(time);
 	sccMode = 0;
-	for (int i = 0; i < 4; ++i) sccBank[i] = i;
+	ranges::iota(sccBank, 0);
 
 	// ide
 	ideControlReg = 0;
@@ -80,9 +82,7 @@ void Carnivore2::reset(EmuTime::param time)
 	ideDevices[1]->reset(time);
 
 	// memory mapper
-	for (int i = 0; i < 4; ++i) {
-		memMapRegs[i] = i; // Note: different from how BIOS initializes these registers
-	}
+	ranges::iota(memMapRegs, 0); // Note: different from how BIOS initializes these registers
 
 	// fm-pac
 	ym2413.reset(time);
@@ -99,7 +99,7 @@ void Carnivore2::globalRead(word address, EmuTime::param /*time*/)
 	if ((!delayedConfig4000() && (address == 0x0000) && (getCPU().isM1Cycle(address))) ||
 	    ( delayedConfig4000() && (address <= 0x4000) && (address < 0x4010))) {
 		// activate delayed configuration
-		for (int i = 0x05; i <= 0x1e; ++i) {
+		for (auto i : xrange(0x05, 0x1f)) {
 			configRegs[i] = shadowConfigRegs[i];
 		}
 	}
@@ -112,7 +112,7 @@ byte Carnivore2::getSubSlot(word address) const
 		byte subSlot = (subSlotReg >> (2 * page)) & 0x03;
 		return subSlotEnabled(subSlot) ? subSlot : -1;
 	} else {
-		for (int i = 0; i < 4; ++i) {
+		for (auto i : xrange(4)) {
 			if (subSlotEnabled(i)) return i;
 		}
 		return byte(-1);
@@ -198,9 +198,9 @@ byte Carnivore2::readConfigRegister(word address, EmuTime::param time)
 	}
 }
 
-static float volumeLevel(byte volume)
+static constexpr float volumeLevel(byte volume)
 {
-	static constexpr byte tab[8] = {5, 6, 7, 8, 10, 12, 14, 16};
+	constexpr byte tab[8] = {5, 6, 7, 8, 10, 12, 14, 16};
 	return tab[volume & 7] / 16.0f;
 }
 
@@ -253,7 +253,7 @@ bool Carnivore2::isConfigReg(word address) const
 std::pair<unsigned, byte> Carnivore2::decodeMultiMapper(word address) const
 {
 	// check up to 4 possible banks
-	for (int i = 0; i < 4; ++i) {
+	for (auto i : xrange(4)) {
 		const byte* base = configRegs + (i * 6) + 6; // points to R<i>Mask
 		byte mult = base[3];
 		if (mult & 8) continue; // bank disabled
@@ -301,8 +301,7 @@ byte Carnivore2::readMultiMapperSlot(word address, EmuTime::param time)
 		return readConfigRegister(address, time);
 	}
 
-	unsigned addr; byte mult;
-	std::tie(addr, mult) = decodeMultiMapper(address);
+	auto [addr, mult] = decodeMultiMapper(address);
 	if (addr == unsigned(-1)) return 0xff; // unmapped
 
 	if (mult & 0x20) {
@@ -319,8 +318,7 @@ byte Carnivore2::peekMultiMapperSlot(word address, EmuTime::param time) const
 		return peekConfigRegister(address, time);
 	}
 
-	unsigned addr; byte mult;
-	std::tie(addr, mult) = decodeMultiMapper(address);
+	auto [addr, mult] = decodeMultiMapper(address);
 	if (addr == unsigned(-1)) return 0xff; // unmapped
 
 	if (mult & 0x20) {
@@ -338,7 +336,7 @@ void Carnivore2::writeMultiMapperSlot(word address, byte value, EmuTime::param t
 	}
 
 	// check (all) 4 bank switch regions
-	for (int i = 0; i < 4; ++i) {
+	for (auto i : xrange(4)) {
 		byte* base = configRegs + (i * 6) + 6; // points to R<i>Mask
 		byte mask = base[0];
 		byte addr = base[1];
@@ -352,8 +350,7 @@ void Carnivore2::writeMultiMapperSlot(word address, byte value, EmuTime::param t
 		}
 	}
 
-	unsigned addr; byte mult;
-	std::tie(addr, mult) = decodeMultiMapper(address);
+	auto [addr, mult] = decodeMultiMapper(address);
 	if ((addr != unsigned(-1)) && (mult & 0x10)) { // write enable
 		if (mult & 0x20) {
 			ram[addr & 0x1fffff] = value; // 2MB
@@ -369,8 +366,8 @@ void Carnivore2::writeMultiMapperSlot(word address, byte value, EmuTime::param t
 	}
 	if (((sccMode & 0x10) == 0x00) && // note: no check for sccEnabled()
 	    ((address & 0x1800) == 0x1000)) {
-		byte regio = (address >> 13) - 2;
-		sccBank[regio] = value;
+		byte region = (address >> 13) - 2;
+		sccBank[region] = value;
 	} else if (sccAccess(address)) {
 		scc.writeMem(address & 0xff, value, time);
 	}
@@ -378,7 +375,7 @@ void Carnivore2::writeMultiMapperSlot(word address, byte value, EmuTime::param t
 
 byte Carnivore2::readIDESlot(word address, EmuTime::param time)
 {
-	// TODO mirroing is different from SunriseIDE
+	// TODO mirroring is different from SunriseIDE
 	if (ideRegsEnabled() && ((address & 0xfe00) == 0x7c00)) {
 		// 0x7c00-0x7dff   IDE data register
 		switch (address & 1) {
@@ -431,7 +428,7 @@ byte Carnivore2::peekIDESlot(word address, EmuTime::param /*time*/) const
 
 void Carnivore2::writeIDESlot(word address, byte value, EmuTime::param time)
 {
-	// TODO mirroing is different from SunriseIDE
+	// TODO mirroring is different from SunriseIDE
 	if (address == 0x4104) {
 		ideControlReg = value;
 
@@ -711,13 +708,13 @@ void Carnivore2::serialize(Archive& ar, unsigned /*version*/)
 	             "ideWrite",          ideWrite,
 
 	             "memMapRegs",        memMapRegs,
-	
+
 	             "ym2413",            ym2413,
 	             "fmPacEnable",       fmPacEnable,
 	             "fmPacBank",         fmPacBank,
 	             "fmPac5ffe",         fmPac5ffe,
 	             "fmPac5fff",         fmPac5fff);
-	
+
 	if (ar.isLoader()) {
 		auto time = getCurrentTime();
 		writeSndLVL (configRegs[0x22], time);

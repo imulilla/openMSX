@@ -99,7 +99,7 @@ OSDConsoleRenderer::OSDConsoleRenderer(
 
 	adjustColRow();
 
-	// background (only load backgound on first paint())
+	// background (only load background on first paint())
 	backgroundSetting.setChecker([this](TclObject& value) {
 		loadBackground(value.getString());
 	});
@@ -294,15 +294,13 @@ void OSDConsoleRenderer::drawText(OutputSurface& output, string_view text,
                                   int cx, int cy, byte alpha, uint32_t rgb)
 {
 	auto xy = getTextPos(cx, cy);
-	unsigned width;
-	BaseImage* image;
-	if (!getFromCache(text, rgb, image, width)) {
+	auto [inCache, image, width] = getFromCache(text, rgb);
+	if (!inCache) {
 		string textStr(text);
 		SDLSurfacePtr surf;
 		uint32_t rgb2 = openGL ? 0xffffff : rgb; // openGL -> always render white
 		try {
-			unsigned dummyHeight;
-			font.getSize(textStr, width, dummyHeight);
+			width = font.getSize(textStr)[0];
 			surf = font.render(textStr,
 			                   (rgb2 >> 16) & 0xff,
 			                   (rgb2 >>  8) & 0xff,
@@ -343,8 +341,8 @@ void OSDConsoleRenderer::drawText(OutputSurface& output, string_view text,
 	}
 }
 
-bool OSDConsoleRenderer::getFromCache(string_view text, uint32_t rgb,
-                                      BaseImage*& image, unsigned& width)
+std::tuple<bool, BaseImage*, unsigned> OSDConsoleRenderer::getFromCache(
+	string_view text, uint32_t rgb)
 {
 	// Items are LRU sorted, so the next requested items will often be
 	// located right in front of the previously found item. (Though
@@ -362,17 +360,17 @@ bool OSDConsoleRenderer::getFromCache(string_view text, uint32_t rgb,
 	for (it = begin(textCache); it != end(textCache); ++it) {
 		if (it->text != text) continue;
 		if (!openGL && (it->rgb  != rgb)) continue;
-found:		image = it->image.get();
-		width = it->width;
+found:		BaseImage* image = it->image.get();
+		unsigned width = it->width;
 		cacheHint = it;
 		if (it != begin(textCache)) {
-			--cacheHint; // likely candiate for next item
+			--cacheHint; // likely candidate for next item
 			// move to front (to keep in LRU order)
 			textCache.splice(begin(textCache), textCache, it);
 		}
-		return true;
+		return {true, image, width};
 	}
-	return false;
+	return {false, nullptr, 0};
 }
 
 void OSDConsoleRenderer::insertInCache(
@@ -382,8 +380,7 @@ void OSDConsoleRenderer::insertInCache(
 	constexpr unsigned MAX_TEXT_CACHE_SIZE = 250;
 	if (textCache.size() == MAX_TEXT_CACHE_SIZE) {
 		// flush the least recently used entry
-		auto it = std::prev(std::end(textCache));
-		if (it == cacheHint) {
+		if (auto it = std::prev(std::end(textCache)); it == cacheHint) {
 			cacheHint = begin(textCache);
 		}
 		textCache.pop_back();
@@ -449,9 +446,8 @@ void OSDConsoleRenderer::paint(OutputSurface& output)
 		blink = !blink;
 	}
 
-	unsigned cursorX, cursorY;
-	console.getCursorPosition(cursorX, cursorY);
-	if ((cursorX != lastCursorX) || (cursorY != lastCursorY)) {
+	auto [cursorX, cursorY] = console.getCursorPosition();
+	if ((unsigned(cursorX) != lastCursorX) || (unsigned(cursorY) != lastCursorY)) {
 		blink = true; // force cursor
 		lastBlinkTime = now + BLINK_RATE; // maximum time
 		lastCursorX = cursorX;
@@ -479,7 +475,7 @@ void OSDConsoleRenderer::drawConsoleText(OutputSurface& output, byte visibility)
 				return std::tuple(int(rows - 1), int(count - target), idx);
 			}
 		}
-		int y = count - 1 - scrollBack;
+		int y = int(count - 1 - scrollBack);
 		return std::tuple(y, 0, lines.size() - 1);
 	}();
 	int cursorY = cursorY_; // clang workaround

@@ -61,13 +61,13 @@ unsigned OutputArchiveBase2::generateID2(
 
 unsigned OutputArchiveBase2::getID1(const void* p)
 {
-	auto v = lookup(polyIdMap, p);
+	auto* v = lookup(polyIdMap, p);
 	return v ? *v : 0;
 }
 unsigned OutputArchiveBase2::getID2(
 	const void* p, const std::type_info& typeInfo)
 {
-	auto v = lookup(idMap, std::pair(p, std::type_index(typeInfo)));
+	auto* v = lookup(idMap, std::pair(p, std::type_index(typeInfo)));
 	return v ? *v : 0;
 }
 
@@ -76,7 +76,7 @@ template<typename Derived>
 void OutputArchiveBase<Derived>::serialize_blob(
 	const char* tag, const void* data_, size_t len, bool /*diff*/)
 {
-	auto* data = static_cast<const uint8_t*>(data_);
+	const auto* data = static_cast<const uint8_t*>(data_);
 
 	string encoding;
 	string tmp;
@@ -114,7 +114,7 @@ template class OutputArchiveBase<XmlOutputArchive>;
 
 void* InputArchiveBase2::getPointer(unsigned id)
 {
-	auto v = lookup(idMap, id);
+	auto* v = lookup(idMap, id);
 	return v ? *v : nullptr;
 }
 
@@ -254,7 +254,7 @@ void MemInputArchive::serialize_blob(const char* /*tag*/, void* data,
 
 ////
 
-XmlOutputArchive::XmlOutputArchive(const string& filename)
+XmlOutputArchive::XmlOutputArchive(zstring_view filename)
 	: root("serial")
 {
 	root.addAttribute("openmsx_version", Version::full());
@@ -321,7 +321,7 @@ void XmlOutputArchive::save(bool b)
 {
 	assert(!current.empty());
 	assert(current.back()->getData().empty());
-	current.back()->setData(b ? "true" : "false");
+	current.back()->setData(std::string_view(b ? "true" : "false"));
 }
 void XmlOutputArchive::save(unsigned char b)
 {
@@ -348,11 +348,11 @@ void XmlOutputArchive::save(unsigned long long ull)
 	saveImpl(ull);
 }
 
-void XmlOutputArchive::attribute(const char* name, const string& str)
+void XmlOutputArchive::attribute(const char* name, string str)
 {
 	assert(!current.empty());
 	assert(!current.back()->hasAttribute(name));
-	current.back()->addAttribute(name, str);
+	current.back()->addAttribute(name, std::move(str));
 }
 void XmlOutputArchive::attribute(const char* name, int i)
 {
@@ -503,7 +503,7 @@ void XmlInputArchive::load(char& c)
 
 void XmlInputArchive::beginTag(const char* tag)
 {
-	auto* child = elems.back().first->findNextChild(
+	const auto* child = elems.back().first->findNextChild(
 		tag, elems.back().second);
 	if (!child) {
 		string path;

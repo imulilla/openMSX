@@ -10,12 +10,14 @@ namespace openmsx {
 
 class ResampledSoundDevice;
 
-template <unsigned CHANNELS>
+template<unsigned CHANNELS>
 class ResampleHQ final : public ResampleAlgo
 {
 public:
 	ResampleHQ(ResampledSoundDevice& input, const DynamicClock& hostClock);
 	~ResampleHQ() override;
+	ResampleHQ(const ResampleHQ&) = delete;
+	ResampleHQ& operator=(const ResampleHQ&) = delete;
 
 	bool generateOutputImpl(float* dataOut, unsigned num,
 	                        EmuTime::param time) override;
@@ -24,8 +26,8 @@ private:
 	void calcOutput(float pos, float* output);
 	void prepareData(unsigned emuNum);
 
+private:
 	const DynamicClock& hostClock;
-
 	const float ratio;
 	unsigned bufStart;
 	unsigned bufEnd;

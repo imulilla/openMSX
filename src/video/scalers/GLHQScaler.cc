@@ -23,32 +23,36 @@ GLHQScaler::GLHQScaler(GLScaler& fallback_)
 		glUniform1i(p.getUniformLocation("weightTex"), 4);
 	}
 
+	// GL_LUMINANCE_ALPHA is no longer supported in newer openGL versions
+	auto format = (OPENGL_VERSION >= OPENGL_3_3) ? GL_RG : GL_LUMINANCE_ALPHA;
 	edgeTexture.bind();
 	glTexImage2D(GL_TEXTURE_2D,    // target
 	             0,                // level
-	             GL_R16,           // internal format
+	             format,           // internal format
 	             320,              // width
 	             240,              // height
 	             0,                // border
-	             GL_RED,           // format
-	             GL_UNSIGNED_SHORT,// type
+	             format,           // format
+	             GL_UNSIGNED_BYTE, // type
 	             nullptr);         // data
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+#if OPENGL_VERSION >= OPENGL_3_3
+	GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_ONE};
+	glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+#endif
 	edgeBuffer.setImage(320, 240);
 
 	auto context = systemFileContext();
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	string offsetsName = "shaders/HQ_xOffsets.dat";
 	string weightsName = "shaders/HQ_xWeights.dat";
-	for (int i = 0; i < 3; ++i) {
+	for (auto i : xrange(3)) {
 		int n = i + 2;
 		offsetsName[10] = char('0') + n;
 		File offsetsFile(context.resolve(offsetsName));
 		offsetTexture[i].bind();
 		glTexImage2D(GL_TEXTURE_2D,       // target
 		             0,                   // level
-		             GL_RGBA8,            // internal format
+		             GL_RGBA,             // internal format
 		             n * 64,              // width
 		             n * 64,              // height
 		             0,                   // border
@@ -61,7 +65,7 @@ GLHQScaler::GLHQScaler(GLScaler& fallback_)
 		weightTexture[i].bind();
 		glTexImage2D(GL_TEXTURE_2D,       // target
 		             0,                   // level
-		             GL_RGB8,             // internal format
+		             GL_RGB,              // internal format
 		             n * 64,              // width
 		             n * 64,              // height
 		             0,                   // border
@@ -110,7 +114,7 @@ void GLHQScaler::uploadBlock(
 {
 	if ((lineWidth != 320) || (srcEndY > 240)) return;
 
-	uint32_t tmpBuf2[320 / 2]; // 2 x uint16_t
+	Endian::L32 tmpBuf2[320 / 2]; // 2 x uint16_t
 	#ifndef NDEBUG
 	// Avoid UMR. In optimized mode we don't care.
 	memset(tmpBuf2, 0, sizeof(tmpBuf2));
@@ -118,14 +122,14 @@ void GLHQScaler::uploadBlock(
 
 	VLA_SSE_ALIGNED(Pixel, buf1_, lineWidth); auto* buf1 = buf1_;
 	VLA_SSE_ALIGNED(Pixel, buf2_, lineWidth); auto* buf2 = buf2_;
-	auto* curr = paintFrame.getLinePtr(srcStartY - 1, lineWidth, buf1);
-	auto* next = paintFrame.getLinePtr(srcStartY + 0, lineWidth, buf2);
+	const auto* curr = paintFrame.getLinePtr(srcStartY - 1, lineWidth, buf1);
+	const auto* next = paintFrame.getLinePtr(srcStartY + 0, lineWidth, buf2);
 	EdgeHQ edgeOp(0, 8, 16);
 	calcEdgesGL(curr, next, tmpBuf2, edgeOp);
 
 	edgeBuffer.bind();
 	if (auto* mapped = edgeBuffer.mapWrite()) {
-		for (unsigned y = srcStartY; y < srcEndY; ++y) {
+		for (auto y : xrange(srcStartY, srcEndY)) {
 			curr = next;
 			std::swap(buf1, buf2);
 			next = paintFrame.getLinePtr(y + 1, lineWidth, buf2);
@@ -134,6 +138,7 @@ void GLHQScaler::uploadBlock(
 		}
 		edgeBuffer.unmap();
 
+		auto format = (OPENGL_VERSION >= OPENGL_3_3) ? GL_RG : GL_LUMINANCE_ALPHA;
 		edgeTexture.bind();
 		glTexSubImage2D(GL_TEXTURE_2D,       // target
 		                0,                   // level
@@ -141,8 +146,8 @@ void GLHQScaler::uploadBlock(
 		                srcStartY,           // offset y
 		                lineWidth,           // width
 		                srcEndY - srcStartY, // height
-		                GL_RED,              // format
-		                GL_UNSIGNED_SHORT,   // type
+		                format,              // format
+		                GL_UNSIGNED_BYTE,    // type
 		                edgeBuffer.getOffset(0, srcStartY)); // data
 	}
 	edgeBuffer.unbind();

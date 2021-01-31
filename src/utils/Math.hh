@@ -94,17 +94,6 @@ template<typename T>
 	return floodRight(x - 1) + 1;
 }
 
-/** Clips x to the range [LO,HI].
-  * Slightly faster than    std::min(HI, std::max(LO, x))
-  * especially when no clipping is required.
-  */
-template <int LO, int HI>
-[[nodiscard]] inline int clip(int x)
-{
-	static_assert(LO <= HI, "invalid clip range");
-	return unsigned(x - LO) <= unsigned(HI - LO) ? x : (x < HI ? LO : HI);
-}
-
 /** Clip x to range [-32768,32767]. Special case of the version above.
   * Optimized for the case when no clipping is needed.
   */
@@ -123,44 +112,11 @@ template <int LO, int HI>
 	return likely(uint8_t(x) == x) ? x : ~(x >> 31);
 }
 
-/** Calculate greatest common divider of two strictly positive integers.
-  * Classical implementation is like this:
-  *    while (unsigned t = b % a) { b = a; a = t; }
-  *    return a;
-  * The following implementation avoids the costly modulo operation. It
-  * is about 40% faster on my machine.
-  *
-  * require: a != 0  &&  b != 0
-  */
-[[nodiscard]] inline unsigned gcd(unsigned a, unsigned b)
-{
-	unsigned k = 0;
-	while (((a & 1) == 0) && ((b & 1) == 0)) {
-		a >>= 1; b >>= 1; ++k;
-	}
-
-	// either a or b (or both) is odd
-	while ((a & 1) == 0) a >>= 1;
-	while ((b & 1) == 0) b >>= 1;
-
-	// both a and b odd
-	while (a != b) {
-		if (a >= b) {
-			a -= b;
-			do { a >>= 1; } while ((a & 1) == 0);
-		} else {
-			b -= a;
-			do { b >>= 1; } while ((b & 1) == 0);
-		}
-	}
-	return b << k;
-}
-
 /** Reverse the lower N bits of a given value.
   * The upper 32-N bits from the input are ignored and will be returned as 0.
   * For example reverseNBits('xxxabcde', 5) returns '000edcba' (binary notation).
   */
-[[nodiscard]] inline unsigned reverseNBits(unsigned x, unsigned bits)
+[[nodiscard]] constexpr unsigned reverseNBits(unsigned x, unsigned bits)
 {
 	unsigned ret = 0;
 	while (bits--) {
@@ -210,7 +166,7 @@ template <int LO, int HI>
 /** Reverse the bits in a byte.
   * This is equivalent to (but faster than) reverseNBits(x, 8);
   */
-[[nodiscard]] inline uint8_t reverseByte(uint8_t a)
+[[nodiscard]] constexpr uint8_t reverseByte(uint8_t a)
 {
 	// Classical implementation (can be extended to 16 and 32 bits)
 	//   a = ((a & 0xF0) >> 4) | ((a & 0x0F) << 4);
@@ -233,7 +189,7 @@ template <int LO, int HI>
 /** Count the number of leading zero-bits in the given word.
   * The result is undefined when the input is zero (all bits are zero).
   */
-[[nodiscard]] inline unsigned countLeadingZeros(unsigned x)
+[[nodiscard]] constexpr unsigned countLeadingZeros(unsigned x)
 {
 #ifdef __GNUC__
 	// actually this only exists starting from gcc-3.4.x
@@ -253,7 +209,7 @@ template <int LO, int HI>
   * @return 0 if the input is zero (no bits are set),
   *   otherwise the index of the first set bit + 1.
   */
-[[nodiscard]] inline unsigned findFirstSet(unsigned x)
+[[nodiscard]] inline /*constexpr*/ unsigned findFirstSet(unsigned x)
 {
 #if defined(__GNUC__)
 	return __builtin_ffs(x);
@@ -285,7 +241,7 @@ template <int LO, int HI>
 // For more details see:
 //   https://en.wikipedia.org/wiki/Cubic_Hermite_spline
 //   https://www.paulinternet.nl/?page=bicubic
-[[nodiscard]] inline float cubicHermite(const float* y, float x)
+[[nodiscard]] constexpr float cubicHermite(const float* y, float x)
 {
 	assert(0.0f <= x); assert(x <= 1.0f);
 	float a = -0.5f*y[-1] + 1.5f*y[0] - 1.5f*y[1] + 0.5f*y[2];

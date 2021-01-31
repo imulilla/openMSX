@@ -97,8 +97,8 @@ void CommandLineParser::registerFileType(
 bool CommandLineParser::parseOption(
 	const string& arg, span<string>& cmdLine, ParsePhase phase)
 {
-	auto it = ranges::lower_bound(options, arg, CmpOptions());
-	if ((it != end(options)) && (it->first == arg)) {
+	if (auto it = ranges::lower_bound(options, arg, CmpOptions());
+	    (it != end(options)) && (it->first == arg)) {
 		// parse option
 		if (it->second.phase <= phase) {
 			try {
@@ -146,7 +146,7 @@ CLIFileType* CommandLineParser::getFileTypeHandlerForFileName(string_view filena
 	// First try the fileName as we get it from the commandline. This may
 	// be more interesting than the original fileName of a (g)zipped file:
 	// in case of an OMR file for instance, we want to select on the
-	// original extension, and not on the extension inside the gzipped
+	// original extension, and not on the extension inside the (g)zipped
 	// file.
 	auto* result = inner(filename);
 	if (!result) {
@@ -254,13 +254,12 @@ void CommandLineParser::parse(int argc, char** argv)
 					    !parseFileName(arg, cmdLine)) {
 						// no option or known file
 						backupCmdLine.push_back(arg);
-						auto it = ranges::lower_bound(options, arg, CmpOptions());
-						if ((it != end(options)) && (it->first == arg)) {
+						if (auto it = ranges::lower_bound(options, arg, CmpOptions());
+						    (it != end(options)) && (it->first == arg)) {
 							for (unsigned i = 0; i < it->second.length - 1; ++i) {
-								if (!cmdLine.empty()) {
-									backupCmdLine.push_back(std::move(cmdLine.front()));
-									cmdLine = cmdLine.subspan(1);
-								}
+								if (cmdLine.empty()) break;
+								backupCmdLine.push_back(std::move(cmdLine.front()));
+								cmdLine = cmdLine.subspan(1);
 							}
 						}
 					}
@@ -272,7 +271,7 @@ void CommandLineParser::parse(int argc, char** argv)
 			break;
 		}
 	}
-	for (auto& opData : view::values(options)) {
+	for (const auto& opData : view::values(options)) {
 		opData.option->parseDone();
 	}
 	if (!cmdLine.empty() && (parseStatus != EXIT)) {
@@ -393,7 +392,7 @@ static string formatSet(const vector<string_view>& inputSet, string::size_type c
 {
 	string outString;
 	string::size_type totalLength = 0; // ignore the starting spaces for now
-	for (auto& temp : inputSet) {
+	for (const auto& temp : inputSet) {
 		if (totalLength == 0) {
 			// first element ?
 			strAppend(outString, "    ", temp);
@@ -429,7 +428,7 @@ static string formatHelptext(string_view helpText,
 			}
 		}
 		strAppend(outText, helpText.substr(index, index + pos), '\n',
-		          string(indent, ' '));
+		          spaces(indent));
 		index = pos + 1;
 	}
 	strAppend(outText, helpText.substr(index));

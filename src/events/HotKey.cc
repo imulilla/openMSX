@@ -181,10 +181,10 @@ void HotKey::loadBindings(const XMLElement& config)
 	cmdMap = defaultMap;
 
 	// load bindings
-	auto* bindingsElement = config.findChild("bindings");
+	const auto* bindingsElement = config.findChild("bindings");
 	if (!bindingsElement) return;
 	auto copy = *bindingsElement; // dont iterate over changing container
-	for (auto& elem : copy.getChildren()) {
+	for (const auto& elem : copy.getChildren()) {
 		try {
 			auto& interp = commandController.getInterpreter();
 			if (elem.getName() == "bind") {
@@ -219,8 +219,8 @@ void HotKey::saveBindings(XMLElement& config) const
 	bindingsElement.removeAllChildren();
 
 	// add explicit bind's
-	for (auto& k : boundKeys) {
-		auto& info = *find_if_unguarded(cmdMap, EqualEvent(*k));
+	for (const auto& k : boundKeys) {
+		const auto& info = *find_if_unguarded(cmdMap, EqualEvent(*k));
 		auto& elem = bindingsElement.addChild("bind", info.command);
 		elem.addAttribute("key", k->toString());
 		if (info.repeat) {
@@ -230,8 +230,8 @@ void HotKey::saveBindings(XMLElement& config) const
 			elem.addAttribute("event", "true");
 		}
 	}
-	// add explicit unbind's
-	for (auto& k : unboundKeys) {
+	// add explicit unbinds
+	for (const auto& k : unboundKeys) {
 		auto& elem = bindingsElement.addChild("unbind");
 		elem.addAttribute("key", k->toString());
 	}
@@ -246,28 +246,27 @@ static bool contains(const vector<T>& v, const Event& event)
 template<typename T>
 static void erase(vector<T>& v, const Event& event)
 {
-	auto it = ranges::find_if(v, EqualEvent(event));
-	if (it != end(v)) move_pop_back(v, it);
+	if (auto it = ranges::find_if(v, EqualEvent(event)); it != end(v)) {
+		move_pop_back(v, it);
+	}
 }
 
-static void insert(HotKey::KeySet& set, HotKey::EventPtr event)
+static void insert(HotKey::KeySet& set, const HotKey::EventPtr& event)
 {
-	auto it = ranges::find_if(set, EqualEvent(*event));
-	if (it == end(set)) {
-		set.push_back(event);
-	} else {
+	if (auto it = ranges::find_if(set, EqualEvent(*event)); it != end(set)) {
 		*it = event;
+	} else {
+		set.push_back(event);
 	}
 }
 
 template<typename HotKeyInfo>
 static void insert(HotKey::BindMap& map, HotKeyInfo&& info)
 {
-	auto it = ranges::find_if(map, EqualEvent(*info.event));
-	if (it == end(map)) {
-		map.push_back(std::forward<HotKeyInfo>(info));
-	} else {
+	if (auto it = ranges::find_if(map, EqualEvent(*info.event)); it != end(map)) {
 		*it = std::forward<HotKeyInfo>(info);
+	} else {
+		map.push_back(std::forward<HotKeyInfo>(info));
 	}
 }
 
@@ -283,8 +282,8 @@ void HotKey::bind(HotKeyInfo&& info)
 
 void HotKey::unbind(const EventPtr& event)
 {
-	auto it1 = ranges::find_if(boundKeys, EqualEvent(*event));
-	if (it1 == end(boundKeys)) {
+	if (auto it1 = ranges::find_if(boundKeys, EqualEvent(*event));
+	    it1 == end(boundKeys)) {
 		// only when not a regular bound event
 		insert(unboundKeys, event);
 	} else {
@@ -302,7 +301,7 @@ void HotKey::bindDefault(HotKeyInfo&& info)
 {
 	if (!contains(  boundKeys, *info.event) &&
 	    !contains(unboundKeys, *info.event)) {
-		// not explicity bound or unbound
+		// not explicitly bound or unbound
 		insert(cmdMap, info);
 	}
 	insert(defaultMap, std::move(info));
@@ -312,7 +311,7 @@ void HotKey::unbindDefault(const EventPtr& event)
 {
 	if (!contains(  boundKeys, *event) &&
 	    !contains(unboundKeys, *event)) {
-		// not explicity bound or unbound
+		// not explicitly bound or unbound
 		erase(cmdMap, *event);
 	}
 	erase(defaultMap, *event);
@@ -335,7 +334,7 @@ void HotKey::unbindFullLayer(const string& layer)
 
 void HotKey::activateLayer(std::string layer, bool blocking)
 {
-	// Insert new activattion record at the end of the list.
+	// Insert new activation record at the end of the list.
 	// (it's not an error if the same layer was already active, in such
 	// as case it will now appear twice in the list of active layer,
 	// and it must also be deactivated twice).
@@ -346,9 +345,9 @@ void HotKey::deactivateLayer(std::string_view layer)
 {
 	// remove the first matching activation record from the end
 	// (it's not an error if there is no match at all)
-	auto it = ranges::find_if(view::reverse(activeLayers),
-	                          [&](auto& info) { return info.layer == layer; });
-	if (it != activeLayers.rend()) {
+	if (auto it = ranges::find_if(view::reverse(activeLayers),
+	                              [&](auto& info) { return info.layer == layer; });
+	    it != activeLayers.rend()) {
 		// 'reverse_iterator' -> 'iterator' conversion is a bit tricky
 		activeLayers.erase((it + 1).base());
 	}
@@ -391,8 +390,7 @@ int HotKey::executeEvent(const EventPtr& event)
 	bool blocking = false;
 	for (auto& info : view::reverse(activeLayers)) {
 		auto& cmap = layerMap[info.layer]; // ok, if this entry doesn't exist yet
-		auto it = findMatch(cmap, *event);
-		if (it != end(cmap)) {
+		if (auto it = findMatch(cmap, *event); it != end(cmap)) {
 			executeBinding(event, *it);
 			// Deny event to MSX listeners, also don't pass event
 			// to other layers (including the default layer).
@@ -403,8 +401,7 @@ int HotKey::executeEvent(const EventPtr& event)
 	}
 
 	// If the event was not yet handled, try the default layer.
-	auto it = findMatch(cmdMap, *event);
-	if (it != end(cmdMap)) {
+	if (auto it = findMatch(cmdMap, *event); it != end(cmdMap)) {
 		executeBinding(event, *it);
 		return EventDistributor::MSX; // deny event to MSX listeners
 	}
@@ -474,7 +471,7 @@ void HotKey::stopRepeat()
 
 // class BindCmd
 
-static std::string_view getBindCmdName(bool defaultCmd)
+static constexpr std::string_view getBindCmdName(bool defaultCmd)
 {
 	return defaultCmd ? "bind_default" : "bind";
 }
@@ -487,7 +484,7 @@ HotKey::BindCmd::BindCmd(CommandController& commandController_, HotKey& hotKey_,
 {
 }
 
-string HotKey::BindCmd::formatBinding(const HotKey::HotKeyInfo& info)
+static string formatBinding(const HotKey::HotKeyInfo& info)
 {
 	return strCat(info.event->toString(), (info.repeat ? " [repeat]" : ""),
 	              (info.passEvent ? " [event]" : ""), ":  ", info.command, '\n');
@@ -583,7 +580,7 @@ string HotKey::BindCmd::help(const vector<string>& /*tokens*/) const
 
 // class UnbindCmd
 
-static string getUnbindCmdName(bool defaultCmd)
+static constexpr std::string_view getUnbindCmdName(bool defaultCmd)
 {
 	return defaultCmd ? "unbind_default" : "unbind";
 }
@@ -700,7 +697,7 @@ void HotKey::DeactivateCmd::execute(span<const TclObject> tokens, TclObject& /*r
 
 string HotKey::DeactivateCmd::help(const vector<string>& /*tokens*/) const
 {
-	return "deactivate_input_layer <layername> : deactive the given input layer";
+	return "deactivate_input_layer <layername> : deactivate the given input layer";
 }
 
 

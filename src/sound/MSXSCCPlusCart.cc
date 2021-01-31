@@ -7,6 +7,7 @@
 #include "FileException.hh"
 #include "XMLElement.hh"
 #include "CacheLine.hh"
+#include "enumerate.hh"
 #include "ranges.hh"
 #include "serialize.hh"
 
@@ -75,14 +76,12 @@ void MSXSCCPlusCart::reset(EmuTime::param time)
 
 byte MSXSCCPlusCart::readMem(word addr, EmuTime::param time)
 {
-	byte result;
 	if (((enable == EN_SCC)     && (0x9800 <= addr) && (addr < 0xA000)) ||
 	    ((enable == EN_SCCPLUS) && (0xB800 <= addr) && (addr < 0xC000))) {
-		result = scc.readMem(addr & 0xFF, time);
+		return scc.readMem(addr & 0xFF, time);
 	} else {
-		result = MSXSCCPlusCart::peekMem(addr, time);
+		return MSXSCCPlusCart::peekMem(addr, time);
 	}
-	return result;
 }
 
 byte MSXSCCPlusCart::peekMem(word addr, EmuTime::param time) const
@@ -133,16 +132,16 @@ void MSXSCCPlusCart::writeMem(word address, byte value, EmuTime::param time)
 	}
 
 	// Write to RAM
-	int regio = (address >> 13) - 2;
-	if (isRamSegment[regio]) {
+	int region = (address >> 13) - 2;
+	if (isRamSegment[region]) {
 		// According to Sean Young
-		// when the regio's are in RAM mode you can read from
+		// when the regions are in RAM mode you can read from
 		// the SCC(+) but not write to them
 		// => we assume a write to the memory but maybe
 		//    they are just discarded
 		// TODO check this out => ask Sean...
-		if (isMapped[regio]) {
-			internalMemoryBank[regio][address & 0x1FFF] = value;
+		if (isMapped[region]) {
+			internalMemoryBank[region][address & 0x1FFF] = value;
 		}
 		return;
 	}
@@ -155,7 +154,7 @@ void MSXSCCPlusCart::writeMem(word address, byte value, EmuTime::param time)
 	 *   bank 4: 0xB000 - 0xB7FF (0xB000 used)
 	 */
 	if ((address & 0x1800) == 0x1000) {
-		setMapper(regio, value);
+		setMapper(region, value);
 		return;
 	}
 
@@ -183,9 +182,9 @@ byte* MSXSCCPlusCart::getWriteCacheLine(word start) const
 		if (start == (0xBFFF & CacheLine::HIGH)) {
 			return nullptr;
 		}
-		int regio = (start >> 13) - 2;
-		if (isRamSegment[regio] && isMapped[regio]) {
-			return &internalMemoryBank[regio][start & 0x1FFF];
+		int region = (start >> 13) - 2;
+		if (isRamSegment[region] && isMapped[region]) {
+			return &internalMemoryBank[region][start & 0x1FFF];
 		}
 		return nullptr;
 	}
@@ -193,24 +192,25 @@ byte* MSXSCCPlusCart::getWriteCacheLine(word start) const
 }
 
 
-void MSXSCCPlusCart::setMapper(int regio, byte value)
+void MSXSCCPlusCart::setMapper(int region, byte value)
 {
-	mapper[regio] = value;
+	mapper[region] = value;
 	value &= mapperMask;
 
-	byte* block;
-	if ((!lowRAM  && (value <  8)) ||
-	    (!highRAM && (value >= 8))) {
-		block = unmappedRead;
-		isMapped[regio] = false;
-	} else {
-		block = &ram[0x2000 * value];
-		isMapped[regio] = true;
-	}
+	byte* block = [&] {
+		if ((!lowRAM  && (value <  8)) ||
+		    (!highRAM && (value >= 8))) {
+			isMapped[region] = false;
+			return unmappedRead;
+		} else {
+			isMapped[region] = true;
+			return &ram[0x2000 * value];
+		}
+	}();
 
 	checkEnable(); // invalidateDeviceRWCache() done below
-	internalMemoryBank[regio] = block;
-	invalidateDeviceRWCache(0x4000 + regio * 0x2000, 0x2000);
+	internalMemoryBank[region] = block;
+	invalidateDeviceRWCache(0x4000 + region * 0x2000, 0x2000);
 }
 
 void MSXSCCPlusCart::setModeRegister(byte value)
@@ -269,8 +269,8 @@ void MSXSCCPlusCart::serialize(Archive& ar, unsigned /*version*/)
 
 	if (ar.isLoader()) {
 		// recalculate: isMapped[4], internalMemoryBank[4]
-		for (int i = 0; i < 4; ++i) {
-			setMapper(i, mapper[i]);
+		for (auto [i, m] : enumerate(mapper)) {
+			setMapper(int(i), m);
 		}
 		// recalculate: enable, isRamSegment[4]
 		setModeRegister(modeRegister);

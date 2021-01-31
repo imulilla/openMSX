@@ -71,15 +71,14 @@ private:
 	// RTSchedulable
 	void executeRT() override;
 
+private:
 	class BindCmd final : public Command {
 	public:
 		BindCmd(CommandController& commandController, HotKey& hotKey,
 			bool defaultCmd);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 	private:
-		std::string formatBinding(const HotKey::BindMap::value_type& info);
-
 		HotKey& hotKey;
 		const bool defaultCmd;
 	};
@@ -91,7 +90,7 @@ private:
 		UnbindCmd(CommandController& commandController, HotKey& hotKey,
 			  bool defaultCmd);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 	private:
 		HotKey& hotKey;
 		const bool defaultCmd;
@@ -102,13 +101,13 @@ private:
 	struct ActivateCmd final : Command {
 		explicit ActivateCmd(CommandController& commandController);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 	} activateCmd;
 
 	struct DeactivateCmd final : Command {
 		explicit DeactivateCmd(CommandController& commandController);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 	} deactivateCmd;
 
 	BindMap cmdMap;
