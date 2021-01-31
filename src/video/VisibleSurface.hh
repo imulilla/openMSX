@@ -1,16 +1,15 @@
 #ifndef VISIBLESURFACE_HH
 #define VISIBLESURFACE_HH
 
-#include "OutputSurface.hh"
 #include "Observer.hh"
 #include "EventListener.hh"
 #include "RTSchedulable.hh"
-#include "SDLSurfacePtr.hh"
 #include <memory>
 
 namespace openmsx {
 
 class Layer;
+class OutputSurface;
 class Reactor;
 class CommandConsole;
 class EventDistributor;
@@ -19,19 +18,18 @@ class Setting;
 class Display;
 class OSDGUI;
 class CliComm;
+class VideoSystem;
 
 /** An OutputSurface which is visible to the user, such as a window or a
   * full screen display.
-  * This class provides a frame buffer based renderer a common interface,
-  * no matter whether the back-end is plain SDL or SDL+OpenGL.
   */
-class VisibleSurface : public OutputSurface, public EventListener,
-                       private Observer<Setting>, private RTSchedulable
+class VisibleSurface : public EventListener, private Observer<Setting>
+                     , private RTSchedulable
 {
 public:
-	~VisibleSurface() override;
-	void updateWindowTitle();
-	bool setFullScreen(bool fullscreen);
+	virtual ~VisibleSurface();
+	virtual void updateWindowTitle() = 0;
+	virtual bool setFullScreen(bool fullscreen) = 0;
 
 	/** When a complete frame is finished, call this method.
 	  * It will 'actually' display it. E.g. when using double buffering
@@ -39,32 +37,27 @@ public:
 	  */
 	virtual void finish() = 0;
 
-	virtual std::unique_ptr<Layer> createSnowLayer() = 0;
-	virtual std::unique_ptr<Layer> createConsoleLayer(
+	[[nodiscard]] virtual std::unique_ptr<Layer> createSnowLayer() = 0;
+	[[nodiscard]] virtual std::unique_ptr<Layer> createConsoleLayer(
 		Reactor& reactor, CommandConsole& console) = 0;
-	virtual std::unique_ptr<Layer> createOSDGUILayer(OSDGUI& gui) = 0;
+	[[nodiscard]] virtual std::unique_ptr<Layer> createOSDGUILayer(OSDGUI& gui) = 0;
 
 	/** Create an off-screen OutputSurface which has similar properties
 	  * as this VisibleSurface. E.g. used to re-render the current frame
 	  * without OSD elements to take a screenshot.
 	  */
-	virtual std::unique_ptr<OutputSurface> createOffScreenSurface() = 0;
+	[[nodiscard]] virtual std::unique_ptr<OutputSurface> createOffScreenSurface() = 0;
 
-	Display& getDisplay() const { return display; }
+	[[nodiscard]] CliComm& getCliComm() const { return cliComm; }
+	[[nodiscard]] Display& getDisplay() const { return display; }
 
 protected:
 	VisibleSurface(Display& display,
 	               RTScheduler& rtScheduler,
 	               EventDistributor& eventDistributor,
 	               InputEventGenerator& inputEventGenerator,
-	               CliComm& cliComm);
-	void createSurface(int width, int height, unsigned flags);
-
-	SDLSubSystemInitializer<SDL_INIT_VIDEO> videoSubSystem;
-	SDLWindowPtr window;
-	SDLRendererPtr renderer;
-	SDLSurfacePtr surface;
-	SDLTexturePtr texture;
+	               CliComm& cliComm,
+	               VideoSystem& videoSystem);
 
 private:
 	void updateCursor();
@@ -76,10 +69,13 @@ private:
 	// RTSchedulable
 	void executeRT() override;
 
+private:
 	Display& display;
 	EventDistributor& eventDistributor;
 	InputEventGenerator& inputEventGenerator;
 	CliComm& cliComm;
+	VideoSystem& videoSystem;
+	bool grab = false;
 };
 
 } // namespace openmsx

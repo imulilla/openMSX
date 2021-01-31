@@ -5,6 +5,7 @@
 #include "SimpleDebuggable.hh"
 #include "Observer.hh"
 #include "BooleanSetting.hh"
+#include "CacheLine.hh"
 #include "EmuTime.hh"
 #include "TclCallback.hh"
 #include "serialize_meta.hh"
@@ -20,7 +21,7 @@ class CPUClock;
 class CPURegs;
 class Z80TYPE;
 class R800TYPE;
-template <typename T> class CPUCore;
+template<typename T> class CPUCore;
 class TclObject;
 class Interpreter;
 
@@ -49,9 +50,37 @@ public:
 	void updateVisiblePage(byte page, byte primarySlot, byte secondarySlot);
 
 	/** Invalidate the CPU its cache for the interval [start, start + size)
-	  * For example MSXMemoryMapper and MSXGameCartrigde need to call this
+	  * For example MSXMemoryMapper and MSXGameCartridge need to call this
 	  * method when a 'memory switch' occurs. */
-	void invalidateMemCache(word start, unsigned size);
+	void invalidateAllSlotsRWCache(word start, unsigned size);
+
+	/** Similar to the method above, but only invalidates one specific slot.
+	  * One small tweak: lines that are in 'disallowRead/Write' are
+	  * immediately marked as 'non-cacheable' instead of (first) as
+	  * 'unknown'.
+	  */
+	void invalidateRWCache(unsigned start, unsigned size, int ps, int ss,
+                               const byte* disallowRead, const byte* disallowWrite);
+	void invalidateRCache (unsigned start, unsigned size, int ps, int ss,
+                               const byte* disallowRead);
+	void invalidateWCache (unsigned start, unsigned size, int ps, int ss,
+                               const byte* disallowWrite);
+
+	/** Fill the read and write cache lines for a specific slot with the
+	 * specified value. Except for the lines where the corresponding
+	 * 'disallow{Read,Write}' array is non-zero, those lines are marked
+	 * non-cacheable.
+	 * This is useful on e.g. a memory mapper bank switch because:
+	 * - Marking the lines 'unknown' (as done by invalidateMemCache) is
+	 *   as much work as directly setting the correct value.
+	 * - Directly setting the correct value saves work later on.
+	 */
+	void fillRWCache(unsigned start, unsigned size, const byte* rData, byte* wData, int ps, int ss,
+                         const byte* disallowRead, const byte* disallowWrite);
+	void fillRCache (unsigned start, unsigned size, const byte* rData, int ps, int ss,
+                         const byte* disallowRead);
+	void fillWCache (unsigned start, unsigned size, byte* wData, int ps, int ss,
+                         const byte* disallowWrite);
 
 	/** This method raises a maskable interrupt. A device may call this
 	  * method more than once. If the device wants to lower the
@@ -84,7 +113,7 @@ public:
 	  * (the Z80 M1 pin is active). This implementation is not 100%
 	  * accurate, but good enough for now.
 	  */
-	bool isM1Cycle(unsigned address) const;
+	[[nodiscard]] bool isM1Cycle(unsigned address) const;
 
 	/** See CPUCore::exitCPULoopsync() */
 	void exitCPULoopSync();
@@ -92,7 +121,7 @@ public:
 	void exitCPULoopAsync();
 
 	/** Is the R800 currently active? */
-	bool isR800Active() const { return !z80Active; }
+	[[nodiscard]] bool isR800Active() const { return !z80Active; }
 
 	/** Switch the Z80 clock freq. */
 	void setZ80Freq(unsigned freq);
@@ -101,7 +130,7 @@ public:
 
 	void disasmCommand(Interpreter& interp,
 	                   span<const TclObject> tokens,
-                           TclObject& result) const;
+	                   TclObject& result) const;
 
 	/** (un)pause CPU. During pause the CPU executes NOP instructions
 	  * continuously (just like during HALT). Used by turbor hw pause. */
@@ -113,12 +142,14 @@ public:
 	EmuTime waitCyclesZ80(EmuTime::param time, unsigned cycles);
 	EmuTime waitCyclesR800(EmuTime::param time, unsigned cycles);
 
-	CPURegs& getRegisters();
+	[[nodiscard]] CPURegs& getRegisters();
 
 	template<typename Archive>
 	void serialize(Archive& ar, unsigned version);
 
 private:
+	void invalidateMemCacheSlot();
+
 	// only for MSXMotherBoard
 	void execute(bool fastForward);
 	friend class MSXMotherBoard;
@@ -133,17 +164,26 @@ private:
 	// Observer<Setting>
 	void update(const Setting& setting) override;
 
+	template<bool READ, bool WRITE, bool SUB_START>
+	void setRWCache(unsigned start, unsigned size, const byte* rData, byte* wData, int ps, int ss,
+	                const byte* disallowRead, const byte* disallowWrite);
+
+private:
 	MSXMotherBoard& motherboard;
 	BooleanSetting traceSetting;
 	TclCallback diHaltCallback;
 	const std::unique_ptr<CPUCore<Z80TYPE>> z80;
 	const std::unique_ptr<CPUCore<R800TYPE>> r800; // can be nullptr
 
+	const byte* slotReadLines [16][CacheLine::NUM];
+	      byte* slotWriteLines[16][CacheLine::NUM];
+	byte slots[4]; // active slot for page (= 4 * primSlot + secSlot)
+
 	struct TimeInfoTopic final : InfoTopic {
 		explicit TimeInfoTopic(InfoCommand& machineInfoCommand);
 		void execute(span<const TclObject> tokens,
 			     TclObject& result) const override;
-		std::string help (const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help (const std::vector<std::string>& tokens) const override;
 	} timeInfo;
 
 	class CPUFreqInfoTopic final : public InfoTopic {
@@ -152,7 +192,7 @@ private:
 				 const std::string& name, CPUClock& clock);
 		void execute(span<const TclObject> tokens,
 			     TclObject& result) const override;
-		std::string help (const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help (const std::vector<std::string>& tokens) const override;
 	private:
 		CPUClock& clock;
 	};
@@ -161,13 +201,15 @@ private:
 
 	struct Debuggable final : SimpleDebuggable {
 		explicit Debuggable(MSXMotherBoard& motherboard);
-		byte read(unsigned address) override;
+		[[nodiscard]] byte read(unsigned address) override;
 		void write(unsigned address, byte value) override;
 	} debuggable;
 
 	EmuTime reference;
 	bool z80Active;
 	bool newZ80Active;
+
+	MSXCPUInterface* interface = nullptr; // only used for debug
 };
 SERIALIZE_CLASS_VERSION(MSXCPU, 2);
 

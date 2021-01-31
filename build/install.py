@@ -66,7 +66,7 @@ def installAll(
 			scanTree('Contrib/cbios-old')
 			)
 
-	if hasattr(os, 'symlink'):
+	if hasattr(os, 'symlink') and os.name != 'nt':
 		print('  Creating symlinks...')
 		for machine, alias in (
 			('National_CF-3300', 'msx1'),
@@ -124,7 +124,7 @@ def main(
 			installPrefix, binaryDestDir, shareDestDir, docDestDir,
 			binaryBuildPath, targetPlatform, cbios, symlinkForBinary
 			)
-	except IOError as ex:
+	except OSError as ex:
 		print('Installation failed:', ex, file=sys.stderr)
 		sys.exit(1)
 

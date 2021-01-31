@@ -11,6 +11,7 @@
 #include "CommandController.hh"
 #include "CommandException.hh"
 #include "TclObject.hh"
+#include "TemporaryString.hh"
 #include "XMLElement.hh"
 #include "checked_cast.hh"
 #include "cstdiop.hh"
@@ -39,21 +40,21 @@ public:
 		, command(std::move(command_)), id(id_)
 	{
 	}
-	const string& getCommand() const
+	[[nodiscard]] const string& getCommand() const
 	{
 		return command;
 	}
-	const CliConnection* getId() const
+	[[nodiscard]] const CliConnection* getId() const
 	{
 		return id;
 	}
-	TclObject toTclList() const override
+	[[nodiscard]] TclObject toTclList() const override
 	{
 		return makeTclList("CliCmd", getCommand());
 	}
-	bool lessImpl(const Event& other) const override
+	[[nodiscard]] bool lessImpl(const Event& other) const override
 	{
-		auto& otherCmdEvent = checked_cast<const CliCommandEvent&>(other);
+		const auto& otherCmdEvent = checked_cast<const CliCommandEvent&>(other);
 		return getCommand() < otherCmdEvent.getCommand();
 	}
 private:
@@ -80,15 +81,15 @@ CliConnection::~CliConnection()
 	eventDistributor.unregisterEventListener(OPENMSX_CLICOMMAND_EVENT, *this);
 }
 
-void CliConnection::log(CliComm::LogLevel level, string_view message)
+void CliConnection::log(CliComm::LogLevel level, std::string_view message)
 {
 	auto levelStr = CliComm::getLevelStrings();
-	output(strCat("<log level=\"", levelStr[level], "\">",
-	              XMLElement::XMLEscape(message.str()), "</log>\n"));
+	output(tmpStrCat("<log level=\"", levelStr[level], "\">",
+	                 XMLElement::XMLEscape(message), "</log>\n"));
 }
 
-void CliConnection::update(CliComm::UpdateType type, string_view machine,
-                              string_view name, string_view value)
+void CliConnection::update(CliComm::UpdateType type, std::string_view machine,
+                           std::string_view name, std::string_view value)
 {
 	if (!getUpdateEnable(type)) return;
 
@@ -98,9 +99,9 @@ void CliConnection::update(CliComm::UpdateType type, string_view machine,
 		strAppend(tmp, " machine=\"", machine, '\"');
 	}
 	if (!name.empty()) {
-		strAppend(tmp, " name=\"", XMLElement::XMLEscape(name.str()), '\"');
+		strAppend(tmp, " name=\"", XMLElement::XMLEscape(name), '\"');
 	}
-	strAppend(tmp, '>', XMLElement::XMLEscape(value.str()), "</update>\n");
+	strAppend(tmp, '>', XMLElement::XMLEscape(value), "</update>\n");
 
 	output(tmp);
 }
@@ -133,19 +134,19 @@ void CliConnection::execute(const string& command)
 		std::make_shared<CliCommandEvent>(command, this));
 }
 
-static string reply(const string& message, bool status)
+static TemporaryString reply(std::string_view message, bool status)
 {
-	return strCat("<reply result=\"", (status ? "ok" : "nok"), "\">",
+	return tmpStrCat("<reply result=\"", (status ? "ok" : "nok"), "\">",
 	              XMLElement::XMLEscape(message), "</reply>\n");
 }
 
 int CliConnection::signalEvent(const std::shared_ptr<const Event>& event)
 {
-	auto& commandEvent = checked_cast<const CliCommandEvent&>(*event);
+	const auto& commandEvent = checked_cast<const CliCommandEvent&>(*event);
 	if (commandEvent.getId() == this) {
 		try {
-			string result = commandController.executeCommand(
-				commandEvent.getCommand(), this).getString().str();
+			auto result = commandController.executeCommand(
+				commandEvent.getCommand(), this).getString();
 			output(reply(result, true));
 		} catch (CommandException& e) {
 			string result = std::move(e).getMessage() + '\n';
@@ -158,7 +159,7 @@ int CliConnection::signalEvent(const std::shared_ptr<const Event>& event)
 
 // class StdioConnection
 
-static const int BUF_SIZE = 4096;
+constexpr int BUF_SIZE = 4096;
 StdioConnection::StdioConnection(CommandController& commandController_,
                                  EventDistributor& eventDistributor_)
 	: CliConnection(commandController_, eventDistributor_)
@@ -190,7 +191,7 @@ void StdioConnection::run()
 	}
 }
 
-void StdioConnection::output(string_view message)
+void StdioConnection::output(std::string_view message)
 {
 	std::cout << message << std::flush;
 }
@@ -210,7 +211,7 @@ static const HANDLE OPENMSX_INVALID_HANDLE_VALUE = reinterpret_cast<HANDLE>(-1);
 
 PipeConnection::PipeConnection(CommandController& commandController_,
                                EventDistributor& eventDistributor_,
-                               string_view name)
+                               std::string_view name)
 	: CliConnection(commandController_, eventDistributor_)
 {
 	string pipeName = strCat("\\\\.\\pipe\\", name);
@@ -289,7 +290,7 @@ void PipeConnection::run()
 	pipeHandle = OPENMSX_INVALID_HANDLE_VALUE;
 }
 
-void PipeConnection::output(string_view message)
+void PipeConnection::output(std::string_view message)
 {
 	if (pipeHandle != OPENMSX_INVALID_HANDLE_VALUE) {
 		std::cout << message << std::flush;
@@ -360,7 +361,7 @@ void SocketConnection::run()
 	closeSocket();
 }
 
-void SocketConnection::output(string_view message)
+void SocketConnection::output(std::string_view message)
 {
 	if (!established) { // TODO needs locking?
 		// Connection isn't authorized yet (and opening tag is not

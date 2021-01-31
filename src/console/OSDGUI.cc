@@ -6,11 +6,13 @@
 #include "CommandException.hh"
 #include "TclObject.hh"
 #include "StringOp.hh"
+#include "one_of.hh"
 #include "outer.hh"
 #include <memory>
 #include <utility>
 
 using std::string;
+using std::string_view;
 using std::unique_ptr;
 using std::vector;
 
@@ -53,7 +55,7 @@ void OSDGUI::OSDCommand::create(span<const TclObject> tokens, TclObject& result)
 {
 	checkNumArgs(tokens, AtLeast{4}, Prefix{2}, "type name ?property value ...?");
 	string_view type = tokens[2].getString();
-	auto& fullname = tokens[3];
+	const auto& fullname = tokens[3];
 	auto fullnameStr = fullname.getString();
 
 	auto& gui = OUTER(OSDGUI, osdCommand);
@@ -64,8 +66,7 @@ void OSDGUI::OSDCommand::create(span<const TclObject> tokens, TclObject& result)
 			fullnameStr);
 	}
 
-	string_view parentname, childName;
-	StringOp::splitOnLast(fullnameStr, '.', parentname, childName);
+	auto [parentname, childName] = StringOp::splitOnLast(fullnameStr, '.');
 	auto* parent = childName.empty() ? &top : top.findByName(parentname);
 	if (!parent) {
 		throw CommandException(
@@ -73,22 +74,25 @@ void OSDGUI::OSDCommand::create(span<const TclObject> tokens, TclObject& result)
 	}
 
 	auto widget = create(type, fullname);
+	auto* widget2 = widget.get();
 	configure(*widget, tokens.subspan(4));
 	top.addName(*widget);
 	parent->addWidget(std::move(widget));
 
 	result = fullname;
-	gui.refresh();
+	if (widget2->isVisible()) {
+		gui.refresh();
+	}
 }
 
 unique_ptr<OSDWidget> OSDGUI::OSDCommand::create(
-	string_view type, const TclObject& newName) const
+	string_view type, const TclObject& name) const
 {
 	auto& gui = OUTER(OSDGUI, osdCommand);
 	if (type == "rectangle") {
-		return std::make_unique<OSDRectangle>(gui.display, newName);
+		return std::make_unique<OSDRectangle>(gui.display, name);
 	} else if (type == "text") {
-		return std::make_unique<OSDText>(gui.display, newName);
+		return std::make_unique<OSDText>(gui.display, name);
 	} else {
 		throw CommandException(
 			"Invalid widget type '", type, "', expected "
@@ -115,10 +119,12 @@ void OSDGUI::OSDCommand::destroy(span<const TclObject> tokens, TclObject& result
 		throw CommandException("Can't destroy the top widget.");
 	}
 
+	if (widget->isVisible()) {
+		gui.refresh();
+	}
 	top.removeName(*widget);
 	parent->deleteWidget(*widget);
 	result = true;
-	gui.refresh();
 }
 
 void OSDGUI::OSDCommand::info(span<const TclObject> tokens, TclObject& result)
@@ -157,9 +163,12 @@ void OSDGUI::OSDCommand::exists(span<const TclObject> tokens, TclObject& result)
 void OSDGUI::OSDCommand::configure(span<const TclObject> tokens, TclObject& /*result*/)
 {
 	checkNumArgs(tokens, AtLeast{3}, "name ?property value ...?");
-	configure(getWidget(tokens[2].getString()), tokens.subspan(3));
-	auto& gui = OUTER(OSDGUI, osdCommand);
-	gui.refresh();
+	auto& widget = getWidget(tokens[2].getString());
+	configure(widget, tokens.subspan(3));
+	if (widget.isVisible()) {
+		auto& gui = OUTER(OSDGUI, osdCommand);
+		gui.refresh();
+	}
 }
 
 void OSDGUI::OSDCommand::configure(OSDWidget& widget, span<const TclObject> tokens)
@@ -244,12 +253,12 @@ void OSDGUI::OSDCommand::tabCompletion(vector<string>& tokens) const
 {
 	auto& gui = OUTER(OSDGUI, osdCommand);
 	if (tokens.size() == 2) {
-		static const char* const cmds[] = {
+		static constexpr const char* const cmds[] = {
 			"create", "destroy", "info", "exists", "configure"
 		};
 		completeString(tokens, cmds);
 	} else if ((tokens.size() == 3) && (tokens[1] == "create")) {
-		static const char* const types[] = { "rectangle", "text" };
+		static constexpr const char* const types[] = { "rectangle", "text" };
 		completeString(tokens, types);
 	} else if ((tokens.size() == 3) ||
 	           ((tokens.size() == 4) && (tokens[1] == "create"))) {
@@ -260,8 +269,7 @@ void OSDGUI::OSDCommand::tabCompletion(vector<string>& tokens) const
 			if (tokens[1] == "create") {
 				auto widget = create(tokens[2], TclObject());
 				properties = widget->getProperties();
-			} else if ((tokens[1] == "configure") ||
-			           (tokens[1] == "info")) {
+			} else if (tokens[1] == one_of("configure", "info")) {
 				const auto& widget = getWidget(tokens[2]);
 				properties = widget.getProperties();
 			}
@@ -272,12 +280,12 @@ void OSDGUI::OSDCommand::tabCompletion(vector<string>& tokens) const
 	}
 }
 
-OSDWidget& OSDGUI::OSDCommand::getWidget(string_view widgetName) const
+OSDWidget& OSDGUI::OSDCommand::getWidget(string_view name) const
 {
 	auto& gui = OUTER(OSDGUI, osdCommand);
-	auto* widget = gui.getTopWidget().findByName(widgetName);
+	auto* widget = gui.getTopWidget().findByName(name);
 	if (!widget) {
-		throw CommandException("No widget with name ", widgetName);
+		throw CommandException("No widget with name ", name);
 	}
 	return *widget;
 }

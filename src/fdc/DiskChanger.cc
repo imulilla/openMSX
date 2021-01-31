@@ -23,6 +23,7 @@
 #include "serialize_stl.hh"
 #include "serialize_constr.hh"
 #include "strCat.hh"
+#include "view.hh"
 #include <functional>
 #include <memory>
 #include <utility>
@@ -39,9 +40,9 @@ public:
 	            DiskChanger& diskChanger);
 	void execute(span<const TclObject> tokens,
 	             TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
-	bool needRecord(span<const TclObject> tokens) const /*override*/;
+	[[nodiscard]] bool needRecord(span<const TclObject> tokens) const /*override*/;
 private:
 	DiskChanger& diskChanger;
 };
@@ -59,7 +60,7 @@ DiskChanger::DiskChanger(MSXMotherBoard& board,
 	, driveName(std::move(driveName_))
 	, doubleSidedDrive(doubleSidedDrive_)
 {
-	init(strCat(board.getMachineID(), "::"), createCmd);
+	init(tmpStrCat(board.getMachineID(), "::"), createCmd);
 }
 
 DiskChanger::DiskChanger(Reactor& reactor_, string driveName_)
@@ -73,7 +74,7 @@ DiskChanger::DiskChanger(Reactor& reactor_, string driveName_)
 	init({}, true);
 }
 
-void DiskChanger::init(const string& prefix, bool createCmd)
+void DiskChanger::init(std::string_view prefix, bool createCmd)
 {
 	if (createCmd) createCommand();
 	ejectDisk();
@@ -133,7 +134,7 @@ void DiskChanger::sendChangeDiskEvent(span<string> args)
 				args, scheduler->getCurrentTime()));
 	} else {
 		signalStateChange(std::make_shared<MSXCommandEvent>(
-			args, EmuTime::zero));
+			args, EmuTime::zero()));
 	}
 }
 
@@ -142,7 +143,7 @@ void DiskChanger::signalStateChange(const std::shared_ptr<StateChange>& event)
 	auto* commandEvent = dynamic_cast<MSXCommandEvent*>(event.get());
 	if (!commandEvent) return;
 
-	auto& tokens = commandEvent->getTokens();
+	const auto& tokens = commandEvent->getTokens();
 	if (tokens[0] == getDriveName()) {
 		if (tokens[1] == "eject") {
 			ejectDisk();
@@ -157,7 +158,7 @@ void DiskChanger::stopReplay(EmuTime::param /*time*/)
 	// nothing
 }
 
-int DiskChanger::insertDisk(string_view filename)
+int DiskChanger::insertDisk(const std::string& filename)
 {
 	TclObject args[] = { TclObject("dummy"), TclObject(filename) };
 	try {
@@ -170,12 +171,12 @@ int DiskChanger::insertDisk(string_view filename)
 
 void DiskChanger::insertDisk(span<const TclObject> args)
 {
-	const string& diskImage = FileOperations::getConventionalPath(args[1].getString());
+	string diskImage = FileOperations::getConventionalPath(string(args[1].getString()));
 	auto& diskFactory = reactor.getDiskFactory();
 	std::unique_ptr<Disk> newDisk(diskFactory.createDisk(diskImage, *this));
-	for (size_t i = 2; i < args.size(); ++i) {
+	for (const auto& arg : view::drop(args, 2)) {
 		newDisk->applyPatch(Filename(
-			args[i].getString().str(), userFileContext()));
+			arg.getString(), userFileContext()));
 	}
 
 	// no errors, only now replace original disk
@@ -209,7 +210,7 @@ DiskCommand::DiskCommand(CommandController& commandController_,
 void DiskCommand::execute(span<const TclObject> tokens, TclObject& result)
 {
 	if (tokens.size() == 1) {
-		result.addListElement(diskChanger.getDriveName() + ':',
+		result.addListElement(tmpStrCat(diskChanger.getDriveName(), ':'),
 		                      diskChanger.getDiskName().getResolved());
 
 		TclObject options;
@@ -229,7 +230,7 @@ void DiskCommand::execute(span<const TclObject> tokens, TclObject& result)
 
 	} else if (tokens[1] == "ramdsk") {
 		string args[] = {
-			diskChanger.getDriveName(), tokens[1].getString().str()
+			diskChanger.getDriveName(), string(tokens[1].getString())
 		};
 		diskChanger.sendChangeDiskEvent(args);
 	} else if (tokens[1] == "-ramdsk") {
@@ -254,17 +255,17 @@ void DiskCommand::execute(span<const TclObject> tokens, TclObject& result)
 		}
 		try {
 			vector<string> args = { diskChanger.getDriveName() };
-			for (size_t i = firstFileToken; i < tokens.size(); ++i) {
-				string_view option = tokens[i].getString();
+			for (size_t i = firstFileToken; i < tokens.size(); ++i) { // 'i' changes in loop
+				std::string_view option = tokens[i].getString();
 				if (option == "-ips") {
 					if (++i == tokens.size()) {
 						throw MSXException(
 							"Missing argument for option \"", option, '\"');
 					}
-					args.push_back(tokens[i].getString().str());
+					args.emplace_back(tokens[i].getString());
 				} else {
 					// backwards compatibility
-					args.push_back(option.str());
+					args.emplace_back(option);
 				}
 			}
 			diskChanger.sendChangeDiskEvent(args);
@@ -290,7 +291,7 @@ string DiskCommand::help(const vector<string>& /*tokens*/) const
 void DiskCommand::tabCompletion(vector<string>& tokens) const
 {
 	if (tokens.size() >= 2) {
-		static const char* const extra[] = {
+		static constexpr const char* const extra[] = {
 			"eject", "ramdsk", "insert",
 		};
 		completeFileName(tokens, userFileContext(), extra);
@@ -352,7 +353,7 @@ void DiskChanger::serialize(Archive& ar, unsigned version)
 			if (!FileOperations::exists(name)) {
 				assert(!oldChecksum.empty());
 				auto file = filePool.getFile(
-					FilePool::DISK, Sha1Sum(oldChecksum));
+					FileType::DISK, Sha1Sum(oldChecksum));
 				if (file.is_open()) {
 					name = file.getURL();
 				}
@@ -408,7 +409,7 @@ template<> struct SerializeConstructorArgs<DiskChanger>
 	{
 		string driveName;
 		ar.serialize("driveName", driveName);
-		return make_tuple(driveName);
+		return std::tuple(driveName);
 	}
 };
 

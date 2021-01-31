@@ -29,14 +29,15 @@ public:
 	void setAllowExternalCommands();
 
 	// CliComm
-	void log(LogLevel level, string_view message) override;
-	void update(UpdateType type, string_view name,
-	            string_view value) override;
+	void log(LogLevel level, std::string_view message) override;
+	void update(UpdateType type, std::string_view name,
+	            std::string_view value) override;
 
 private:
-	void updateHelper(UpdateType type, string_view machine,
-	                  string_view name, string_view value);
+	void updateHelper(UpdateType type, std::string_view machine,
+	                  std::string_view name, std::string_view value);
 
+private:
 	hash_map<std::string, std::string, XXHasher> prevValues[NUM_UPDATES];
 
 	std::vector<std::unique_ptr<CliListener>> listeners; // unordered

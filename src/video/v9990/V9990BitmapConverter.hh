@@ -2,6 +2,7 @@
 #define V9990BITMAPCONVERTER_HH
 
 #include "V9990ModeEnum.hh"
+#include "one_of.hh"
 #include <cstdint>
 
 namespace openmsx {
@@ -11,7 +12,7 @@ class V9990VRAM;
 
 /** Utility class to convert VRAM content to host pixels.
   */
-template <class Pixel>
+template<typename Pixel>
 class V9990BitmapConverter
 {
 public:
@@ -34,9 +35,8 @@ public:
 	}
 
 private:
-	static bool isHighRes(V9990DisplayMode display) {
-		return (display == B4) || (display == B5) ||
-		       (display == B6) || (display == B7);
+	[[nodiscard]] static bool isHighRes(V9990DisplayMode display) {
+		return display == one_of(B4, B5, B6, B7);
 	}
 
 private:

@@ -17,7 +17,7 @@
 #endif
 
 // 32 or 64 bits ?
-#if (defined(__x86_64__) || defined(__x86_64) || defined(__amd64__) || defined(__amd64) || defined(__ppc64__) || defined(_WIN64) || defined(__LP64__) || defined(_LP64) )
+#if (defined(__x86_64__) || defined(__x86_64) || defined(__amd64__) || defined(__amd64) || defined(__ppc64__) || defined(_WIN64) || defined(__LP64__) || defined(_LP64))
 #  define LZ4_ARCH64 1
 #else
 #  define LZ4_ARCH64 0
@@ -25,30 +25,30 @@
 
 namespace LZ4 {
 
-static const int MEMORY_USAGE = 14;
-static const int HASHLOG = MEMORY_USAGE - 2;
-static const int HASH_SIZE_U32 = 1 << HASHLOG;
-static const int ACCELERATION = 1;
-static const int MINMATCH = 4;
-static const int WILDCOPYLENGTH = 8;
-static const int LASTLITERALS = 5; // see ../doc/lz4_Block_format.md#parsing-restrictions
-static const int MFLIMIT = 12;     // see ../doc/lz4_Block_format.md#parsing-restrictions
-static const int MATCH_SAFEGUARD_DISTANCE = 2 * WILDCOPYLENGTH - MINMATCH; // ensure it's possible to write 2 x wildcopyLength without overflowing output buffer
-static const int FASTLOOP_SAFE_DISTANCE = 64;
-static const int MIN_LENGTH = MFLIMIT + 1;
-static const int DISTANCE_MAX = 65535;
-static const int ML_BITS  = 4;
-static const int ML_MASK  = (1 << ML_BITS) - 1;
-static const int RUN_BITS = 8 - ML_BITS;
-static const int RUN_MASK = (1 << RUN_BITS) - 1;
-static const int LIMIT_64K = 0x10000 + (MFLIMIT - 1);
-static const uint32_t SKIP_TRIGGER = 6;  // Increase this value ==> compression run slower on incompressible data
+static constexpr int MEMORY_USAGE = 14;
+static constexpr int HASHLOG = MEMORY_USAGE - 2;
+static constexpr int HASH_SIZE_U32 = 1 << HASHLOG;
+static constexpr int ACCELERATION = 1;
+static constexpr int MINMATCH = 4;
+static constexpr int WILDCOPYLENGTH = 8;
+static constexpr int LASTLITERALS = 5; // see ../doc/lz4_Block_format.md#parsing-restrictions
+static constexpr int MFLIMIT = 12;     // see ../doc/lz4_Block_format.md#parsing-restrictions
+static constexpr int MATCH_SAFEGUARD_DISTANCE = 2 * WILDCOPYLENGTH - MINMATCH; // ensure it's possible to write 2 x wildcopyLength without overflowing output buffer
+static constexpr int FASTLOOP_SAFE_DISTANCE = 64;
+static constexpr int MIN_LENGTH = MFLIMIT + 1;
+static constexpr int DISTANCE_MAX = 65535;
+static constexpr int ML_BITS  = 4;
+static constexpr int ML_MASK  = (1 << ML_BITS) - 1;
+static constexpr int RUN_BITS = 8 - ML_BITS;
+static constexpr int RUN_MASK = (1 << RUN_BITS) - 1;
+static constexpr int LIMIT_64K = 0x10000 + (MFLIMIT - 1);
+static constexpr uint32_t SKIP_TRIGGER = 6;  // Increase this value ==> compression run slower on incompressible data
 
 using reg_t = uintptr_t;
-static const int STEPSIZE = sizeof(reg_t);
+static constexpr int STEPSIZE = sizeof(reg_t);
 
 
-static reg_t read_ARCH(const uint8_t* p)
+[[nodiscard]] static reg_t read_ARCH(const uint8_t* p)
 {
 	reg_t val;
 	memcpy(&val, p, sizeof(val));
@@ -78,8 +78,8 @@ static void wildCopy32(uint8_t* dst, const uint8_t* src, uint8_t* dstEnd)
 	} while (dst < dstEnd);
 }
 
-static const unsigned inc32table[8] = {0, 1, 2,  1,  0,  4, 4, 4};
-static const int      dec64table[8] = {0, 0, 0, -1, -4,  1, 2, 3};
+static constexpr unsigned inc32table[8] = {0, 1, 2,  1,  0,  4, 4, 4};
+static constexpr int      dec64table[8] = {0, 0, 0, -1, -4,  1, 2, 3};
 
 static void memcpy_using_offset_base(uint8_t* dstPtr, const uint8_t* srcPtr, uint8_t* dstEnd, const size_t offset)
 {
@@ -136,7 +136,7 @@ static void memcpy_using_offset(uint8_t* dstPtr, const uint8_t* srcPtr, uint8_t*
 	}
 }
 
-static inline int NbCommonBytes(size_t val)
+[[nodiscard]] static inline int NbCommonBytes(size_t val)
 {
 #if LZ4_ARCH64
 	if (openmsx::OPENMSX_BIGENDIAN) {
@@ -204,7 +204,7 @@ static inline int NbCommonBytes(size_t val)
 #endif // LZ4_ARCH64
 }
 
-ALWAYS_INLINE unsigned count(const uint8_t* pIn, const uint8_t* pMatch, const uint8_t* pInLimit)
+[[nodiscard]] ALWAYS_INLINE unsigned count(const uint8_t* pIn, const uint8_t* pMatch, const uint8_t* pInLimit)
 {
 	const uint8_t* const pStart = pIn;
 
@@ -249,7 +249,7 @@ template<bool L64K, bool ARCH64> struct HashImpl;
 template<bool ARCH64> struct HashImpl<true, ARCH64> {
 	alignas(uint64_t) uint16_t tab[1 << (HASHLOG + 1)] = {};
 
-	static uint32_t hashPosition(const uint8_t* p) {
+	[[nodiscard]] static uint32_t hashPosition(const uint8_t* p) {
 		uint32_t sequence = unalignedLoad32(p);
 		return (sequence * 2654435761U) >> ((MINMATCH * 8) - (HASHLOG + 1));
 	}
@@ -262,13 +262,13 @@ template<bool ARCH64> struct HashImpl<true, ARCH64> {
 	void putPosition(const uint8_t* p, const uint8_t* srcBase) {
 		putPositionOnHash(p, hashPosition(p), srcBase);
 	}
-	uint32_t getIndexOnHash(uint32_t h) const {
+	[[nodiscard]] uint32_t getIndexOnHash(uint32_t h) const {
 		return tab[h];
 	}
-	const uint8_t* getPositionOnHash(uint32_t h, const uint8_t* srcBase) const {
+	[[nodiscard]] const uint8_t* getPositionOnHash(uint32_t h, const uint8_t* srcBase) const {
 		return tab[h] + srcBase;
 	}
-	const uint8_t* getPosition(const uint8_t* p, const uint8_t* srcBase) const {
+	[[nodiscard]] const uint8_t* getPosition(const uint8_t* p, const uint8_t* srcBase) const {
 		return getPositionOnHash(hashPosition(p), srcBase);
 	}
 };
@@ -277,7 +277,7 @@ template<bool ARCH64> struct HashImpl<true, ARCH64> {
 template<> struct HashImpl<false, true> {
 	alignas(uint64_t) uint32_t tab[1 << HASHLOG] = {};
 
-	static uint32_t hashPosition(const uint8_t* p) {
+	[[nodiscard]] static uint32_t hashPosition(const uint8_t* p) {
 		uint64_t sequence = read_ARCH(p);
 		const uint64_t prime = openmsx::OPENMSX_BIGENDIAN
 				     ? 11400714785074694791ULL   // 8 bytes
@@ -293,13 +293,13 @@ template<> struct HashImpl<false, true> {
 	void putPosition(const uint8_t* p, const uint8_t* srcBase) {
 		putPositionOnHash(p, hashPosition(p), srcBase);
 	}
-	uint32_t getIndexOnHash(uint32_t h) const {
+	[[nodiscard]] uint32_t getIndexOnHash(uint32_t h) const {
 		return tab[h];
 	}
-	const uint8_t* getPositionOnHash(uint32_t h, const uint8_t* srcBase) const {
+	[[nodiscard]] const uint8_t* getPositionOnHash(uint32_t h, const uint8_t* srcBase) const {
 		return tab[h] + srcBase;
 	}
-	const uint8_t* getPosition(const uint8_t* p, const uint8_t* srcBase) const {
+	[[nodiscard]] const uint8_t* getPosition(const uint8_t* p, const uint8_t* srcBase) const {
 		return getPositionOnHash(hashPosition(p), srcBase);
 	}
 };
@@ -308,7 +308,7 @@ template<> struct HashImpl<false, true> {
 template<> struct HashImpl<false, false> {
 	alignas(uint64_t) const uint8_t* tab[1 << HASHLOG] = {};
 
-	static uint32_t hashPosition(const uint8_t* p) {
+	[[nodiscard]] static uint32_t hashPosition(const uint8_t* p) {
 		uint32_t sequence = unalignedLoad32(p);
 		return (sequence * 2654435761U) >> ((MINMATCH * 8) - HASHLOG);
 	}
@@ -321,13 +321,13 @@ template<> struct HashImpl<false, false> {
 	void putPosition(const uint8_t* p, const uint8_t* srcBase) {
 		putPositionOnHash(p, hashPosition(p), srcBase);
 	}
-	uint32_t getIndexOnHash(uint32_t /*h*/) const {
+	[[nodiscard]] uint32_t getIndexOnHash(uint32_t /*h*/) const {
 		UNREACHABLE; return 0;
 	}
-	const uint8_t* getPositionOnHash(uint32_t h, const uint8_t* /*srcBase*/) const {
+	[[nodiscard]] const uint8_t* getPositionOnHash(uint32_t h, const uint8_t* /*srcBase*/) const {
 		return tab[h];
 	}
-	const uint8_t* getPosition(const uint8_t* p, const uint8_t* srcBase) const {
+	[[nodiscard]] const uint8_t* getPosition(const uint8_t* p, const uint8_t* srcBase) const {
 		return getPositionOnHash(hashPosition(p), srcBase);
 	}
 };
@@ -380,9 +380,9 @@ ALWAYS_INLINE int compress_impl(const uint8_t* src, uint8_t* const dst, const in
 			int step = 1;
 			int searchMatchNb = ACCELERATION << SKIP_TRIGGER;
 			while (true) {
-				uint32_t h = forwardH;
-				uint32_t current = uint32_t(forwardIp - src);
-				uint32_t matchIndex = hashTable.getIndexOnHash(h);
+				auto h = forwardH;
+				auto current = uint32_t(forwardIp - src);
+				auto matchIndex = hashTable.getIndexOnHash(h);
 				ip = forwardIp;
 				forwardIp += step;
 				step = searchMatchNb++ >> SKIP_TRIGGER;
@@ -410,7 +410,7 @@ ALWAYS_INLINE int compress_impl(const uint8_t* src, uint8_t* const dst, const in
 		}
 
 		// Encode Literals
-		unsigned litLength = unsigned(ip - anchor);
+		auto litLength = unsigned(ip - anchor);
 		uint8_t* token = op++;
 		if (litLength >= RUN_MASK) {
 			int len = int(litLength - RUN_MASK);
@@ -431,7 +431,7 @@ ALWAYS_INLINE int compress_impl(const uint8_t* src, uint8_t* const dst, const in
 _next_match:
 		// At this stage, the following variables must be correctly set:
 		// - ip : at start of LZ operation
-		// - match : at start of previous pattern occurence; can be within current prefix, or within extDict
+		// - match : at start of previous pattern occurrence; can be within current prefix, or within extDict
 		// - token and *token : position to write 4-bits for match length; higher 4-bits for literal length supposed already written
 
 		// Encode Offset
@@ -475,9 +475,9 @@ _next_match:
 				goto _next_match;
 			}
 		} else { // byU16 or byU32
-			uint32_t h = hashTable.hashPosition(ip);
-			uint32_t current = uint32_t(ip - src);
-			uint32_t matchIndex = hashTable.getIndexOnHash(h);
+			auto h = hashTable.hashPosition(ip);
+			auto current = uint32_t(ip - src);
+			auto matchIndex = hashTable.getIndexOnHash(h);
 			match = src + matchIndex;
 			hashTable.putIndexOnHash(current, h);
 			if ((L64K || (matchIndex + DISTANCE_MAX >= current)) &&
@@ -494,7 +494,7 @@ _next_match:
 
 _last_literals:
 	// Encode Last Literals
-	size_t lastRun = size_t(iend - anchor);
+	auto lastRun = size_t(iend - anchor);
 	if (lastRun >= RUN_MASK) {
 		size_t accumulator = lastRun - RUN_MASK;
 		*op++ = RUN_MASK << ML_BITS;
@@ -537,13 +537,13 @@ static ALWAYS_INLINE unsigned read_variable_length(const uint8_t** ip)
 	return length;
 }
 
-int decompress(const uint8_t* src, uint8_t* dst, int srcSize, int outputSize)
+int decompress(const uint8_t* src, uint8_t* dst, int compressedSize, int dstCapacity)
 {
 	const uint8_t* ip = src;
-	const uint8_t* const iend = ip + srcSize;
+	const uint8_t* const iend = ip + compressedSize;
 
 	uint8_t* op = dst;
-	uint8_t* const oend = op + outputSize;
+	uint8_t* const oend = op + dstCapacity;
 	uint8_t* cpy;
 
 	// Set up the "end" pointers for the shortcut.

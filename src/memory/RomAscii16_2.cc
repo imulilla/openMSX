@@ -3,7 +3,7 @@
 // Examples 2kB SRAM: Daisenryaku, Harry Fox MSX Special, Hydlide 2, Jyansei
 // Examples 8kB SRAM: A-Train
 //
-// this type is is almost completely a ASCII16 cartrdige
+// this type is is almost completely a ASCII16 cartridge
 // However, it has 2 or 8kB of SRAM (and 128 kB ROM)
 // Use value 0x10 to select the SRAM.
 // SRAM in page 1 => read-only
@@ -62,12 +62,12 @@ void RomAscii16_2::writeMem(word address, byte value, EmuTime::param /*time*/)
 		if (value == 0x10) {
 			// SRAM block
 			sramEnabled |= (1 << region);
-			invalidateMemCache(0x4000 * region, 0x4000);
 		} else {
 			// ROM block
 			setRom(region, value);
 			sramEnabled &= ~(1 << region);
 		}
+		invalidateDeviceRWCache(0x4000 * region, 0x4000);
 	} else {
 		// write sram
 		if ((1 << (address >> 14)) & sramEnabled & 0x04) {

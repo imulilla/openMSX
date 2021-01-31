@@ -3,13 +3,14 @@
 #include "ReadOnlySetting.hh"
 #include "CommandController.hh"
 #include "Timer.hh"
+#include "xrange.hh"
 #include <memory>
 
 namespace openmsx {
 
-static std::string getLedName(LedStatus::Led led)
+[[nodiscard]] static std::string getLedName(LedStatus::Led led)
 {
-	static const char* const names[LedStatus::NUM_LEDS] = {
+	static constexpr const char* const names[LedStatus::NUM_LEDS] = {
 		"power", "caps", "kana", "pause", "turbo", "FDD"
 	};
 	return names[led];
@@ -24,12 +25,12 @@ LedStatus::LedStatus(
 	, interp(commandController.getInterpreter())
 {
 	lastTime = Timer::getTime();
-	for (int i = 0; i < NUM_LEDS; ++i) {
+	for (auto i : xrange(int(NUM_LEDS))) {
 		ledValue[i] = false;
 		std::string name = getLedName(static_cast<Led>(i));
 		ledStatus[i] = std::make_unique<ReadOnlySetting>(
-			commandController, "led_" + name,
-			"Current status for LED: " + name,
+			commandController, tmpStrCat("led_", name),
+			"Current status for LED",
 			TclObject("off"));
 	}
 }
@@ -61,17 +62,14 @@ void LedStatus::setLed(Led led, bool status)
 
 void LedStatus::handleEvent(Led led) noexcept
 {
-	static const string_view ON  = "on";
-	static const string_view OFF = "off";
-	const string_view& str = ledValue[led] ? ON : OFF;
-
+	std::string_view str = ledValue[led] ? "on": "off";
 	ledStatus[led]->setReadOnlyValue(TclObject(str));
 	msxCliComm.update(CliComm::LED, getLedName(led), str);
 }
 
 void LedStatus::executeRT()
 {
-	for (int i = 0; i < NUM_LEDS; ++i) {
+	for (auto i : xrange(int(NUM_LEDS))) {
 		if (ledValue[i] != ledStatus[i]->getValue().getBoolean(interp)) {
 			handleEvent(static_cast<Led>(i));
 		}

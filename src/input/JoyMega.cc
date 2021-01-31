@@ -9,6 +9,7 @@
 #include "serialize.hh"
 #include "serialize_meta.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 #include "build-info.hh"
 #include <memory>
 
@@ -18,22 +19,21 @@ using std::shared_ptr;
 namespace openmsx {
 
 #if PLATFORM_ANDROID
-static const int THRESHOLD = 32768 / 4;
+constexpr int THRESHOLD = 32768 / 4;
 #else
-static const int THRESHOLD = 32768 / 10;
+constexpr int THRESHOLD = 32768 / 10;
 #endif
 
 void JoyMega::registerAll(MSXEventDistributor& eventDistributor,
-                           StateChangeDistributor& stateChangeDistributor,
-                           PluggingController& controller)
+                          StateChangeDistributor& stateChangeDistributor,
+                          PluggingController& controller)
 {
 #ifdef SDL_JOYSTICK_DISABLED
 	(void)eventDistributor;
 	(void)stateChangeDistributor;
 	(void)controller;
 #else
-	unsigned numJoysticks = SDL_NumJoysticks();
-	for (unsigned i = 0; i < numJoysticks; i++) {
+	for (auto i : xrange(SDL_NumJoysticks())) {
 		if (SDL_Joystick* joystick = SDL_JoystickOpen(i)) {
 			// Avoid devices that have axes but no buttons, like accelerometers.
 			// SDL 1.2.14 in Linux has an issue where it rejects a device from
@@ -65,9 +65,9 @@ public:
 		assert((press != 0) || (release != 0));
 		assert((press & release) == 0);
 	}
-	unsigned getJoystick() const { return joyNum; }
-	unsigned getPress()    const { return press; }
-	unsigned getRelease()  const { return release; }
+	[[nodiscard]] unsigned getJoystick() const { return joyNum; }
+	[[nodiscard]] unsigned getPress()    const { return press; }
+	[[nodiscard]] unsigned getRelease()  const { return release; }
 
 	template<typename Archive> void serialize(Archive& ar, unsigned /*version*/)
 	{
@@ -96,7 +96,7 @@ JoyMega::JoyMega(MSXEventDistributor& eventDistributor_,
 	, joyNum(SDL_JoystickInstanceID(joystick_))
 	, name("joymegaX") // 'X' is filled in below
 	, desc(string(SDL_JoystickName(joystick_)))
-	, lastTime(EmuTime::zero)
+	, lastTime(EmuTime::zero())
 {
 	const_cast<string&>(name)[7] = char('1' + joyNum);
 }
@@ -115,7 +115,7 @@ const string& JoyMega::getName() const
 	return name;
 }
 
-string_view JoyMega::getDescription() const
+std::string_view JoyMega::getDescription() const
 {
 	return desc;
 }
@@ -192,7 +192,7 @@ void JoyMega::checkTime(EmuTime::param time)
 	}
 }
 
-static unsigned encodeButton(unsigned button, byte cycleMask)
+static constexpr unsigned encodeButton(unsigned button, byte cycleMask)
 {
 	unsigned n = (cycleMask == 7) ? 7 : 3; // 6- or 3-button mode
 	return 1 << (4 + (button & n));
@@ -215,8 +215,7 @@ unsigned JoyMega::calcInitialState()
 		result &= ~JOY_DOWN;
 	}
 
-	int numButtons = InputEventGenerator::joystickNumButtons(joystick);
-	for (int button = 0; button < numButtons; ++button) {
+	for (auto button : xrange(InputEventGenerator::joystickNumButtons(joystick))) {
 		if (InputEventGenerator::joystickGetButton(joystick, button)) {
 			result &= ~encodeButton(button, 7);
 		}
@@ -227,7 +226,7 @@ unsigned JoyMega::calcInitialState()
 // MSXEventListener
 void JoyMega::signalMSXEvent(const shared_ptr<const Event>& event, EmuTime::param time)
 {
-	auto joyEvent = dynamic_cast<const JoystickEvent*>(event.get());
+	const auto* joyEvent = dynamic_cast<const JoystickEvent*>(event.get());
 	if (!joyEvent) return;
 
 	// TODO: It would be more efficient to make a dispatcher instead of
@@ -236,7 +235,7 @@ void JoyMega::signalMSXEvent(const shared_ptr<const Event>& event, EmuTime::para
 
 	switch (event->getType()) {
 	case OPENMSX_JOY_AXIS_MOTION_EVENT: {
-		auto& mev = checked_cast<const JoystickAxisMotionEvent&>(*event);
+		const auto& mev = checked_cast<const JoystickAxisMotionEvent&>(*event);
 		int value = mev.getValue();
 		switch (mev.getAxis() & 1) {
 		case JoystickAxisMotionEvent::X_AXIS: // Horizontal
@@ -270,12 +269,12 @@ void JoyMega::signalMSXEvent(const shared_ptr<const Event>& event, EmuTime::para
 		break;
 	}
 	case OPENMSX_JOY_BUTTON_DOWN_EVENT: {
-		auto& butEv = checked_cast<const JoystickButtonEvent&>(*event);
+		const auto& butEv = checked_cast<const JoystickButtonEvent&>(*event);
 		createEvent(time, encodeButton(butEv.getButton(), cycleMask), 0);
 		break;
 	}
 	case OPENMSX_JOY_BUTTON_UP_EVENT: {
-		auto& butEv = checked_cast<const JoystickButtonEvent&>(*event);
+		const auto& butEv = checked_cast<const JoystickButtonEvent&>(*event);
 		createEvent(time, 0, encodeButton(butEv.getButton(), cycleMask));
 		break;
 	}
@@ -307,7 +306,7 @@ void JoyMega::createEvent(EmuTime::param time, unsigned newStatus)
 // StateChangeListener
 void JoyMega::signalStateChange(const shared_ptr<StateChange>& event)
 {
-	auto js = dynamic_cast<const JoyMegaState*>(event.get());
+	const auto* js = dynamic_cast<const JoyMegaState*>(event.get());
 	if (!js) return;
 
 	// TODO: It would be more efficient to make a dispatcher instead of

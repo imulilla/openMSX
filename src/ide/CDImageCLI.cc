@@ -1,6 +1,6 @@
 #include "CDImageCLI.hh"
 #include "CommandLineParser.hh"
-#include "GlobalCommandController.hh"
+#include "Interpreter.hh"
 #include "TclObject.hh"
 #include "MSXException.hh"
 
@@ -17,17 +17,17 @@ CDImageCLI::CDImageCLI(CommandLineParser& parser_)
 
 void CDImageCLI::parseOption(const string& option, span<string>& cmdLine)
 {
-	string_view cd = string_view(option).substr(1); // cda
+	auto cd = std::string_view(option).substr(1); // cda
 	string filename = getArgument(option, cmdLine);
-	if (!parser.getGlobalCommandController().hasCommand(cd)) { // TODO WIP
-		throw MSXException("No CDROM named '", cd, "'.");
+	if (!parser.getInterpreter().hasCommand(std::string(cd))) { // TODO WIP
+		throw MSXException("No CD-ROM named '", cd, "'.");
 	}
 	TclObject command = makeTclList(cd, filename);
 	command.executeCommand(parser.getInterpreter());
 }
-string_view CDImageCLI::optionHelp() const
+std::string_view CDImageCLI::optionHelp() const
 {
-	return "Use iso image in argument for the CDROM extension";
+	return "Use iso image in argument for the CD-ROM extension";
 }
 
 } // namespace openmsx

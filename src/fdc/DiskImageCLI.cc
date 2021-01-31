@@ -1,6 +1,6 @@
 #include "DiskImageCLI.hh"
 #include "CommandLineParser.hh"
-#include "GlobalCommandController.hh"
+#include "Interpreter.hh"
 #include "TclObject.hh"
 #include "MSXException.hh"
 
@@ -13,36 +13,41 @@ DiskImageCLI::DiskImageCLI(CommandLineParser& parser_)
 {
 	parser.registerOption("-diska", *this);
 	parser.registerOption("-diskb", *this);
-	parser.registerFileType("di1,di2,dmk,dsk,xsa,fd1,fd2", *this);
+	parser.registerFileType({"di1", "di2", "dmk", "dsk", "xsa", "fd1", "fd2"}, *this);
 	driveLetter = 'a';
 }
 
 void DiskImageCLI::parseOption(const string& option, span<string>& cmdLine)
 {
 	string filename = getArgument(option, cmdLine);
-	parse(string_view(option).substr(1), filename, cmdLine);
+	parse(zstring_view(option).substr(1), filename, cmdLine);
 }
-string_view DiskImageCLI::optionHelp() const
+std::string_view DiskImageCLI::optionHelp() const
 {
 	return "Insert the disk image specified in argument";
 }
 
 void DiskImageCLI::parseFileType(const string& filename, span<string>& cmdLine)
 {
-	parse(strCat("disk", driveLetter), filename, cmdLine);
+	parse(tmpStrCat("disk", driveLetter), filename, cmdLine);
 	++driveLetter;
 }
 
-string_view DiskImageCLI::fileTypeHelp() const
+std::string_view DiskImageCLI::fileTypeHelp() const
 {
 	return "Disk image";
 }
 
-void DiskImageCLI::parse(string_view drive, string_view image,
+std::string_view DiskImageCLI::fileTypeCategoryName() const
+{
+	return "disk";
+}
+
+void DiskImageCLI::parse(zstring_view drive, std::string_view image,
                          span<string>& cmdLine)
 {
-	if (!parser.getGlobalCommandController().hasCommand(drive)) { // TODO WIP
-		throw MSXException("No drive named '", drive, "'.");
+	if (!parser.getInterpreter().hasCommand(drive)) {
+		throw MSXException("No disk drive ", char(::toupper(drive.back())), " present to put image '", image, "' in.");
 	}
 	TclObject command = makeTclList(drive, image);
 	while (peekArgument(cmdLine) == "-ips") {

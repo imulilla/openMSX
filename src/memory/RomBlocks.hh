@@ -9,17 +9,18 @@ namespace openmsx {
 
 class SRAM;
 
-template <unsigned BANK_SIZE_>
+template<unsigned BANK_SIZE_>
 class RomBlocks : public MSXRom
 {
 public:
-	static const unsigned BANK_SIZE = BANK_SIZE_;
-	static const unsigned NUM_BANKS = 0x10000 / BANK_SIZE;
-	static const unsigned BANK_MASK = BANK_SIZE - 1;
+	static constexpr unsigned BANK_SIZE = BANK_SIZE_;
+	static constexpr unsigned NUM_BANKS = 0x10000 / BANK_SIZE;
+	static constexpr unsigned BANK_MASK = BANK_SIZE - 1;
 
-	byte readMem(word address, EmuTime::param time) override;
-	byte peekMem(word address, EmuTime::param time) const override;
-	const byte* getReadCacheLine(word address) const override;
+	[[nodiscard]] unsigned getBaseSizeAlignment() const override;
+	[[nodiscard]] byte readMem(word address, EmuTime::param time) override;
+	[[nodiscard]] byte peekMem(word address, EmuTime::param time) const override;
+	[[nodiscard]] const byte* getReadCacheLine(word address) const override;
 
 	template<typename Archive>
 	void serialize(Archive& ar, unsigned version);
@@ -78,6 +79,7 @@ protected:
 	 */
 	void setExtraMemory(const byte* mem, unsigned size);
 
+protected:
 	const byte* bankPtr[NUM_BANKS];
 	std::unique_ptr<SRAM> sram; // can be nullptr
 	byte blockNr[NUM_BANKS];

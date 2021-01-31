@@ -27,18 +27,18 @@ public:
 	  * @param vdp The VDP whose display will be rendered.
 	  * @return The rasterizer created.
 	  */
-	virtual std::unique_ptr<Rasterizer> createRasterizer(VDP& vdp) = 0;
+	[[nodiscard]] virtual std::unique_ptr<Rasterizer> createRasterizer(VDP& vdp) = 0;
 
 	/** Create the V9990 rasterizer selected by the current renderer setting.
 	  * Video systems that use a rasterizer must override this method.
 	  * @param vdp The V9990 whose display will be rendered.
 	  * @return The rasterizer created.
 	  */
-	virtual std::unique_ptr<V9990Rasterizer> createV9990Rasterizer(
+	[[nodiscard]] virtual std::unique_ptr<V9990Rasterizer> createV9990Rasterizer(
 		V9990& vdp) = 0;
 
 #if COMPONENT_LASERDISC
-	virtual std::unique_ptr<LDRasterizer> createLDRasterizer(
+	[[nodiscard]] virtual std::unique_ptr<LDRasterizer> createLDRasterizer(
 		LaserdiscPlayer &ld) = 0;
 #endif
 
@@ -49,12 +49,12 @@ public:
 	  * right renderer is selected. Subclasses are encouraged to check
 	  * more settings.
 	  * @return True if the settings were still in sync
-	  *     or were succesfully synced;
+	  *     or were successfully synced;
 	  *     false if the renderer is unable to bring the settings in sync.
 	  * TODO: Text copied from Renderer interface,
 	  *       if this stays here then rewrite text accordingly.
 	  */
-	virtual bool checkSettings();
+	[[nodiscard]] virtual bool checkSettings();
 
 	/** Finish pending drawing operations and make them visible to the user.
 	  */
@@ -73,7 +73,9 @@ public:
 	virtual void updateWindowTitle();
 
 	/** TODO */
-	virtual OutputSurface* getOutputSurface() = 0;
+	[[nodiscard]] virtual OutputSurface* getOutputSurface() = 0;
+	virtual void showCursor(bool show) = 0;
+	virtual void repaint() = 0;
 
 protected:
 	VideoSystem() = default;

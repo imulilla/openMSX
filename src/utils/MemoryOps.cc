@@ -19,8 +19,7 @@
 #include <emmintrin.h>
 #endif
 
-namespace openmsx {
-namespace MemoryOps {
+namespace openmsx::MemoryOps {
 
 #ifdef __SSE2__
 #if ASM_X86_32 && defined _MSC_VER
@@ -28,7 +27,7 @@ namespace MemoryOps {
 // only has it for 64 bit. So we add it ourselves for vc++/32-bit. An
 // alternative would be to always use this routine, but this generates worse
 // code than the real _mm_set1_epi64x() function for gcc (both 32 and 64 bit).
-static inline __m128i _mm_set1_epi64x(uint64_t val)
+[[nodiscard]] static inline __m128i _mm_set1_epi64x(uint64_t val)
 {
 	uint32_t low  = val >> 32;
 	uint32_t high = val >>  0;
@@ -64,7 +63,7 @@ static inline void memset_64_SSE(
 #endif
 
 static inline void memset_64(
-        uint64_t* out, size_t num64, uint64_t val64)
+	uint64_t* out, size_t num64, uint64_t val64)
 {
 	assert((size_t(out) % 8) == 0); // must be 8-byte aligned
 
@@ -217,6 +216,9 @@ template struct MemSet2<uint32_t>;
 class AllocMap
 {
 public:
+	AllocMap(const AllocMap&) = delete;
+	AllocMap& operator=(const AllocMap&) = delete;
+
 	static AllocMap& instance() {
 		static AllocMap oneInstance;
 		return oneInstance;
@@ -254,7 +256,7 @@ void* mallocAligned(size_t alignment, size_t size)
 	assert("must be a power of 2" && Math::ispow2(alignment));
 	assert(alignment >= sizeof(void*));
 #if HAVE_POSIX_MEMALIGN
-	void* aligned;
+	void* aligned = nullptr;
 	if (posix_memalign(&aligned, alignment, size)) {
 		throw std::bad_alloc();
 	}
@@ -294,5 +296,4 @@ void freeAligned(void* aligned)
 #endif
 }
 
-} // namespace MemoryOps
-} // namespace openmsx
+} // namespace openmsx::MemoryOps

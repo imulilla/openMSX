@@ -25,11 +25,12 @@
 #include "utf8_checked.hh"
 #include "MSXException.hh"
 #include "StringOp.hh"
-#include "countof.hh"
+#include "xrange.hh"
 #include <windows.h>
 #include <cstring>
 #include <cstdlib>
 #include <exception>
+#include <iterator>
 
 namespace openmsx {
 
@@ -64,7 +65,7 @@ dirent* readdir(DIR* dir)
 {
 	static dirent entry;
 	entry.d_ino = 0;
-	entry.d_type = 0;
+	entry.d_type = DT_UNKNOWN;
 
 	auto find = static_cast<WIN32_FIND_DATAW*>(dir->data);
 	if (dir->filepos) {
@@ -74,7 +75,7 @@ dirent* readdir(DIR* dir)
 	}
 
 	std::string d_name = utf8::utf16to8(find->cFileName);
-	strncpy(entry.d_name, d_name.c_str(), countof(entry.d_name));
+	strncpy(entry.d_name, d_name.c_str(), std::size(entry.d_name));
 
 	entry.d_off = dir->filepos;
 	entry.d_reclen = static_cast<unsigned short>(strlen(entry.d_name));
@@ -104,7 +105,7 @@ void rewinddir(DIR* dir)
 void seekdir(DIR* dir, off_t offset)
 {
 	rewinddir(dir);
-	for (off_t n = 0; n < offset; ++n) {
+	for (auto n : xrange(offset)) {
 		if (FindNextFileW(reinterpret_cast<HANDLE>(dir->fd),
 		                  static_cast<WIN32_FIND_DATAW*>(dir->data))) {
 			dir->filepos++;

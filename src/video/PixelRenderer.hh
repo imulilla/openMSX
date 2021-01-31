@@ -5,12 +5,15 @@
 #include "Observer.hh"
 #include "RenderSettings.hh"
 #include "openmsx.hh"
+#include <cstdint>
 #include <memory>
 
 namespace openmsx {
 
 class EventDistributor;
 class RealTime;
+class SpeedManager;
+class ThrottleManager;
 class Display;
 class Rasterizer;
 class VDP;
@@ -30,7 +33,7 @@ public:
 	~PixelRenderer() override;
 
 	// Renderer interface:
-	PostProcessor* getPostProcessor() const override;
+	[[nodiscard]] PostProcessor* getPostProcessor() const override;
 	void reInit() override;
 	void frameStart(EmuTime::param time) override;
 	void frameEnd(EmuTime::param time) override;
@@ -80,9 +83,9 @@ private:
 	  */
 	void subdivide(
 		int startX, int startY, int endX, int endY,
-		int clipL, int clipR, DrawType drawType );
+		int clipL, int clipR, DrawType drawType);
 
-	inline bool checkSync(int offset, EmuTime::param time);
+	[[nodiscard]] inline bool checkSync(int offset, EmuTime::param time);
 
 	/** Update renderer state to specified moment in time.
 	  * @param time Moment in emulated time to update to.
@@ -99,6 +102,7 @@ private:
 	  */
 	void renderUntil(EmuTime::param time);
 
+private:
 	/** The VDP of which the video output is being rendered.
 	  */
 	VDP& vdp;
@@ -109,6 +113,8 @@ private:
 
 	EventDistributor& eventDistributor;
 	RealTime& realTime;
+	SpeedManager& speedManager;
+	ThrottleManager& throttleManager;
 	RenderSettings& renderSettings;
 	VideoSourceSetting& videoSourceSetting;
 
@@ -119,7 +125,7 @@ private:
 	const std::unique_ptr<Rasterizer> rasterizer;
 
 	float finishFrameDuration;
-	int frameSkipCounter;
+	float frameSkipCounter;
 
 	/** Number of the next position within a line to render.
 	  * Expressed in VDP clock ticks since start of line.
@@ -148,6 +154,18 @@ private:
 	  */
 	bool renderFrame;
 	bool prevRenderFrame;
+
+	/** Should a rendered frame be painted to the window?
+	  * When renderFrame is false, paintFrame must be false as well.
+	  * But when recording, renderFrame will be true for every frame,
+	  * while paintFrame may not.
+	  */
+	bool paintFrame;
+
+	/** Timestamp (us, like Timer::getTime()) at which we last painted a frame.
+	  * Used to force a minimal paint rate when throttle is off.
+	  */
+	uint64_t lastPaintTime = 0;
 };
 
 } // namespace openmsx

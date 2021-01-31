@@ -17,8 +17,8 @@
 namespace openmsx {
 
 #ifndef _WIN32
-static const int OPENMSX_INVALID_SOCKET = -1;
-static const int SOCKET_ERROR = -1;
+constexpr int OPENMSX_INVALID_SOCKET = -1;
+constexpr int SOCKET_ERROR = -1;
 using SOCKET = int;
 #else
 // INVALID_SOCKET is #defined as  (SOCKET)(~0)
@@ -26,12 +26,12 @@ using SOCKET = int;
 static const SOCKET OPENMSX_INVALID_SOCKET = static_cast<SOCKET>(~0);
 #endif
 
-std::string sock_error();
+[[nodiscard]] std::string sock_error();
 void sock_startup();
 void sock_cleanup();
 void sock_close(SOCKET sd);
-int sock_recv(SOCKET sd, char* buf, size_t count);
-int sock_send(SOCKET sd, const char* buf, size_t count);
+[[nodiscard]] int sock_recv(SOCKET sd, char* buf, size_t count);
+[[nodiscard]] int sock_send(SOCKET sd, const char* buf, size_t count);
 
 } // namespace openmsx
 

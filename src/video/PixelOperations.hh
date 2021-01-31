@@ -1,36 +1,36 @@
 #ifndef PIXELOPERATIONS_HH
 #define PIXELOPERATIONS_HH
 
+#include "PixelFormat.hh"
 #include "unreachable.hh"
 #include "build-info.hh"
 #include "Math.hh"
-#include <SDL.h>
 
 namespace openmsx {
 
 template<typename Pixel> class PixelOpBase
 {
 public:
-	explicit PixelOpBase(const SDL_PixelFormat& format_)
+	explicit PixelOpBase(const PixelFormat& format_)
 		: format(format_)
 		, blendMask(calcBlendMask())
 	{
 	}
 
-	const SDL_PixelFormat& getSDLPixelFormat() const { return format; }
+	[[nodiscard]] const PixelFormat& getPixelFormat() const { return format; }
 
-	inline int getRmask()  const { return format.Rmask;  }
-	inline int getGmask()  const { return format.Gmask;  }
-	inline int getBmask()  const { return format.Bmask;  }
-	inline int getAmask()  const { return format.Amask;  }
-	inline int getRshift() const { return format.Rshift; }
-	inline int getGshift() const { return format.Gshift; }
-	inline int getBshift() const { return format.Bshift; }
-	inline int getAshift() const { return format.Ashift; }
-	inline int getRloss()  const { return format.Rloss;  }
-	inline int getGloss()  const { return format.Gloss;  }
-	inline int getBloss()  const { return format.Bloss;  }
-	inline int getAloss()  const { return format.Aloss;  }
+	[[nodiscard]] inline int getRmask()  const { return format.getRmask();  }
+	[[nodiscard]] inline int getGmask()  const { return format.getGmask();  }
+	[[nodiscard]] inline int getBmask()  const { return format.getBmask();  }
+	[[nodiscard]] inline int getAmask()  const { return format.getAmask();  }
+	[[nodiscard]] inline int getRshift() const { return format.getRshift(); }
+	[[nodiscard]] inline int getGshift() const { return format.getGshift(); }
+	[[nodiscard]] inline int getBshift() const { return format.getBshift(); }
+	[[nodiscard]] inline int getAshift() const { return format.getAshift(); }
+	[[nodiscard]] inline int getRloss()  const { return format.getRloss();  }
+	[[nodiscard]] inline int getGloss()  const { return format.getGloss();  }
+	[[nodiscard]] inline int getBloss()  const { return format.getBloss();  }
+	[[nodiscard]] inline int getAloss()  const { return format.getAloss();  }
 
 	/** Returns a constant that is useful to calculate the average of
 	  * two pixel values. See the implementation of blend(p1, p2) for
@@ -39,16 +39,16 @@ public:
 	  * method directly. This method is typically used as a helper in
 	  * older SIMD (MMX/SSE1) routines.
 	  */
-	inline Pixel getBlendMask() const { return blendMask; }
+	[[nodiscard]] inline Pixel getBlendMask() const { return blendMask; }
 
 	/** Return true if it's statically known that the pixelformat has
-	  * a 5-6-5 format (not specified wihich component goes where, but
+	  * a 5-6-5 format (not specified which component goes where, but
 	  * usually it will be BGR). This method is currently used to pick
 	  * a faster version for lerp() on dingoo. */
-	static const bool IS_RGB565 = false;
+	static constexpr bool IS_RGB565 = false;
 
 private:
-	inline Pixel calcBlendMask() const
+	[[nodiscard]] inline Pixel calcBlendMask() const
 	{
 		int rBit = ~(getRmask() << 1) & getRmask();
 		int gBit = ~(getGmask() << 1) & getGmask();
@@ -56,7 +56,8 @@ private:
 		return ~(rBit | gBit | bBit);
 	}
 
-	const SDL_PixelFormat& format;
+private:
+	const PixelFormat& format;
 
 	/** Mask used for blending.
 	  * The least significant bit of R,G,B must be 0,
@@ -72,30 +73,30 @@ private:
 template<> class PixelOpBase<unsigned>
 {
 public:
-	explicit PixelOpBase(const SDL_PixelFormat& format_)
+	explicit PixelOpBase(const PixelFormat& format_)
 		: format(format_) {}
 
-	const SDL_PixelFormat& getSDLPixelFormat() const { return format; }
+	[[nodiscard]] const PixelFormat& getPixelFormat() const { return format; }
 
-	inline int getRmask()  const { return format.Rmask;  }
-	inline int getGmask()  const { return format.Gmask;  }
-	inline int getBmask()  const { return format.Bmask;  }
-	inline int getAmask()  const { return format.Amask;  }
-	inline int getRshift() const { return format.Rshift; }
-	inline int getGshift() const { return format.Gshift; }
-	inline int getBshift() const { return format.Bshift; }
-	inline int getAshift() const { return format.Ashift; }
-	inline int getRloss()  const { return 0;             }
-	inline int getGloss()  const { return 0;             }
-	inline int getBloss()  const { return 0;             }
-	inline int getAloss()  const { return 0;             }
+	[[nodiscard]] inline int getRmask()  const { return format.getRmask();  }
+	[[nodiscard]] inline int getGmask()  const { return format.getGmask();  }
+	[[nodiscard]] inline int getBmask()  const { return format.getBmask();  }
+	[[nodiscard]] inline int getAmask()  const { return format.getAmask();  }
+	[[nodiscard]] inline int getRshift() const { return format.getRshift(); }
+	[[nodiscard]] inline int getGshift() const { return format.getGshift(); }
+	[[nodiscard]] inline int getBshift() const { return format.getBshift(); }
+	[[nodiscard]] inline int getAshift() const { return format.getAshift(); }
+	[[nodiscard]] inline int getRloss()  const { return 0;             }
+	[[nodiscard]] inline int getGloss()  const { return 0;             }
+	[[nodiscard]] inline int getBloss()  const { return 0;             }
+	[[nodiscard]] inline int getAloss()  const { return 0;             }
 
-	inline unsigned getBlendMask() const { return 0xFEFEFEFE; }
+	[[nodiscard]] inline unsigned getBlendMask() const { return 0xFEFEFEFE; }
 
-	static const bool IS_RGB565 = false;
+	static constexpr bool IS_RGB565 = false;
 
 private:
-	const SDL_PixelFormat& format;
+	const PixelFormat& format;
 };
 
 
@@ -106,45 +107,34 @@ private:
 template<> class PixelOpBase<uint16_t>
 {
 public:
-	explicit PixelOpBase(const SDL_PixelFormat& /*format*/) {}
+	explicit PixelOpBase(const PixelFormat& /*format*/) {}
 
-	const SDL_PixelFormat& getSDLPixelFormat() const
+	[[nodiscard]] const PixelFormat& getPixelFormat() const
 	{
-		static SDL_PixelFormat format;
-		format.palette = nullptr;
-		format.BitsPerPixel = 16;
-		format.BytesPerPixel = 2;
-		format.Rloss = 3;
-		format.Gloss = 2;
-		format.Bloss = 3;
-		format.Aloss = 8;
-		format.Rshift =  0;
-		format.Gshift =  5;
-		format.Bshift = 11;
-		format.Ashift =  0;
-		format.Rmask = 0x001F;
-		format.Gmask = 0x07E0;
-		format.Bmask = 0xF800;
-		format.Amask = 0x0000;
+		static PixelFormat format(16,
+			0x001F,  0, 3,
+			0x07E0,  5, 2,
+			0xF800, 11, 3,
+			0x0000,  0, 8);
 		return format;
 	}
 
-	inline int getRmask()  const { return 0x001F; }
-	inline int getGmask()  const { return 0x07E0; }
-	inline int getBmask()  const { return 0xF800; }
-	inline int getAmask()  const { return 0x0000; }
-	inline int getRshift() const { return  0; }
-	inline int getGshift() const { return  5; }
-	inline int getBshift() const { return 11; }
-	inline int getAshift() const { return  0; }
-	inline int getRloss()  const { return 3; }
-	inline int getGloss()  const { return 2; }
-	inline int getBloss()  const { return 3; }
-	inline int getAloss()  const { return 8; }
+	[[nodiscard]] inline int getRmask()  const { return 0x001F; }
+	[[nodiscard]] inline int getGmask()  const { return 0x07E0; }
+	[[nodiscard]] inline int getBmask()  const { return 0xF800; }
+	[[nodiscard]] inline int getAmask()  const { return 0x0000; }
+	[[nodiscard]] inline int getRshift() const { return  0; }
+	[[nodiscard]] inline int getGshift() const { return  5; }
+	[[nodiscard]] inline int getBshift() const { return 11; }
+	[[nodiscard]] inline int getAshift() const { return  0; }
+	[[nodiscard]] inline int getRloss()  const { return 3; }
+	[[nodiscard]] inline int getGloss()  const { return 2; }
+	[[nodiscard]] inline int getBloss()  const { return 3; }
+	[[nodiscard]] inline int getAloss()  const { return 8; }
 
-	inline uint16_t getBlendMask() const { return 0xF7DE; }
+	[[nodiscard]] inline uint16_t getBlendMask() const { return 0xF7DE; }
 
-	static const bool IS_RGB565 = true;
+	static constexpr bool IS_RGB565 = true;
 };
 #endif
 
@@ -153,7 +143,7 @@ public:
 template<typename Pixel> class PixelOperations : public PixelOpBase<Pixel>
 {
 public:
-	using PixelOpBase<Pixel>::getSDLPixelFormat;
+	using PixelOpBase<Pixel>::getPixelFormat;
 	using PixelOpBase<Pixel>::getRmask;
 	using PixelOpBase<Pixel>::getGmask;
 	using PixelOpBase<Pixel>::getBmask;
@@ -169,61 +159,61 @@ public:
 	using PixelOpBase<Pixel>::getBlendMask;
 	using PixelOpBase<Pixel>::IS_RGB565;
 
-	explicit PixelOperations(const SDL_PixelFormat& format);
+	explicit PixelOperations(const PixelFormat& format);
 
-	/** Extract RGB componts
+	/** Extract RGB components
 	  */
-	inline unsigned red(Pixel p) const;
-	inline unsigned green(Pixel p) const;
-	inline unsigned blue(Pixel p) const;
-	inline unsigned alpha(Pixel p) const;
+	[[nodiscard]] inline unsigned red(Pixel p) const;
+	[[nodiscard]] inline unsigned green(Pixel p) const;
+	[[nodiscard]] inline unsigned blue(Pixel p) const;
+	[[nodiscard]] inline unsigned alpha(Pixel p) const;
 
 	// alpha is maximum
-	inline bool isFullyOpaque(Pixel p) const;
+	[[nodiscard]] inline bool isFullyOpaque(Pixel p) const;
 	// alpha is minimum
-	inline bool isFullyTransparent(Pixel p) const;
+	[[nodiscard]] inline bool isFullyTransparent(Pixel p) const;
 
 	/** Same as above, but result is scaled to [0..255]
 	  */
-	inline unsigned red256(Pixel p) const;
-	inline unsigned green256(Pixel p) const;
-	inline unsigned blue256(Pixel p) const;
+	[[nodiscard]] inline unsigned red256(Pixel p) const;
+	[[nodiscard]] inline unsigned green256(Pixel p) const;
+	[[nodiscard]] inline unsigned blue256(Pixel p) const;
 
 	/** Combine RGB components to a pixel
 	  */
-	inline Pixel combine(unsigned r, unsigned g, unsigned b) const;
-	inline Pixel combine256(unsigned r, unsigned g, unsigned b) const;
+	[[nodiscard]] inline Pixel combine(unsigned r, unsigned g, unsigned b) const;
+	[[nodiscard]] inline Pixel combine256(unsigned r, unsigned g, unsigned b) const;
 
 	/** Get maximum component value
 	  */
-	inline unsigned getMaxRed() const;
-	inline unsigned getMaxGreen() const;
-	inline unsigned getMaxBlue() const;
+	[[nodiscard]] inline unsigned getMaxRed() const;
+	[[nodiscard]] inline unsigned getMaxGreen() const;
+	[[nodiscard]] inline unsigned getMaxBlue() const;
 
 	/** Blend the given colors into a single color.
 	  * The special case for blending between two colors with
 	  * an equal blend weight has an optimized implementation.
 	  */
-	template <unsigned w1, unsigned w2>
-	inline Pixel blend(Pixel p1, Pixel p2) const;
-	template <unsigned w1, unsigned w2, unsigned w3>
-	inline Pixel blend(Pixel p1, Pixel p2, Pixel p3) const;
-	template <unsigned w1, unsigned w2, unsigned w3, unsigned w4>
-	inline Pixel blend(Pixel p1, Pixel p2, Pixel p3, Pixel p4) const;
-	template <unsigned w1, unsigned w2, unsigned w3,
-	          unsigned w4, unsigned w5, unsigned w6>
-	inline Pixel blend(Pixel p1, Pixel p2, Pixel p3,
-	                   Pixel p4, Pixel p5, Pixel p6) const;
+	template<unsigned w1, unsigned w2>
+	[[nodiscard]] inline Pixel blend(Pixel p1, Pixel p2) const;
+	template<unsigned w1, unsigned w2, unsigned w3>
+	[[nodiscard]] inline Pixel blend(Pixel p1, Pixel p2, Pixel p3) const;
+	template<unsigned w1, unsigned w2, unsigned w3, unsigned w4>
+	[[nodiscard]] inline Pixel blend(Pixel p1, Pixel p2, Pixel p3, Pixel p4) const;
+	template<unsigned w1, unsigned w2, unsigned w3,
+	         unsigned w4, unsigned w5, unsigned w6>
+	[[nodiscard]] inline Pixel blend(Pixel p1, Pixel p2, Pixel p3,
+	                                 Pixel p4, Pixel p5, Pixel p6) const;
 
-	template <unsigned w1, unsigned w2>
-	inline Pixel blend2(const Pixel* p) const;
-	template <unsigned w1, unsigned w2, unsigned w3>
-	inline Pixel blend3(const Pixel* p) const;
-	template <unsigned w1, unsigned w2, unsigned w3, unsigned w4>
-	inline Pixel blend4(const Pixel* p) const;
-	template <unsigned w1, unsigned w2, unsigned w3,
+	template<unsigned w1, unsigned w2>
+	[[nodiscard]] inline Pixel blend2(const Pixel* p) const;
+	template<unsigned w1, unsigned w2, unsigned w3>
+	[[nodiscard]] inline Pixel blend3(const Pixel* p) const;
+	template<unsigned w1, unsigned w2, unsigned w3, unsigned w4>
+	[[nodiscard]] inline Pixel blend4(const Pixel* p) const;
+	template<unsigned w1, unsigned w2, unsigned w3,
 	          unsigned w4, unsigned w5, unsigned w6>
-	inline Pixel blend6(const Pixel* p) const;
+	[[nodiscard]] inline Pixel blend6(const Pixel* p) const;
 
 	/** Perform a component wise multiplication of a pixel with an 8-bit
 	  * fractional value:
@@ -233,7 +223,7 @@ public:
 	  * For x=255 the result in the original value.
 	  * Note: ATM only implemented for 32bpp.
 	  */
-	static inline Pixel multiply(Pixel p, unsigned x);
+	[[nodiscard]] static inline Pixel multiply(Pixel p, unsigned x);
 
 	/** Perform linear interpolation between two pixels.
 	 * This calculates component-wise:
@@ -243,27 +233,27 @@ public:
 	 * For x=0   the result is p1.
 	 * For x=256 the result is p2.
 	 */
-	inline Pixel lerp(Pixel p1, Pixel p2, unsigned x) const;
+	[[nodiscard]] inline Pixel lerp(Pixel p1, Pixel p2, unsigned x) const;
 
 	/** Perform alpha blending of two pixels.
 	 * Pixel p1 contains the alpha value. For maximal alpha p1 is
 	 * returned, for minimal alpha p2.
 	 */
-	inline Pixel alphaBlend(Pixel p1, Pixel p2) const;
+	[[nodiscard]] inline Pixel alphaBlend(Pixel p1, Pixel p2) const;
 
 private:
-	inline Pixel avgDown(Pixel p1, Pixel p2) const;
-	inline Pixel avgUp  (Pixel p1, Pixel p2) const;
+	[[nodiscard]] inline Pixel avgDown(Pixel p1, Pixel p2) const;
+	[[nodiscard]] inline Pixel avgUp  (Pixel p1, Pixel p2) const;
 };
 
 
-template <typename Pixel>
-PixelOperations<Pixel>::PixelOperations(const SDL_PixelFormat& format_)
+template<typename Pixel>
+PixelOperations<Pixel>::PixelOperations(const PixelFormat& format_)
 	: PixelOpBase<Pixel>(format_)
 {
 }
 
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::red(Pixel p) const
 {
 	if (sizeof(Pixel) == 4) {
@@ -272,7 +262,7 @@ inline unsigned PixelOperations<Pixel>::red(Pixel p) const
 		return (p & getRmask()) >> getRshift();
 	}
 }
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::green(Pixel p) const
 {
 	if (sizeof(Pixel) == 4) {
@@ -281,7 +271,7 @@ inline unsigned PixelOperations<Pixel>::green(Pixel p) const
 		return (p & getGmask()) >> getGshift();
 	}
 }
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::blue(Pixel p) const
 {
 	if (sizeof(Pixel) == 4) {
@@ -290,7 +280,7 @@ inline unsigned PixelOperations<Pixel>::blue(Pixel p) const
 		return (p & getBmask()) >> getBshift();
 	}
 }
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::alpha(Pixel p) const
 {
 	if (sizeof(Pixel) == 4) {
@@ -301,7 +291,7 @@ inline unsigned PixelOperations<Pixel>::alpha(Pixel p) const
 	}
 }
 
-template <typename Pixel>
+template<typename Pixel>
 inline bool PixelOperations<Pixel>::isFullyOpaque(Pixel p) const
 {
 	if (sizeof(Pixel) == 4) {
@@ -310,7 +300,7 @@ inline bool PixelOperations<Pixel>::isFullyOpaque(Pixel p) const
 		return p != 0x0001;
 	}
 }
-template <typename Pixel>
+template<typename Pixel>
 inline bool PixelOperations<Pixel>::isFullyTransparent(Pixel p) const
 {
 	if (sizeof(Pixel) == 4) {
@@ -320,7 +310,7 @@ inline bool PixelOperations<Pixel>::isFullyTransparent(Pixel p) const
 	}
 }
 
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::red256(Pixel p) const
 {
 	if (sizeof(Pixel) == 4) {
@@ -329,7 +319,7 @@ inline unsigned PixelOperations<Pixel>::red256(Pixel p) const
 		return ((p >> getRshift()) << getRloss()) & 0xFF;
 	}
 }
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::green256(Pixel p) const
 {
 	if (sizeof(Pixel) == 4) {
@@ -338,7 +328,7 @@ inline unsigned PixelOperations<Pixel>::green256(Pixel p) const
 		return ((p >> getGshift()) << getGloss()) & 0xFF;
 	}
 }
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::blue256(Pixel p) const
 {
 	if (sizeof(Pixel) == 4) {
@@ -348,7 +338,7 @@ inline unsigned PixelOperations<Pixel>::blue256(Pixel p) const
 	}
 }
 
-template <typename Pixel>
+template<typename Pixel>
 inline Pixel PixelOperations<Pixel>::combine(
 		unsigned r, unsigned g, unsigned b) const
 {
@@ -357,7 +347,7 @@ inline Pixel PixelOperations<Pixel>::combine(
 	             (b << getBshift()));
 }
 
-template <typename Pixel>
+template<typename Pixel>
 inline Pixel PixelOperations<Pixel>::combine256(
 		unsigned r, unsigned g, unsigned b) const
 {
@@ -372,7 +362,7 @@ inline Pixel PixelOperations<Pixel>::combine256(
 	}
 }
 
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::getMaxRed() const
 {
 	if (sizeof(Pixel) == 4) {
@@ -381,7 +371,7 @@ inline unsigned PixelOperations<Pixel>::getMaxRed() const
 		return 255 >> getRloss();
 	}
 }
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::getMaxGreen() const
 {
 	if (sizeof(Pixel) == 4) {
@@ -390,7 +380,7 @@ inline unsigned PixelOperations<Pixel>::getMaxGreen() const
 		return 255 >> getGloss();
 	}
 }
-template <typename Pixel>
+template<typename Pixel>
 inline unsigned PixelOperations<Pixel>::getMaxBlue() const
 {
 	if (sizeof(Pixel) == 4) {
@@ -448,9 +438,9 @@ inline Pixel PixelOperations<Pixel>::blend(Pixel p1, Pixel p2) const
 		// approximate with weights that sum to 256 (or 64)
 		// e.g. approximate <1,2> as <85,171> (or <21,43>)
 		//  ww1 = round(256 * w1 / total)   ww2 = 256 - ww1
-		static const unsigned newTotal = IS_RGB565 ? 64 : 256;
-		static const unsigned ww1 = (2 * w1 * newTotal + total) / (2 * total);
-		static const unsigned ww2 = 256 - ww1;
+		constexpr unsigned newTotal = IS_RGB565 ? 64 : 256;
+		constexpr unsigned ww1 = (2 * w1 * newTotal + total) / (2 * total);
+		constexpr unsigned ww2 = 256 - ww1;
 		return blend<ww1, ww2>(p1, p2);
 
 	} else if (sizeof(Pixel) == 4) {
@@ -468,11 +458,11 @@ inline Pixel PixelOperations<Pixel>::blend(Pixel p1, Pixel p2) const
 			// reduce to maximum 6-bit
 			// note: DIV64 only exists to work around a
 			//       division by zero in dead code
-			static const unsigned DIV64 = (total > 64) ? 64 : 1;
-			static const unsigned factor = total / DIV64;
-			static const unsigned round = factor / 2;
-			static const unsigned ww1 = (w1 + round) / factor;
-			static const unsigned ww2 = 64 - ww1;
+			constexpr unsigned DIV64 = (total > 64) ? 64 : 1;
+			constexpr unsigned factor = total / DIV64;
+			constexpr unsigned round = factor / 2;
+			constexpr unsigned ww1 = (w1 + round) / factor;
+			constexpr unsigned ww2 = 64 - ww1;
 			return blend<ww1, ww2>(p1, p2);
 		} else {
 			unsigned l2 = Math::log2p1(total) - 1;
@@ -492,11 +482,11 @@ inline Pixel PixelOperations<Pixel>::blend(Pixel p1, Pixel p2) const
 	}
 }
 
-template <typename Pixel>
-template <unsigned w1, unsigned w2, unsigned w3>
+template<typename Pixel>
+template<unsigned w1, unsigned w2, unsigned w3>
 inline Pixel PixelOperations<Pixel>::blend(Pixel p1, Pixel p2, Pixel p3) const
 {
-	static const unsigned total = w1 + w2 + w3;
+	constexpr unsigned total = w1 + w2 + w3;
 	if ((sizeof(Pixel) == 4) && Math::ispow2(total)) {
 		unsigned l2 = Math::log2p1(total) - 1;
 		unsigned c1 = (((p1 & 0x00FF00FF) * w1 +
@@ -514,12 +504,12 @@ inline Pixel PixelOperations<Pixel>::blend(Pixel p1, Pixel p2, Pixel p3) const
 	}
 }
 
-template <typename Pixel>
-template <unsigned w1, unsigned w2, unsigned w3, unsigned w4>
+template<typename Pixel>
+template<unsigned w1, unsigned w2, unsigned w3, unsigned w4>
 inline Pixel PixelOperations<Pixel>::blend(
 		Pixel p1, Pixel p2, Pixel p3, Pixel p4) const
 {
-	static const unsigned total = w1 + w2 + w3 + w4;
+	constexpr unsigned total = w1 + w2 + w3 + w4;
 	if ((sizeof(Pixel) == 4) && Math::ispow2(total)) {
 		unsigned l2 = Math::log2p1(total) - 1;
 		unsigned c1 = (((p1 & 0x00FF00FF) * w1 +
@@ -542,13 +532,13 @@ inline Pixel PixelOperations<Pixel>::blend(
 	}
 }
 
-template <typename Pixel>
-template <unsigned w1, unsigned w2, unsigned w3,
+template<typename Pixel>
+template<unsigned w1, unsigned w2, unsigned w3,
           unsigned w4, unsigned w5, unsigned w6>
 inline Pixel PixelOperations<Pixel>::blend(
 	Pixel p1, Pixel p2, Pixel p3, Pixel p4, Pixel p5, Pixel p6) const
 {
-	static const unsigned total = w1 + w2 + w3 + w4 + w5 + w6;
+	constexpr unsigned total = w1 + w2 + w3 + w4 + w5 + w6;
 	if ((sizeof(Pixel) == 4) && Math::ispow2(total)) {
 		unsigned l2 = Math::log2p1(total) - 1;
 		unsigned c1 = (((p1 & 0x00FF00FF) * w1 +
@@ -579,36 +569,36 @@ inline Pixel PixelOperations<Pixel>::blend(
 }
 
 
-template <typename Pixel>
-template <unsigned w1, unsigned w2>
+template<typename Pixel>
+template<unsigned w1, unsigned w2>
 inline Pixel PixelOperations<Pixel>::blend2(const Pixel* p) const
 {
 	return blend<w1, w2>(p[0], p[1]);
 }
 
-template <typename Pixel>
-template <unsigned w1, unsigned w2, unsigned w3>
+template<typename Pixel>
+template<unsigned w1, unsigned w2, unsigned w3>
 inline Pixel PixelOperations<Pixel>::blend3(const Pixel* p) const
 {
 	return blend<w1, w2, w3>(p[0], p[1], p[2]);
 }
 
-template <typename Pixel>
-template <unsigned w1, unsigned w2, unsigned w3, unsigned w4>
+template<typename Pixel>
+template<unsigned w1, unsigned w2, unsigned w3, unsigned w4>
 inline Pixel PixelOperations<Pixel>::blend4(const Pixel* p) const
 {
 	return blend<w1, w2, w3, w4>(p[0], p[1], p[2], p[3]);
 }
 
-template <typename Pixel>
-template <unsigned w1, unsigned w2, unsigned w3,
+template<typename Pixel>
+template<unsigned w1, unsigned w2, unsigned w3,
           unsigned w4, unsigned w5, unsigned w6>
 inline Pixel PixelOperations<Pixel>::blend6(const Pixel* p) const
 {
 	return blend<w1, w2, w3, w4, w5, w6>(p[0], p[1], p[2], p[3], p[4], p[5]);
 }
 
-template <typename Pixel>
+template<typename Pixel>
 inline Pixel PixelOperations<Pixel>::multiply(Pixel p, unsigned x)
 {
 	if (sizeof(Pixel) == 4) {
@@ -619,7 +609,7 @@ inline Pixel PixelOperations<Pixel>::multiply(Pixel p, unsigned x)
 	}
 }
 
-template <typename Pixel>
+template<typename Pixel>
 inline Pixel PixelOperations<Pixel>::lerp(Pixel p1, Pixel p2, unsigned x) const
 {
 	if (sizeof(Pixel) == 4) { // 32 bpp
@@ -668,7 +658,7 @@ inline Pixel PixelOperations<Pixel>::lerp(Pixel p1, Pixel p2, unsigned x) const
 	}
 }
 
-template <typename Pixel>
+template<typename Pixel>
 inline Pixel PixelOperations<Pixel>::alphaBlend(Pixel p1, Pixel p2) const
 {
 	if (sizeof(Pixel) == 2) {

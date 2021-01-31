@@ -37,14 +37,16 @@
 #include "SRAM.hh"
 #include "MSXMotherBoard.hh"
 #include "MSXException.hh"
+#include "one_of.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <memory>
 
 namespace openmsx {
 
 // 8kb shared sram //
 
-static std::shared_ptr<SRAM> getSram(const DeviceConfig& config)
+[[nodiscard]] static std::shared_ptr<SRAM> getSram(const DeviceConfig& config)
 {
 	return config.getMotherBoard().getSharedStuff<SRAM>(
 		"FSA1FM-sram",
@@ -59,8 +61,7 @@ RomFSA1FM1::RomFSA1FM1(const DeviceConfig& config, Rom&& rom_)
 	, fsSram(getSram(config))
 	, firmwareSwitch(config)
 {
-	if ((rom.getSize() != 0x100000) &&
-	    (rom.getSize() != 0x200000)) {
+	if (rom.getSize() != one_of(0x100000u, 0x200000u)) {
 		throw MSXException(
 			"Rom for FSA1FM mapper must be 1MB in size "
 			"(some dumps are 2MB, those can be used as well).");
@@ -104,7 +105,7 @@ byte RomFSA1FM1::readMem(word address, EmuTime::param time)
 const byte* RomFSA1FM1::getReadCacheLine(word address) const
 {
 	if (address == (0x7FC0 & CacheLine::HIGH)) {
-		// dont't cache IO area
+		// don't cache IO area
 		return nullptr;
 	} else if ((0x4000 <= address) && (address < 0x6000)) {
 		// read rom
@@ -125,7 +126,7 @@ void RomFSA1FM1::writeMem(word address, byte value, EmuTime::param /*time*/)
 	if ((0x6000 <= address) && (address < 0x8000)) {
 		if (address == 0x7FC4) {
 			// switch rom bank
-			invalidateMemCache(0x4000, 0x2000);
+			invalidateDeviceRCache(0x4000, 0x2000);
 		}
 		fsSram->write(address & 0x1FFF, value);
 	}
@@ -167,29 +168,29 @@ RomFSA1FM2::RomFSA1FM2(const DeviceConfig& config, Rom&& rom_)
 void RomFSA1FM2::reset(EmuTime::param /*time*/)
 {
 	control = 0;
-	for (int region = 0; region < 6; ++region) {
+	for (auto region : xrange(6)) {
 		changeBank(region, 0xA8);
 	}
-	changeBank(6, 0);
+	changeBank(6, 0); // for mapper-state read-back
 	changeBank(7, 0);
+	setUnmapped(6);
+	setUnmapped(7);
 }
 
 byte RomFSA1FM2::peekMem(word address, EmuTime::param time) const
 {
-	byte result;
 	if (0xC000 <= address) {
-		result = 0xFF;
+		return 0xFF;
 	} else if ((control & 0x04) && (0x7FF0 <= address) && (address < 0x7FF8)) {
 		// read mapper state
-		result = bankSelect[address & 7];
+		return bankSelect[address & 7];
 	} else if (isRam[address >> 13]) {
-		result = (*fsSram)[address & 0x1FFF];
+		return (*fsSram)[address & 0x1FFF];
 	} else if (isEmpty[address >> 13]) {
-		result = 0xFF;
+		return 0xFF;
 	} else {
-		result = Rom8kBBlocks::peekMem(address, time);
+		return Rom8kBBlocks::peekMem(address, time);
 	}
-	return result;
 }
 
 byte RomFSA1FM2::readMem(word address, EmuTime::param time)
@@ -273,11 +274,14 @@ void RomFSA1FM2::changeBank(byte region, byte bank)
 			isRam[region]   = false;
 			isEmpty[region] = true;
 		}
-		invalidateMemCache(0x2000 * region, 0x2000);
+		invalidateDeviceRWCache(0x2000 * region, 0x2000);
 	} else {
 		isRam[region]   = false;
 		isEmpty[region] = false;
 		setRom(region, bank & 0x7F);
+		if (region == 3) {
+			invalidateDeviceRCache(0x7FF0 & CacheLine::HIGH, CacheLine::SIZE);
+		}
 	}
 }
 
@@ -292,7 +296,7 @@ void RomFSA1FM2::serialize(Archive& ar, unsigned /*version*/)
 	             "control",    control);
 	if (ar.isLoader()) {
 		// recalculate 'isRam' and 'isEmpty' from bankSelect
-		for (int region = 0; region < 8; ++region) {
+		for (auto region : xrange(8)) {
 			changeBank(region, bankSelect[region]);
 		}
 	}

@@ -34,7 +34,7 @@
 #include "FileContext.hh"
 #include "FileException.hh"
 #include "FileOperations.hh"
-#include "ReadDir.hh"
+#include "foreach_file.hh"
 #include "Thread.hh"
 #include "Timer.hh"
 #include "serialize.hh"
@@ -42,6 +42,7 @@
 #include "ranges.hh"
 #include "statp.hh"
 #include "stl.hh"
+#include "StringOp.hh"
 #include "unreachable.hh"
 #include "view.hh"
 #include "build-info.hh"
@@ -51,6 +52,7 @@
 using std::make_shared;
 using std::make_unique;
 using std::string;
+using std::string_view;
 using std::vector;
 
 namespace openmsx {
@@ -63,7 +65,7 @@ class ExitCommand final : public Command
 public:
 	ExitCommand(CommandController& commandController, EventDistributor& distributor);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 private:
 	EventDistributor& distributor;
 };
@@ -73,7 +75,7 @@ class MachineCommand final : public Command
 public:
 	MachineCommand(CommandController& commandController, Reactor& reactor);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
 private:
 	Reactor& reactor;
@@ -84,7 +86,7 @@ class TestMachineCommand final : public Command
 public:
 	TestMachineCommand(CommandController& commandController, Reactor& reactor);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
 private:
 	Reactor& reactor;
@@ -95,7 +97,7 @@ class CreateMachineCommand final : public Command
 public:
 	CreateMachineCommand(CommandController& commandController, Reactor& reactor);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 private:
 	Reactor& reactor;
 };
@@ -105,7 +107,7 @@ class DeleteMachineCommand final : public Command
 public:
 	DeleteMachineCommand(CommandController& commandController, Reactor& reactor);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
 private:
 	Reactor& reactor;
@@ -116,7 +118,7 @@ class ListMachinesCommand final : public Command
 public:
 	ListMachinesCommand(CommandController& commandController, Reactor& reactor);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 private:
 	Reactor& reactor;
 };
@@ -126,7 +128,7 @@ class ActivateMachineCommand final : public Command
 public:
 	ActivateMachineCommand(CommandController& commandController, Reactor& reactor);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
 private:
 	Reactor& reactor;
@@ -137,7 +139,7 @@ class StoreMachineCommand final : public Command
 public:
 	StoreMachineCommand(CommandController& commandController, Reactor& reactor);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
 private:
 	Reactor& reactor;
@@ -148,7 +150,7 @@ class RestoreMachineCommand final : public Command
 public:
 	RestoreMachineCommand(CommandController& commandController, Reactor& reactor);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
 private:
 	Reactor& reactor;
@@ -159,7 +161,7 @@ class GetClipboardCommand final : public Command
 public:
 	GetClipboardCommand(CommandController& commandController);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 };
 
 class SetClipboardCommand final : public Command
@@ -167,7 +169,7 @@ class SetClipboardCommand final : public Command
 public:
 	SetClipboardCommand(CommandController& commandController);
 	void execute(span<const TclObject> tokens, TclObject& result) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 };
 
 class ConfigInfo final : public InfoTopic
@@ -176,7 +178,7 @@ public:
 	ConfigInfo(InfoCommand& openMSXInfoCommand, const string& configName);
 	void execute(span<const TclObject> tokens,
 	             TclObject& result) const override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
 private:
 	const string configName;
@@ -188,7 +190,7 @@ public:
 	explicit RealTimeInfo(InfoCommand& openMSXInfoCommand);
 	void execute(span<const TclObject> tokens,
 	             TclObject& result) const override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 private:
 	const uint64_t reference;
 };
@@ -199,7 +201,7 @@ public:
 	SoftwareInfoTopic(InfoCommand& openMSXInfoCommand, Reactor& reactor);
 	void execute(span<const TclObject> tokens,
 	             TclObject& result) const override;
-	std::string help(const std::vector<std::string>& tokens) const override;
+	[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 private:
 	Reactor& reactor;
 };
@@ -218,8 +220,6 @@ void Reactor::init()
 		*globalCommandController);
 	inputEventGenerator = make_unique<InputEventGenerator>(
 		*globalCommandController, *eventDistributor, *globalSettings);
-	mixer = make_unique<Mixer>(
-		*this, *globalCommandController);
 	diskFactory = make_unique<DiskFactory>(
 		*this);
 	diskManipulator = make_unique<DiskManipulator>(
@@ -275,7 +275,6 @@ void Reactor::init()
 #if PLATFORM_ANDROID
 	eventDistributor->registerEventListener(OPENMSX_FOCUS_EVENT, *this);
 #endif
-	eventDistributor->registerEventListener(OPENMSX_DELETE_BOARDS, *this);
 	isInit = true;
 }
 
@@ -288,9 +287,16 @@ Reactor::~Reactor()
 #if PLATFORM_ANDROID
 	eventDistributor->unregisterEventListener(OPENMSX_FOCUS_EVENT, *this);
 #endif
-	eventDistributor->unregisterEventListener(OPENMSX_DELETE_BOARDS, *this);
 
 	getGlobalSettings().getPauseSetting().detach(*this);
+}
+
+Mixer& Reactor::getMixer()
+{
+	if (!mixer) {
+		mixer = make_unique<Mixer>(*this, *globalCommandController);
+	}
+	return *mixer;
 }
 
 RomDatabase& Reactor::getSoftwareDatabase()
@@ -324,24 +330,22 @@ InfoCommand& Reactor::getOpenMSXInfoCommand()
 vector<string> Reactor::getHwConfigs(string_view type)
 {
 	vector<string> result;
-	for (auto& p : systemFileContext().getPaths()) {
-		const auto& path = FileOperations::join(p, type);
-		ReadDir configsDir(path);
-		while (auto* entry = configsDir.getEntry()) {
-			string_view name = entry->d_name;
-			const auto& fullname = FileOperations::join(path, name);
-			if (name.ends_with(".xml") &&
-			    FileOperations::isRegularFile(fullname)) {
+	for (const auto& p : systemFileContext().getPaths()) {
+		auto fileAction = [&](const std::string& /*path*/, std::string_view name) {
+			if (StringOp::endsWith(name, ".xml")) {
 				name.remove_suffix(4);
-				result.push_back(name.str());
-			} else if (FileOperations::isDirectory(fullname)) {
-				const auto& config = FileOperations::join(
-					fullname, "hardwareconfig.xml");
-				if (FileOperations::isRegularFile(config)) {
-					result.push_back(name.str());
-				}
+				result.emplace_back(name);
 			}
-		}
+		};
+		auto dirAction = [&](std::string& path, std::string_view name) {
+			auto size = path.size();
+			path += "/hardwareconfig.xml";
+			if (FileOperations::isRegularFile(path)) {
+				result.emplace_back(name);
+			}
+			path.resize(size);
+		};
+		foreach_file_and_directory(FileOperations::join(p, type), fileAction, dirAction);
 	}
 	// remove duplicates
 	ranges::sort(result);
@@ -351,10 +355,12 @@ vector<string> Reactor::getHwConfigs(string_view type)
 
 void Reactor::createMachineSetting()
 {
+	auto names = getHwConfigs("machines");
 	EnumSetting<int>::Map machines; // int's are unique dummy values
+	machines.reserve(names.size() + 1);
 	int count = 1;
-	append(machines, view::transform(getHwConfigs("machines"),
-		[&](auto& name) { return std::make_pair(name, count++); }));
+	append(machines, view::transform(names,
+		[&](auto& name) { return std::pair(std::move(name), count++); }));
 	machines.emplace_back("C-BIOS_MSX2+", 0); // default machine
 
 	machineSetting = make_unique<EnumSetting<int>>(
@@ -366,7 +372,7 @@ void Reactor::createMachineSetting()
 MSXMotherBoard* Reactor::getMotherBoard() const
 {
 	assert(Thread::isMainThread());
-	return activeBoard;
+	return activeBoard.get();
 }
 
 string_view Reactor::getMachineID() const
@@ -380,11 +386,11 @@ vector<string_view> Reactor::getMachineIDs() const
 		boards, [](auto& b) { return b->getMachineID(); }));
 }
 
-MSXMotherBoard& Reactor::getMachine(string_view machineID) const
+Reactor::Board Reactor::getMachine(string_view machineID) const
 {
 	for (auto& b : boards) {
 		if (b->getMachineID() == machineID) {
-			return *b;
+			return b;
 		}
 	}
 	throw CommandException("No machine with ID: ", machineID);
@@ -392,30 +398,26 @@ MSXMotherBoard& Reactor::getMachine(string_view machineID) const
 
 Reactor::Board Reactor::createEmptyMotherBoard()
 {
-	return make_unique<MSXMotherBoard>(*this);
+	return make_shared<MSXMotherBoard>(*this);
 }
 
-void Reactor::replaceBoard(MSXMotherBoard& oldBoard_, Board newBoard_)
+void Reactor::replaceBoard(MSXMotherBoard& oldBoard_, Board newBoard)
 {
 	assert(Thread::isMainThread());
 
 	// Add new board.
-	auto* newBoard = newBoard_.get();
-	boards.push_back(move(newBoard_));
+	boards.push_back(newBoard);
 
 	// Lookup old board (it must be present).
 	auto it = find_if_unguarded(boards,
-		[&](Boards::value_type& b) { return b.get() == &oldBoard_; });
+		[&](auto& b) { return b.get() == &oldBoard_; });
 
 	// If the old board was the active board, then activate the new board
-	if (it->get() == activeBoard) {
+	if (*it == activeBoard) {
 		switchBoard(newBoard);
 	}
 
-	// Remove (=delete) the old board.
-	// Note that we don't use the 'garbageBoards' mechanism as used in
-	// deleteBoard(). This means oldBoard cannot be used  anymore right
-	// after this method returns.
+	// Remove the old board.
 	move_pop_back(boards, it);
 }
 
@@ -436,23 +438,20 @@ void Reactor::switchMachine(const string& machine)
 	assert(Thread::isMainThread());
 	// Note: loadMachine can throw an exception and in that case the
 	//       motherboard must be considered as not created at all.
-	auto newBoard_ = createEmptyMotherBoard();
-	auto* newBoard = newBoard_.get();
+	auto newBoard = createEmptyMotherBoard();
 	newBoard->loadMachine(machine);
-	boards.push_back(move(newBoard_));
+	boards.push_back(newBoard);
 
-	auto* oldBoard = activeBoard;
+	auto oldBoard = activeBoard;
 	switchBoard(newBoard);
 	deleteBoard(oldBoard);
 }
 
-void Reactor::switchBoard(MSXMotherBoard* newBoard)
+void Reactor::switchBoard(Board newBoard)
 {
 	assert(Thread::isMainThread());
-	assert(!newBoard ||
-	       (ranges::any_of(boards, [&](auto& b) { return b.get() == newBoard; })));
-	assert(!activeBoard ||
-	       (ranges::any_of(boards, [&](auto& b) { return b.get() == activeBoard; })));
+	assert(!newBoard || contains(boards, newBoard));
+	assert(!activeBoard || contains(boards, activeBoard));
 	if (activeBoard) {
 		activeBoard->activate(false);
 	}
@@ -471,7 +470,7 @@ void Reactor::switchBoard(MSXMotherBoard* newBoard)
 	}
 }
 
-void Reactor::deleteBoard(MSXMotherBoard* board)
+void Reactor::deleteBoard(Board board)
 {
 	// Note: pass 'board' by-value to keep the parameter from changing
 	// after the call to switchBoard(). switchBoard() changes the
@@ -485,17 +484,8 @@ void Reactor::deleteBoard(MSXMotherBoard* board)
 		// delete active board -> there is no active board anymore
 		switchBoard(nullptr);
 	}
-	auto it = rfind_if_unguarded(boards,
-		[&](Boards::value_type& b) { return b.get() == board; });
-	auto board_ = move(*it);
+	auto it = rfind_unguarded(boards, board);
 	move_pop_back(boards, it);
-	// Don't immediately delete old boards because it's possible this
-	// routine is called via a code path that goes through the old
-	// board. Instead remember this board and delete it at a safe moment
-	// in time.
-	garbageBoards.push_back(move(board_));
-	eventDistributor->distributeEvent(
-		make_shared<SimpleEvent>(OPENMSX_DELETE_BOARDS));
 }
 
 void Reactor::enterMainLoop()
@@ -527,12 +517,20 @@ void Reactor::run(CommandLineParser& parser)
 	}
 
 	// execute startup scripts
-	for (auto& s : parser.getStartupScripts()) {
+	for (const auto& s : parser.getStartupScripts()) {
 		try {
 			commandController.source(userFileContext().resolve(s));
 		} catch (FileException& e) {
 			throw FatalError("Couldn't execute script: ",
 			                 e.getMessage());
+		}
+	}
+	for (const auto& cmd : parser.getStartupCommands()) {
+		try {
+			commandController.executeCommand(cmd);
+		} catch (CommandException& e) {
+			throw FatalError("Couldn't execute command: ", cmd,
+			                 '\n', e.getMessage());
 		}
 	}
 
@@ -553,21 +551,31 @@ void Reactor::run(CommandLineParser& parser)
 		}
 	}
 
-	while (running) {
-		eventDistributor->deliverEvents();
-		assert(garbageBoards.empty());
-		bool blocked = (blockedCounter > 0) || !activeBoard;
-		if (!blocked) blocked = !activeBoard->execute();
-		if (blocked) {
-			// At first sight a better alternative is to use the
-			// SDL_WaitEvent() function. Though when inspecting
-			// the implementation of that function, it turns out
-			// to also use a sleep/poll loop, with even shorter
-			// sleep periods as we use here. Maybe in future
-			// SDL implementations this will be improved.
-			eventDistributor->sleep(20 * 1000);
-		}
+	while (doOneIteration()) {
+		// nothing
 	}
+}
+
+bool Reactor::doOneIteration()
+{
+	eventDistributor->deliverEvents();
+	bool blocked = (blockedCounter > 0) || !activeBoard;
+	if (!blocked) {
+		// copy shared_ptr to keep Board alive (e.g. in case of Tcl
+		// callbacks)
+		auto copy = activeBoard;
+		blocked = !copy->execute();
+	}
+	if (blocked) {
+		// At first sight a better alternative is to use the
+		// SDL_WaitEvent() function. Though when inspecting
+		// the implementation of that function, it turns out
+		// to also use a sleep/poll loop, with even shorter
+		// sleep periods as we use here. Maybe in future
+		// SDL implementations this will be improved.
+		eventDistributor->sleep(20 * 1000);
+	}
+	return running;
 }
 
 void Reactor::unpause()
@@ -592,14 +600,14 @@ void Reactor::block()
 {
 	++blockedCounter;
 	enterMainLoop();
-	mixer->mute();
+	getMixer().mute();
 }
 
 void Reactor::unblock()
 {
 	--blockedCounter;
 	assert(blockedCounter >= 0);
-	mixer->unmute();
+	getMixer().unmute();
 }
 
 
@@ -629,7 +637,7 @@ int Reactor::signalEvent(const std::shared_ptr<const Event>& event)
 		// by the OS for whatever reason (like an incoming phone call) and all screen
 		// resources are taken away from the app.
 		// In such case the app is supposed to behave as a good citizen
-		// and minize its resource usage and related battery drain.
+		// and minimize its resource usage and related battery drain.
 		// The SDL Android port already takes care of halting the Java
 		// part of the sound processing. The Display class makes sure that it wont try
 		// to render anything to the (temporary missing) graphics resources but the
@@ -641,11 +649,6 @@ int Reactor::signalEvent(const std::shared_ptr<const Event>& event)
 			block();
 		}
 #endif
-	} else if (type == OPENMSX_DELETE_BOARDS) {
-		// Doesn't really matter which one we delete, just that we do
-		// one per event.
-		assert(!garbageBoards.empty());
-		garbageBoards.pop_back();
 	} else {
 		UNREACHABLE; // we didn't subscribe to this event...
 	}
@@ -701,7 +704,7 @@ void MachineCommand::execute(span<const TclObject> tokens, TclObject& result)
 		break;
 	case 2:
 		try {
-			reactor.switchMachine(tokens[1].getString().str());
+			reactor.switchMachine(string(tokens[1].getString()));
 		} catch (MSXException& e) {
 			throw CommandException("Machine switching failed: ",
 			                       e.getMessage());
@@ -738,7 +741,7 @@ void TestMachineCommand::execute(span<const TclObject> tokens,
 	checkNumArgs(tokens, 2, "machinetype");
 	try {
 		MSXMotherBoard mb(reactor);
-		mb.loadMachine(tokens[1].getString().str());
+		mb.loadMachine(string(tokens[1].getString()));
 	} catch (MSXException& e) {
 		result = e.getMessage(); // error
 	}
@@ -800,7 +803,7 @@ void DeleteMachineCommand::execute(span<const TclObject> tokens,
                                    TclObject& /*result*/)
 {
 	checkNumArgs(tokens, 2, "id");
-	reactor.deleteBoard(&reactor.getMachine(tokens[1].getString()));
+	reactor.deleteBoard(reactor.getMachine(tokens[1].getString()));
 }
 
 string DeleteMachineCommand::help(const vector<string>& /*tokens*/) const
@@ -852,7 +855,7 @@ void ActivateMachineCommand::execute(span<const TclObject> tokens,
 	case 1:
 		break;
 	case 2:
-		reactor.switchBoard(&reactor.getMachine(tokens[1].getString()));
+		reactor.switchBoard(reactor.getMachine(tokens[1].getString()));
 		break;
 	}
 	result = reactor.getMachineID();
@@ -896,11 +899,11 @@ void StoreMachineCommand::execute(span<const TclObject> tokens, TclObject& resul
 		break;
 	case 3:
 		machineID = tokens[1].getString();
-		filename = tokens[2].getString().str();
+		filename = tokens[2].getString();
 		break;
 	}
 
-	auto& board = reactor.getMachine(machineID);
+	auto& board = *reactor.getMachine(machineID);
 
 	XmlOutputArchive out(filename);
 	out.serialize("machine", board);
@@ -913,7 +916,7 @@ string StoreMachineCommand::help(const vector<string>& /*tokens*/) const
 	return
 		"store_machine                       Save state of current machine to file \"openmsxNNNN.xml.gz\"\n"
 		"store_machine machineID             Save state of machine \"machineID\" to file \"openmsxNNNN.xml.gz\"\n"
-                "store_machine machineID <filename>  Save state of machine \"machineID\" to indicated file\n"
+		"store_machine machineID <filename>  Save state of machine \"machineID\" to indicated file\n"
 		"\n"
 		"This is a low-level command, the 'savestate' script is easier to use.";
 }
@@ -943,29 +946,24 @@ void RestoreMachineCommand::execute(span<const TclObject> tokens,
 	switch (tokens.size()) {
 	case 1: {
 		// load last saved entry
-		struct stat st;
-		string dirName = FileOperations::getUserOpenMSXDir() + "/savestates/";
 		string lastEntry;
 		time_t lastTime = 0;
-		ReadDir dir(dirName);
-		while (dirent* d = dir.getEntry()) {
-			int res = stat(strCat(dirName, d->d_name).c_str(), &st);
-			if ((res == 0) && S_ISREG(st.st_mode)) {
+		foreach_file(
+			FileOperations::getUserOpenMSXDir() + "/savestates",
+			[&](const string& path, const FileOperations::Stat& st) {
 				time_t modTime = st.st_mtime;
 				if (modTime > lastTime) {
-					lastEntry = string(d->d_name);
+					filename = path;
 					lastTime = modTime;
 				}
-			}
-		}
-		if (lastEntry.empty()) {
+			});
+		if (filename.empty()) {
 			throw CommandException("Can't find last saved state.");
 		}
-		filename = dirName + lastEntry;
 		break;
 	}
 	case 2:
-		filename = tokens[1].getString().str();
+		filename = FileOperations::expandTilde(string(tokens[1].getString()));
 		break;
 	}
 
@@ -1036,7 +1034,7 @@ SetClipboardCommand::SetClipboardCommand(CommandController& commandController_)
 void SetClipboardCommand::execute(span<const TclObject> tokens, TclObject& /*result*/)
 {
 	checkNumArgs(tokens, 2, "text");
-	string text = tokens[1].getString().str();
+	auto text = tokens[1].getString();
 	if (SDL_SetClipboardText(text.c_str()) != 0) {
 		const char* err = SDL_GetError();
 		SDL_ClearError();
@@ -1072,7 +1070,7 @@ void ConfigInfo::execute(span<const TclObject> tokens, TclObject& result) const
 			auto config = HardwareConfig::loadConfig(
 				configName, tokens[2].getString());
 			if (auto* info = config.findChild("info")) {
-				for (auto& i : info->getChildren()) {
+				for (const auto& i : info->getChildren()) {
 					result.addDictKeyValue(i.getName(), i.getData());
 				}
 			}
@@ -1135,7 +1133,7 @@ void SoftwareInfoTopic::execute(
 		throw CommandException("Wrong number of parameters");
 	}
 
-	Sha1Sum sha1sum = Sha1Sum(tokens[2].getString());
+	Sha1Sum sha1sum(tokens[2].getString());
 	auto& romDatabase = reactor.getSoftwareDatabase();
 	const RomInfo* romInfo = romDatabase.fetchRomInfo(sha1sum);
 	if (!romInfo) {

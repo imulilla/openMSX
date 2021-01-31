@@ -20,9 +20,9 @@ public:
 	            byte press_, byte release_)
 		: StateChange(time_)
 		, name(std::move(name_)), press(press_), release(release_) {}
-	const string& getName() const { return name; }
-	byte getPress()   const { return press; }
-	byte getRelease() const { return release; }
+	[[nodiscard]] const string& getName() const { return name; }
+	[[nodiscard]] byte getPress()   const { return press; }
+	[[nodiscard]] byte getRelease() const { return release; }
 	template<typename Archive> void serialize(Archive& ar, unsigned /*version*/)
 	{
 		ar.template serializeBase<StateChange>(*this);
@@ -44,17 +44,17 @@ KeyJoystick::KeyJoystick(CommandController& commandController,
 	: eventDistributor(eventDistributor_)
 	, stateChangeDistributor(stateChangeDistributor_)
 	, name(std::move(name_))
-	, up   (commandController, name + ".up",
+	, up   (commandController, tmpStrCat(name, ".up"),
 		"key for direction up",    Keys::K_UP)
-	, down (commandController, name + ".down",
+	, down (commandController, tmpStrCat(name, ".down"),
 		"key for direction down",  Keys::K_DOWN)
-	, left (commandController, name + ".left",
+	, left (commandController, tmpStrCat(name, ".left"),
 		"key for direction left",  Keys::K_LEFT)
-	, right(commandController, name + ".right",
+	, right(commandController, tmpStrCat(name, ".right"),
 		"key for direction right", Keys::K_RIGHT)
-	, trigA(commandController, name + ".triga",
+	, trigA(commandController, tmpStrCat(name, ".triga"),
 		"key for trigger A",       Keys::K_SPACE)
-	, trigB(commandController, name + ".trigb",
+	, trigB(commandController, tmpStrCat(name, ".trigb"),
 		"key for trigger B",       Keys::K_M)
 {
 	status = JOY_UP | JOY_DOWN | JOY_LEFT | JOY_RIGHT |
@@ -75,7 +75,7 @@ const string& KeyJoystick::getName() const
 	return name;
 }
 
-string_view KeyJoystick::getDescription() const
+std::string_view KeyJoystick::getDescription() const
 {
 	return "Key-Joystick, use your keyboard to emulate an MSX joystick. "
 		"See manual for information on how to configure this.";
@@ -115,7 +115,7 @@ void KeyJoystick::signalMSXEvent(const shared_ptr<const Event>& event,
 	switch (event->getType()) {
 	case OPENMSX_KEY_DOWN_EVENT:
 	case OPENMSX_KEY_UP_EVENT: {
-		auto& keyEvent = checked_cast<const KeyEvent&>(*event);
+		const auto& keyEvent = checked_cast<const KeyEvent&>(*event);
 		auto key = static_cast<Keys::KeyCode>(
 			int(keyEvent.getKeyCode()) & int(Keys::K_MASK));
 		if (event->getType() == OPENMSX_KEY_DOWN_EVENT) {
@@ -149,7 +149,7 @@ void KeyJoystick::signalMSXEvent(const shared_ptr<const Event>& event,
 // StateChangeListener
 void KeyJoystick::signalStateChange(const shared_ptr<StateChange>& event)
 {
-	auto kjs = dynamic_cast<const KeyJoyState*>(event.get());
+	const auto* kjs = dynamic_cast<const KeyJoyState*>(event.get());
 	if (!kjs) return;
 	if (kjs->getName() != name) return;
 

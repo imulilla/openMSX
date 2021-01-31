@@ -28,10 +28,10 @@ public:
 
 protected:
 	// AbstractIDEDevice:
-	bool isPacketDevice() override;
-	const std::string& getDeviceName() override;
+	[[nodiscard]] bool isPacketDevice() override;
+	[[nodiscard]] const std::string& getDeviceName() override;
 	void fillIdentifyBlock (AlignedBuffer& buffer) override;
-	unsigned readBlockStart(AlignedBuffer& buffer, unsigned count) override;
+	[[nodiscard]] unsigned readBlockStart(AlignedBuffer& buffer, unsigned count) override;
 	void readEnd() override;
 	void writeBlockComplete(AlignedBuffer& buffer, unsigned count) override;
 	void executeCommand(byte cmd) override;
@@ -39,11 +39,11 @@ protected:
 private:
 	// Flags for the interrupt reason register:
 	/** Bus release: 0 = normal, 1 = bus release */
-	static const byte REL = 0x04;
+	static constexpr byte REL = 0x04;
 	/** I/O direction: 0 = host->device, 1 = device->host */
-	static const byte I_O = 0x02;
+	static constexpr byte I_O = 0x02;
 	/** Command/data: 0 = data, 1 = command */
-	static const byte C_D = 0x01;
+	static constexpr byte C_D = 0x01;
 
 	/** Indicates the start of a read data transfer performed in packets.
 	  * @param count Total number of bytes to transfer.
@@ -66,7 +66,7 @@ private:
 	bool remMedStatNotifEnabled;
 	bool mediaChanged;
 
-	static const unsigned MAX_CD = 26;
+	static constexpr unsigned MAX_CD = 26;
 	using CDInUse = std::bitset<MAX_CD>;
 	std::shared_ptr<CDInUse> cdInUse;
 

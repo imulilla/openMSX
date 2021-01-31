@@ -5,9 +5,9 @@
 #include "RenderSettings.hh"
 #include "Scaler.hh"
 #include "ScalerFactory.hh"
-#include "OutputSurface.hh"
-#include "Math.hh"
+#include "SDLOutputSurface.hh"
 #include "aligned.hh"
+#include "checked_cast.hh"
 #include "random.hh"
 #include "xrange.hh"
 #include <algorithm>
@@ -15,17 +15,18 @@
 #include <cmath>
 #include <cstdint>
 #include <cstddef>
+#include <numeric>
 #ifdef __SSE2__
 #include <emmintrin.h>
 #endif
 
 namespace openmsx {
 
-static const unsigned NOISE_SHIFT = 8192;
-static const unsigned NOISE_BUF_SIZE = 2 * NOISE_SHIFT;
-SSE_ALIGNED(static signed char noiseBuf[NOISE_BUF_SIZE]);
+constexpr unsigned NOISE_SHIFT = 8192;
+constexpr unsigned NOISE_BUF_SIZE = 2 * NOISE_SHIFT;
+ALIGNAS_SSE static signed char noiseBuf[NOISE_BUF_SIZE];
 
-template <class Pixel>
+template<typename Pixel>
 void FBPostProcessor<Pixel>::preCalcNoise(float factor)
 {
 	// We skip noise drawing if the factor is 0, so there is no point in
@@ -64,10 +65,10 @@ void FBPostProcessor<Pixel>::preCalcNoise(float factor)
 	std::normal_distribution<float> distribution(0.0f, 1.0f);
 	for (unsigned i = 0; i < NOISE_BUF_SIZE; i += 4) {
 		float r = distribution(generator);
-		noiseBuf[i + 0] = Math::clip<-128, 127>(roundf(r * scale[0]));
-		noiseBuf[i + 1] = Math::clip<-128, 127>(roundf(r * scale[1]));
-		noiseBuf[i + 2] = Math::clip<-128, 127>(roundf(r * scale[2]));
-		noiseBuf[i + 3] = Math::clip<-128, 127>(roundf(r * scale[3]));
+		noiseBuf[i + 0] = std::clamp(int(roundf(r * scale[0])), -128, 127);
+		noiseBuf[i + 1] = std::clamp(int(roundf(r * scale[1])), -128, 127);
+		noiseBuf[i + 2] = std::clamp(int(roundf(r * scale[2])), -128, 127);
+		noiseBuf[i + 3] = std::clamp(int(roundf(r * scale[3])), -128, 127);
 	}
 }
 
@@ -85,7 +86,7 @@ static inline void drawNoiseLineSse2(uint32_t* buf_, signed char* noise, size_t 
 	//   x + 128 == x - 128 == x ^ 128
 	// So the expression becomes:
 	//   signed_add_sat(value ^ 128, noise) ^ 128
-	// The follwoing loop does just that, though it processes 64 bytes per
+	// The following loop does just that, though it processes 64 bytes per
 	// iteration.
 	ptrdiff_t x = width * sizeof(uint32_t);
 	assert((x & 63) == 0);
@@ -123,7 +124,7 @@ static inline void drawNoiseLineSse2(uint32_t* buf_, signed char* noise, size_t 
  * @param n contains 4 8-bit   signed components, so components have range [-128, 127]
  * @result per component result of clip<0, 255>(p + n)
  */
-static inline uint32_t addNoise4(uint32_t p, uint32_t n)
+static constexpr uint32_t addNoise4(uint32_t p, uint32_t n)
 {
 	// unclipped result (lower 8 bits of each component)
 	// alternative:
@@ -160,7 +161,7 @@ static inline uint32_t addNoise4(uint32_t p, uint32_t n)
 	return (s & (~u8)) | o8;
 }
 
-template <class Pixel>
+template<typename Pixel>
 void FBPostProcessor<Pixel>::drawNoiseLine(
 		Pixel* buf, signed char* noise, size_t width)
 {
@@ -176,15 +177,15 @@ void FBPostProcessor<Pixel>::drawNoiseLine(
 	// c++ version
 	if (sizeof(Pixel) == 4) {
 		// optimized version for 32bpp
-		auto noise4 = reinterpret_cast<uint32_t*>(noise);
-		for (size_t i = 0; i < width; ++i) {
+		auto* noise4 = reinterpret_cast<uint32_t*>(noise);
+		for (auto i : xrange(width)) {
 			buf[i] = addNoise4(buf[i], noise4[i]);
 		}
 	} else {
 		int mr = pixelOps.getMaxRed();
 		int mg = pixelOps.getMaxGreen();
 		int mb = pixelOps.getMaxBlue();
-		for (size_t i = 0; i < width; ++i) {
+		for (auto i : xrange(width)) {
 			Pixel p = buf[i];
 			int r = pixelOps.red(p);
 			int g = pixelOps.green(p);
@@ -203,21 +204,21 @@ void FBPostProcessor<Pixel>::drawNoiseLine(
 	}
 }
 
-template <class Pixel>
-void FBPostProcessor<Pixel>::drawNoise(OutputSurface& output)
+template<typename Pixel>
+void FBPostProcessor<Pixel>::drawNoise(OutputSurface& output_)
 {
 	if (renderSettings.getNoise() == 0.0f) return;
 
-	unsigned h = output.getHeight();
-	unsigned w = output.getWidth();
-	output.lock();
-	for (unsigned y = 0; y < h; ++y) {
-		auto* buf = output.getLinePtrDirect<Pixel>(y);
+	auto& output = checked_cast<SDLOutputSurface&>(output_);
+	auto [w, h] = output.getLogicalSize();
+	auto pixelAccess = output.getDirectPixelAccess();
+	for (auto y : xrange(h)) {
+		auto* buf = pixelAccess.getLinePtr<Pixel>(y);
 		drawNoiseLine(buf, &noiseBuf[noiseShift[y]], w);
 	}
 }
 
-template <class Pixel>
+template<typename Pixel>
 void FBPostProcessor<Pixel>::update(const Setting& setting)
 {
 	VideoLayer::update(setting);
@@ -228,34 +229,36 @@ void FBPostProcessor<Pixel>::update(const Setting& setting)
 }
 
 
-template <class Pixel>
+template<typename Pixel>
 FBPostProcessor<Pixel>::FBPostProcessor(MSXMotherBoard& motherBoard_,
 	Display& display_, OutputSurface& screen_, const std::string& videoSource,
 	unsigned maxWidth_, unsigned height_, bool canDoInterlace_)
 	: PostProcessor(
 		motherBoard_, display_, screen_, videoSource, maxWidth_, height_,
 		canDoInterlace_)
-	, noiseShift(screen.getHeight())
-	, pixelOps(screen.getSDLFormat())
+	, noiseShift(screen.getLogicalHeight())
+	, pixelOps(screen.getPixelFormat())
 {
 	scaleAlgorithm = RenderSettings::NO_SCALER;
 	scaleFactor = unsigned(-1);
+	stretchWidth = unsigned(-1);
 
 	auto& noiseSetting = renderSettings.getNoiseSetting();
 	noiseSetting.attach(*this);
 	preCalcNoise(noiseSetting.getDouble());
-	assert((screen.getWidth() * sizeof(Pixel)) < NOISE_SHIFT);
+	assert((screen.getLogicalWidth() * sizeof(Pixel)) < NOISE_SHIFT);
 }
 
-template <class Pixel>
+template<typename Pixel>
 FBPostProcessor<Pixel>::~FBPostProcessor()
 {
 	renderSettings.getNoiseSetting().detach(*this);
 }
 
-template <class Pixel>
-void FBPostProcessor<Pixel>::paint(OutputSurface& output)
+template<typename Pixel>
+void FBPostProcessor<Pixel>::paint(OutputSurface& output_)
 {
+	auto& output = checked_cast<SDLOutputSurface&>(output_);
 	if (renderSettings.getInterleaveBlackFrame()) {
 		interleaveCount ^= 1;
 		if (interleaveCount) {
@@ -266,22 +269,28 @@ void FBPostProcessor<Pixel>::paint(OutputSurface& output)
 
 	if (!paintFrame) return;
 
-	// New scaler algorithm selected?
+	// New scaler algorithm selected? Or different horizontal stretch?
 	auto algo = renderSettings.getScaleAlgorithm();
 	unsigned factor = renderSettings.getScaleFactor();
-	if ((scaleAlgorithm != algo) || (scaleFactor != factor)) {
+	unsigned inWidth = lrintf(renderSettings.getHorizontalStretch());
+	if ((scaleAlgorithm != algo) || (scaleFactor != factor) ||
+	    (inWidth != stretchWidth) || (lastOutput != &output)) {
 		scaleAlgorithm = algo;
 		scaleFactor = factor;
+		stretchWidth = inWidth;
+		lastOutput = &output;
 		currScaler = ScalerFactory<Pixel>::createScaler(
-			PixelOperations<Pixel>(output.getSDLFormat()),
+			PixelOperations<Pixel>(output.getPixelFormat()),
 			renderSettings);
+		stretchScaler = StretchScalerOutputFactory<Pixel>::create(
+			output, pixelOps, inWidth);
 	}
 
 	// Scale image.
 	const unsigned srcHeight = paintFrame->getHeight();
-	const unsigned dstHeight = output.getHeight();
+	const unsigned dstHeight = output.getLogicalHeight();
 
-	unsigned g = Math::gcd(srcHeight, dstHeight);
+	unsigned g = std::gcd(srcHeight, dstHeight);
 	unsigned srcStep = srcHeight / g;
 	unsigned dstStep = dstHeight / g;
 
@@ -306,17 +315,11 @@ void FBPostProcessor<Pixel>::paint(OutputSurface& output)
 
 		// fill region
 		//fprintf(stderr, "post processing lines %d-%d: %d\n",
-		//	srcStartY, srcEndY, lineWidth );
-		output.lock();
-		float horStretch = renderSettings.getHorizontalStretch();
-		unsigned inWidth = lrintf(horStretch);
-		std::unique_ptr<ScalerOutput<Pixel>> dst(
-			StretchScalerOutputFactory<Pixel>::create(
-				output, pixelOps, inWidth));
+		//        srcStartY, srcEndY, lineWidth);
 		currScaler->scaleImage(
 			*paintFrame, superImposeVideoFrame,
 			srcStartY, srcEndY, lineWidth, // source
-			*dst, dstStartY, dstEndY); // dest
+			*stretchScaler, dstStartY, dstEndY); // dest
 
 		// next region
 		srcStartY = srcEndY;
@@ -328,13 +331,13 @@ void FBPostProcessor<Pixel>::paint(OutputSurface& output)
 	output.flushFrameBuffer();
 }
 
-template <class Pixel>
+template<typename Pixel>
 std::unique_ptr<RawFrame> FBPostProcessor<Pixel>::rotateFrames(
 	std::unique_ptr<RawFrame> finishedFrame, EmuTime::param time)
 {
 	auto& generator = global_urng(); // fast (non-cryptographic) random numbers
 	std::uniform_int_distribution<int> distribution(0, NOISE_SHIFT / 16 - 1);
-	for (auto y : xrange(screen.getHeight())) {
+	for (auto y : xrange(screen.getLogicalHeight())) {
 		noiseShift[y] = distribution(generator) * 16;
 	}
 

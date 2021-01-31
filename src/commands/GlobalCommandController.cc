@@ -15,12 +15,15 @@
 #include "outer.hh"
 #include "ranges.hh"
 #include "stl.hh"
+#include "StringOp.hh"
 #include "view.hh"
 #include "xrange.hh"
+#include "build-info.hh"
 #include <cassert>
 #include <memory>
 
 using std::string;
+using std::string_view;
 using std::vector;
 
 namespace openmsx {
@@ -49,11 +52,13 @@ GlobalCommandControllerBase::~GlobalCommandControllerBase()
 {
 	// GlobalCommandController destructor must have run before
 	// we can check this.
+#ifdef DEBUG
 	assert(commands.empty());
+#endif
 	assert(commandCompleters.empty());
 }
 
-void GlobalCommandController::registerProxyCommand(const string& name)
+void GlobalCommandController::registerProxyCommand(std::string_view name)
 {
 	auto it = proxyCommandMap.find(name);
 	if (it == end(proxyCommandMap)) {
@@ -123,36 +128,41 @@ Interpreter& GlobalCommandController::getInterpreter()
 }
 
 void GlobalCommandController::registerCommand(
-	Command& command, const string& str)
+	Command& command, zstring_view str)
 {
+#ifdef DEBUG
 	assert(!commands.contains(str));
 	commands.emplace_noDuplicateCheck(str, &command);
+#endif
 	interpreter.registerCommand(str, command);
 }
 
 void GlobalCommandController::unregisterCommand(
 	Command& command, string_view str)
 {
+	(void)str;
+#ifdef DEBUG
 	assert(commands.contains(str));
-	assert(commands[str.str()] == &command);
+	assert(commands[str] == &command);
 	commands.erase(str);
+#endif
 	interpreter.unregisterCommand(command);
 }
 
 void GlobalCommandController::registerCompleter(
 	CommandCompleter& completer, string_view str)
 {
-	if (str.starts_with("::")) str.remove_prefix(2); // drop leading ::
+	if (StringOp::startsWith(str, "::")) str.remove_prefix(2); // drop leading ::
 	assert(!commandCompleters.contains(str));
-	commandCompleters.emplace_noDuplicateCheck(str.str(), &completer);
+	commandCompleters.emplace_noDuplicateCheck(str, &completer);
 }
 
 void GlobalCommandController::unregisterCompleter(
 	CommandCompleter& completer, string_view str)
 {
-	if (str.starts_with("::")) str.remove_prefix(2); // drop leading ::
+	if (StringOp::startsWith(str, "::")) str.remove_prefix(2); // drop leading ::
 	assert(commandCompleters.contains(str));
-	assert(commandCompleters[str.str()] == &completer); (void)completer;
+	assert(commandCompleters[str] == &completer); (void)completer;
 	commandCompleters.erase(str);
 }
 
@@ -168,14 +178,10 @@ void GlobalCommandController::unregisterSetting(Setting& setting)
 	getSettingsManager().unregisterSetting(setting);
 }
 
-bool GlobalCommandController::hasCommand(string_view command) const
+static vector<string> split(string_view str, const char delimiter)
 {
-	return commands.contains(command);
-}
+	vector<string> tokens;
 
-void GlobalCommandController::split(string_view str, vector<string>& tokens,
-                                    const char delimiter)
-{
 	enum ParseState {Alpha, BackSlash, Quote};
 	ParseState state = Alpha;
 
@@ -209,9 +215,10 @@ void GlobalCommandController::split(string_view str, vector<string>& tokens,
 				break;
 		}
 	}
+	return tokens;
 }
 
-string GlobalCommandController::removeEscaping(const string& str)
+static string removeEscaping(const string& str)
 {
 	enum ParseState {Alpha, BackSlash, Quote};
 	ParseState state = Alpha;
@@ -244,11 +251,10 @@ string GlobalCommandController::removeEscaping(const string& str)
 	return result;
 }
 
-vector<string> GlobalCommandController::removeEscaping(
-	const vector<string>& input, bool keepLastIfEmpty)
+static vector<string> removeEscaping(const vector<string>& input, bool keepLastIfEmpty)
 {
 	vector<string> result;
-	for (auto& s : input) {
+	for (const auto& s : input) {
 		if (!s.empty()) {
 			result.push_back(removeEscaping(s));
 		}
@@ -259,7 +265,7 @@ vector<string> GlobalCommandController::removeEscaping(
 	return result;
 }
 
-static string escapeChars(const string& str, const string& chars)
+static string escapeChars(const string& str, string_view chars)
 {
 	string result;
 	for (auto chr : str) {
@@ -272,15 +278,14 @@ static string escapeChars(const string& str, const string& chars)
 	return result;
 }
 
-string GlobalCommandController::addEscaping(const string& str, bool quote,
-                                            bool finished)
+static string addEscaping(const string& str, bool quote, bool finished)
 {
 	if (str.empty() && finished) {
 		quote = true;
 	}
 	string result = escapeChars(str, "$[]");
 	if (quote) {
-                result.insert(result.begin(), '"');
+		result.insert(result.begin(), '"');
 		if (finished) {
 			result += '"';
 		}
@@ -290,15 +295,15 @@ string GlobalCommandController::addEscaping(const string& str, bool quote,
 	return result;
 }
 
-bool GlobalCommandController::isComplete(const string& command)
+bool GlobalCommandController::isComplete(zstring_view command)
 {
 	return interpreter.isComplete(command);
 }
 
 TclObject GlobalCommandController::executeCommand(
-	const string& command, CliConnection* connection_)
+	zstring_view command, CliConnection* connection_)
 {
-	ScopedAssign<CliConnection*> sa(connection, connection_);
+	ScopedAssign sa(connection, connection_);
 	return interpreter.execute(command);
 }
 
@@ -326,8 +331,7 @@ string GlobalCommandController::tabCompletion(string_view command)
 	string_view post = command.substr(last);
 
 	// split command string in tokens
-	vector<string> originalTokens;
-	split(post, originalTokens, ' ');
+	vector<string> originalTokens = split(post, ' ');
 	if (originalTokens.empty()) {
 		originalTokens.emplace_back();
 	}
@@ -366,7 +370,7 @@ void GlobalCommandController::tabCompletion(vector<string>& tokens)
 		string_view cmd = tokens[0];
 		string_view leadingNs;
 		// remove leading ::
-		if (cmd.starts_with("::")) {
+		if (StringOp::startsWith(cmd, "::")) {
 			cmd.remove_prefix(2);
 			leadingNs = "::";
 		}
@@ -380,9 +384,9 @@ void GlobalCommandController::tabCompletion(vector<string>& tokens)
 		names2.reserve(names.size());
 		for (string_view n1 : names) {
 			// remove leading ::
-			if (n1.starts_with("::")) n1.remove_prefix(2);
+			if (StringOp::startsWith(n1, "::")) n1.remove_prefix(2);
 			// initial namespace part must match
-			if (!n1.starts_with(ns)) continue;
+			if (!StringOp::startsWith(n1, ns)) continue;
 			// the part following the initial namespace
 			string_view n2 = n1.substr(ns.size());
 			// only keep upto the next namespace portion,
@@ -394,9 +398,9 @@ void GlobalCommandController::tabCompletion(vector<string>& tokens)
 		Completer::completeString(tokens, names2);
 	} else {
 		string_view cmd = tokens.front();
-		if (cmd.starts_with("::")) cmd.remove_prefix(2); // drop leading ::
+		if (StringOp::startsWith(cmd, "::")) cmd.remove_prefix(2); // drop leading ::
 
-		if (auto v = lookup(commandCompleters, cmd)) {
+		if (auto* v = lookup(commandCompleters, cmd)) {
 			(*v)->tabCompletion(tokens);
 		} else {
 			TclObject command = makeTclList("openmsx::tabcompletion");
@@ -444,8 +448,12 @@ void GlobalCommandController::HelpCmd::execute(
 		string text =
 			"Use 'help [command]' to get help for a specific command\n"
 			"The following commands exist:\n";
-		auto cmds = to_vector<string_view>(
-			view::keys(controller.commandCompleters));
+		auto cmds = concat<string_view>(
+			view::keys(controller.commandCompleters),
+			getInterpreter().execute("openmsx::all_command_names_with_help"));
+		cmds.erase(ranges::remove_if(cmds, [](const auto& c) {
+		                   return c.find("::") != std::string_view::npos; }),
+		           cmds.end());
 		ranges::sort(cmds);
 		for (auto& line : formatListInColumns(cmds)) {
 			strAppend(text, line, '\n');
@@ -454,10 +462,10 @@ void GlobalCommandController::HelpCmd::execute(
 		break;
 	}
 	default: {
-		if (auto v = lookup(controller.commandCompleters, tokens[1].getString())) {
+		if (const auto* v = lookup(controller.commandCompleters, tokens[1].getString())) {
 			auto tokens2 = to_vector(view::transform(
 				view::drop(tokens, 1),
-				[](auto& t) { return t.getString().str(); }));
+				[](auto& t) { return string(t.getString()); }));
 			result = (*v)->help(tokens2);
 		} else {
 			TclObject command = makeTclList("openmsx::help");
@@ -541,7 +549,7 @@ CliConnection& GlobalCommandController::UpdateCmd::getConnection()
 void GlobalCommandController::UpdateCmd::execute(
 	span<const TclObject> tokens, TclObject& /*result*/)
 {
-	checkNumArgs(tokens, 3, "enable|disable type");
+	checkNumArgs(tokens, 3, Prefix{1}, "enable|disable type");
 	if (tokens[1] == "enable") {
 		getConnection().setUpdateEnable(getType(tokens[2]), true);
 	} else if (tokens[1] == "disable") {
@@ -561,7 +569,7 @@ void GlobalCommandController::UpdateCmd::tabCompletion(vector<string>& tokens) c
 {
 	switch (tokens.size()) {
 	case 2: {
-		static const char* const ops[] = { "enable", "disable" };
+		static constexpr const char* const ops[] = { "enable", "disable" };
 		completeString(tokens, ops);
 		break;
 	}

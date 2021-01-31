@@ -43,12 +43,12 @@ HD::HD(const DeviceConfig& config)
 	auto mode = File::NORMAL;
 	string cliImage = HDImageCLI::getImageForId(id);
 	if (cliImage.empty()) {
-		string original = config.getChildData("filename");
+		const string& original = config.getChildData("filename");
 		string resolved = config.getFileContext().resolveCreate(original);
-		filename = Filename(resolved);
+		filename = Filename(std::move(resolved));
 		mode = File::CREATE;
 	} else {
-		filename = Filename(cliImage, userFileContext());
+		filename = Filename(std::move(cliImage), userFileContext());
 	}
 
 	file = File(filename, mode);
@@ -98,10 +98,11 @@ size_t HD::getNbSectorsImpl() const
 	return filesize / sizeof(SectorBuffer);
 }
 
-void HD::readSectorImpl(size_t sector, SectorBuffer& buf)
+void HD::readSectorsImpl(
+	SectorBuffer* buffers, size_t startSector, size_t num)
 {
-	file.seek(sector * sizeof(buf));
-	file.read(&buf, sizeof(buf));
+	file.seek(startSector * sizeof(SectorBuffer));
+	file.read(buffers, num * sizeof(SectorBuffer));
 }
 
 void HD::writeSectorImpl(size_t sector, const SectorBuffer& buf)
@@ -154,22 +155,20 @@ std::string HD::getTigerTreeHash()
 
 uint8_t* HD::getData(size_t offset, size_t size)
 {
-	assert(size <= 1024);
+	assert(size <= TigerTree::BLOCK_SIZE);
 	assert((offset % sizeof(SectorBuffer)) == 0);
 	assert((size   % sizeof(SectorBuffer)) == 0);
 
 	struct Work {
 		char extra; // at least one byte before 'bufs'
-		// likely here are padding bytes inbetween
-		SectorBuffer bufs[1024 / sizeof(SectorBuffer)];
+		// likely here are padding bytes in between
+		SectorBuffer bufs[TigerTree::BLOCK_SIZE / sizeof(SectorBuffer)];
 	};
 	static Work work; // not reentrant
 
 	size_t sector = offset / sizeof(SectorBuffer);
-	for (auto i : xrange(size / sizeof(SectorBuffer))) {
-		// This possibly applies IPS patches.
-		readSector(sector++, work.bufs[i]);
-	}
+	size_t num    = size   / sizeof(SectorBuffer);
+	readSectors(work.bufs, sector, num); // This possibly applies IPS patches.
 	return work.bufs[0].raw;
 }
 
@@ -196,10 +195,10 @@ bool HD::diskChanged()
 	return false; // TODO not implemented
 }
 
-int HD::insertDisk(string_view newFilename)
+int HD::insertDisk(const std::string& newFilename)
 {
 	try {
-		switchImage(Filename(newFilename.str()));
+		switchImage(Filename(newFilename));
 		return 0;
 	} catch (MSXException&) {
 		return -1;

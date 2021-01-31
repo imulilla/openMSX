@@ -4,6 +4,7 @@
 #include "XMLElement.hh"
 #include "MSXException.hh"
 #include "StringOp.hh"
+#include "enumerate.hh"
 #include "outer.hh"
 #include "serialize.hh"
 #include "stl.hh"
@@ -11,22 +12,21 @@
 
 namespace openmsx {
 
-static byte calcReadBackMask(MSXMotherBoard& motherBoard)
+[[nodiscard]] static byte calcReadBackMask(MSXMotherBoard& motherBoard)
 {
-	string_view type = motherBoard.getMachineConfig()->getConfig().getChildData(
+	std::string_view type = motherBoard.getMachineConfig()->getConfig().getChildData(
 	                               "MapperReadBackBits", "largest");
 	if (type == "largest") {
 		return 0x00; // all bits can be read
 	}
-	std::string str = type.str();
-	int bits;
-	if (!StringOp::stringToInt(str, bits)) {
+	auto bits = StringOp::stringTo<int>(type);
+	if (!bits) {
 		throw FatalError("Unknown mapper type: \"", type, "\".");
 	}
-	if (bits < 0 || bits > 8) {
+	if (*bits < 0 || *bits > 8) {
 		throw FatalError("MapperReadBackBits out of range: \"", type, "\".");
 	}
-	return unsigned(-1) << bits;
+	return unsigned(-1) << *bits;
 }
 
 MSXMapperIO::MSXMapperIO(const DeviceConfig& config)
@@ -67,10 +67,11 @@ byte MSXMapperIO::peekIO(word port, EmuTime::param time) const
 
 void MSXMapperIO::writeIO(word port, byte value, EmuTime::param time)
 {
+	// Note: the mappers are responsible for invalidating/filling the CPU
+	// cache-lines.
 	for (auto* mapper : mappers) {
 		mapper->writeIO(port, value, time);
 	}
-	invalidateMemCache(0x4000 * (port & 0x03), 0x4000);
 }
 
 
@@ -111,8 +112,8 @@ void MSXMapperIO::serialize(Archive& ar, unsigned version)
 		assert(ar.isLoader());
 		byte registers[4];
 		ar.serialize("registers", registers);
-		for (int page = 0; page < 4; page++) {
-			writeIO(page, registers[page], EmuTime::dummy());
+		for (auto [page, reg] : enumerate(registers)) {
+			writeIO(word(page), reg, EmuTime::dummy());
 		}
 	}
 }

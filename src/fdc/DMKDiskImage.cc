@@ -4,7 +4,9 @@
 #include "File.hh"
 #include "FilePool.hh"
 #include "likely.hh"
+#include "one_of.hh"
 #include "ranges.hh"
+#include "xrange.hh"
 #include <cassert>
 
 namespace openmsx {
@@ -18,17 +20,16 @@ struct DmkHeader
 	byte reserved[7];
 	byte format[4];
 };
-static_assert(sizeof(DmkHeader) == 16, "must be size 16");
+static_assert(sizeof(DmkHeader) == 16);
 
-static const byte FLAG_SINGLE_SIDED = 0x10;
-static const unsigned IDAM_FLAGS_MASK = 0xC000;
-static const unsigned FLAG_MFM_SECTOR = 0x8000;
+constexpr byte FLAG_SINGLE_SIDED = 0x10;
+constexpr unsigned IDAM_FLAGS_MASK = 0xC000;
+constexpr unsigned FLAG_MFM_SECTOR = 0x8000;
 
 
-static bool isValidDmkHeader(const DmkHeader& header)
+[[nodiscard]] static constexpr bool isValidDmkHeader(const DmkHeader& header)
 {
-	if (!((header.writeProtected == 0x00) ||
-	      (header.writeProtected == 0xff))) {
+	if (header.writeProtected != one_of(0x00, 0xff)) {
 		return false;
 	}
 	unsigned trackLen = header.trackLen[0] + 256 * header.trackLen[1];
@@ -87,7 +88,7 @@ void DMKDiskImage::readTrack(byte track, byte side, RawTrack& output)
 
 	// Convert idam data into an easier to work with internal format.
 	int lastIdam = -1;
-	for (int i = 0; i < 64; ++i) {
+	for (auto i : xrange(64)) {
 		unsigned idx = idamBuf[2 * i + 0] + 256 * idamBuf[2 * i + 1];
 		if (idx == 0) break; // end of table reached
 
@@ -138,8 +139,8 @@ void DMKDiskImage::doWriteTrack(byte track, byte side, const RawTrack& input)
 
 	// Write idam table.
 	byte idamOut[2 * 64] = {}; // zero-initialize
-	auto& idamIn = input.getIdamBuffer();
-	for (int i = 0; i < std::min(64, int(idamIn.size())); ++i) {
+	const auto& idamIn = input.getIdamBuffer();
+	for (auto i : xrange(std::min(64, int(idamIn.size())))) {
 		int t = (idamIn[i] + 128) | FLAG_MFM_SECTOR;
 		idamOut[2 * i + 0] = t & 0xff;
 		idamOut[2 * i + 1] = t >> 8;
@@ -157,7 +158,7 @@ void DMKDiskImage::extendImageToTrack(byte track)
 	RawTrack emptyTrack(dmkTrackLen);
 	byte numSides = singleSided ? 1 : 2;
 	while (numTracks <= track) {
-		for (byte side = 0; side < numSides; ++side) {
+		for (auto side : xrange(numSides)) {
 			doWriteTrack(numTracks, side, emptyTrack);
 		}
 		++numTracks;
@@ -172,33 +173,31 @@ void DMKDiskImage::extendImageToTrack(byte track)
 
 void DMKDiskImage::readSectorImpl(size_t logicalSector, SectorBuffer& buf)
 {
-	byte track, side, sector;
-	logToPhys(logicalSector, track, side, sector);
+	auto [track, side, sector] = logToPhys(logicalSector);
 	RawTrack rawTrack;
 	readTrack(track, side, rawTrack);
 
-	RawTrack::Sector sectorInfo;
-	if (!rawTrack.decodeSector(sector, sectorInfo)) {
+	if (auto sectorInfo = rawTrack.decodeSector(sector)) {
+		// TODO should we check sector size == 512?
+		//      crc errors? correct track/head?
+		rawTrack.readBlock(sectorInfo->dataIdx, buf.raw);
+	} else {
 		throw NoSuchSectorException("Sector not found");
 	}
-	// TODO should we check sector size == 512?
-	//      crc errors? correct track/head?
-	rawTrack.readBlock(sectorInfo.dataIdx, sizeof(buf), buf.raw);
 }
 
 void DMKDiskImage::writeSectorImpl(size_t logicalSector, const SectorBuffer& buf)
 {
-	byte track, side, sector;
-	logToPhys(logicalSector, track, side, sector);
+	auto [track, side, sector] = logToPhys(logicalSector);
 	RawTrack rawTrack;
 	readTrack(track, side, rawTrack);
 
-	RawTrack::Sector sectorInfo;
-	if (!rawTrack.decodeSector(sector, sectorInfo)) {
+	if (auto sectorInfo = rawTrack.decodeSector(sector)) {
+		// TODO do checks? see readSectorImpl()
+		rawTrack.writeBlock(sectorInfo->dataIdx, buf.raw);
+	} else {
 		throw NoSuchSectorException("Sector not found");
 	}
-	// TODO do checks? see readSectorImpl()
-	rawTrack.writeBlock(sectorInfo.dataIdx, sizeof(buf), buf.raw);
 
 	writeTrack(track, side, rawTrack);
 }

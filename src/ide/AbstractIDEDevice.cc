@@ -4,6 +4,7 @@
 #include "Version.hh"
 #include "serialize.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <cstring>
 #include <cstdio>
@@ -257,7 +258,7 @@ void AbstractIDEDevice::setInterruptReason(byte value)
 	sectorCountReg = value;
 }
 
-unsigned AbstractIDEDevice::getByteCount()
+unsigned AbstractIDEDevice::getByteCount() const
 {
 	return cylinderLowReg | (cylinderHighReg << 8);
 }
@@ -418,7 +419,7 @@ void AbstractIDEDevice::setTransferWrite(bool status)
 static void writeIdentifyString(byte* p, unsigned len, std::string s)
 {
 	s.resize(2 * len, ' ');
-	for (unsigned i = 0; i < len; ++i) {
+	for (auto i : xrange(len)) {
 		// copy and swap
 		p[2 * i + 0] = s[2 * i + 1];
 		p[2 * i + 1] = s[2 * i + 0];
@@ -434,7 +435,7 @@ void AbstractIDEDevice::createIdentifyBlock(AlignedBuffer& buf)
 		// Use openMSX version as firmware revision, because most of our
 		// IDE emulation code is in fact emulating the firmware.
 		Version::RELEASE ? strCat('v', Version::VERSION)
-                                 : strCat('d', Version::REVISION));
+		                 : strCat('d', Version::REVISION));
 	writeIdentifyString(&buf[27 * 2], 20, getDeviceName()); // model
 
 	fillIdentifyBlock(buf);

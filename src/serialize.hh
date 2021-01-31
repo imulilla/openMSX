@@ -9,6 +9,7 @@
 #include "inline.hh"
 #include "strCat.hh"
 #include "unreachable.hh"
+#include "zstring_view.hh"
 #include <zlib.h>
 #include <string>
 #include <typeindex>
@@ -67,7 +68,7 @@ template<typename T> struct SerializeClassVersion;
 // Archive code is heavily templatized. It uses the CRTP (curiously recuring
 // template pattern ; a base class templatized on it's derived class). To
 // implement static polymorphism. This means there is practically no run-time
-// overhead of using this mechansim compared to 6 seperatly handcoded functions
+// overhead of using this mechanism compared to 6 separately handcoded functions
 // (Mem/XML/Text x input/output).
 // TODO At least in theory, still need to verify this in practice.
 //      Though my experience is that gcc is generally very good in this.
@@ -101,7 +102,7 @@ public:
 	 * class in a new subtag, serializeInlinedBase() puts the members
 	 * of the base class (inline) in the current tag. The advantage
 	 * of serializeBase() is that the base class can be versioned
-	 * seperatly from the subclass. The disadvantage is that it exposes
+	 * separately from the subclass. The disadvantage is that it exposes
 	 * an internal implementation detail in the XML file, and thus makes
 	 * it harder to for example change the class hierarchy or move
 	 * members from base to subclass or vice-versa.
@@ -114,7 +115,7 @@ public:
 
 	// Each concrete archive class also has the following methods:
 	// Because of the implementation with static polymorphism, this
-	// interface is not explictly visible in the base class.
+	// interface is not explicitly visible in the base class.
 	//
 	//
 	// template<typename T> void serializeWithID(const char* tag, const T& t, ...)
@@ -212,15 +213,15 @@ public:
 	// be used by the serialization framework.
 
 	/** Does this archive store version information. */
-	bool needVersion() const { return true; }
+	[[nodiscard]] bool needVersion() const { return true; }
 
 	/** Is this a reverse-snapshot? */
-	bool isReverseSnapshot() const { return false; }
+	[[nodiscard]] bool isReverseSnapshot() const { return false; }
 
 	/** Does this archive store enums as strings.
 	 * See also struct serialize_as_enum.
 	 */
-	bool translateEnumToString() const { return false; }
+	[[nodiscard]] bool translateEnumToString() const { return false; }
 
 	/** Load/store an attribute from/in the archive.
 	 * Depending on the underlying concrete stream, attributes are either
@@ -239,13 +240,13 @@ public:
 	 * This can be used to for example in XML files don't store attributes
 	 * with default values (thus to make the XML look prettier).
 	 */
-	bool canHaveOptionalAttributes() const { return false; }
+	[[nodiscard]] bool canHaveOptionalAttributes() const { return false; }
 
 	/** Check the presence of a (optional) attribute.
 	 * It's only allowed to call this method on archives that can have
 	 * optional attributes.
 	 */
-	bool hasAttribute(const char* /*name*/)
+	[[nodiscard]] bool hasAttribute(const char* /*name*/)
 	{
 		UNREACHABLE; return false;
 	}
@@ -253,7 +254,7 @@ public:
 	/** Optimization: combination of hasAttribute() and getAttribute().
 	 * Returns true if hasAttribute() and (if so) also fills in the value.
 	 */
-	bool findAttribute(const char* /*name*/, unsigned& /*value*/)
+	[[nodiscard]] bool findAttribute(const char* /*name*/, unsigned& /*value*/)
 	{
 		UNREACHABLE; return false;
 	}
@@ -263,16 +264,16 @@ public:
 	 * the case for this archive or not.
 	 * This can for example be used to make the XML files look prettier in
 	 * case of serialization of collections: in that case we don't need to
-	 * explictly store the size of the collection, it can be derived from
+	 * explicitly store the size of the collection, it can be derived from
 	 * the number of subtags.
 	 */
-	bool canCountChildren() const { return false; }
+	[[nodiscard]] bool canCountChildren() const { return false; }
 
 	/** Count the number of child tags.
 	 * It's only allowed to call this method on archives that have support
 	 * for this operation.
 	 */
-	int countChildren() const
+	[[nodiscard]] int countChildren() const
 	{
 		UNREACHABLE; return 0;
 	}
@@ -348,12 +349,12 @@ protected:
 class OutputArchiveBase2
 {
 public:
-	inline bool isLoader() const { return false; }
-	inline bool versionAtLeast(unsigned /*actual*/, unsigned /*required*/) const
+	[[nodiscard]] inline bool isLoader() const { return false; }
+	[[nodiscard]] inline bool versionAtLeast(unsigned /*actual*/, unsigned /*required*/) const
 	{
 		return true;
 	}
-	inline bool versionBelow(unsigned /*actual*/, unsigned /*required*/) const
+	[[nodiscard]] inline bool versionBelow(unsigned /*actual*/, unsigned /*required*/) const
 	{
 		return false;
 	}
@@ -370,7 +371,7 @@ public:
 	// is _below_ the heap.
 	// But this is anyway only used to check assertions. So for now
 	// only do that in linux.
-	static NEVER_INLINE bool addressOnStack(const void* p)
+	[[nodiscard]] static NEVER_INLINE bool addressOnStack(const void* p)
 	{
 		// This is not portable, it assumes:
 		//  - stack grows downwards
@@ -384,7 +385,7 @@ public:
 
 	// Generate a new ID for the given pointer and store this association
 	// for later (see getId()).
-	template<typename T> unsigned generateId(const T* p)
+	template<typename T> [[nodiscard]] unsigned generateId(const T* p)
 	{
 		// For composed structures, for example
 		//   struct A { ... };
@@ -396,16 +397,16 @@ public:
 		// For polymorphic types you do sometimes use a base pointer
 		// to refer to a subtype. So there we only use the pointer
 		// value as key in the map.
-		if (std::is_polymorphic<T>::value) {
+		if constexpr (std::is_polymorphic_v<T>) {
 			return generateID1(p);
 		} else {
 			return generateID2(p, typeid(T));
 		}
 	}
 
-	template<typename T> unsigned getId(const T* p)
+	template<typename T> [[nodiscard]] unsigned getId(const T* p)
 	{
-		if (std::is_polymorphic<T>::value) {
+		if constexpr (std::is_polymorphic_v<T>) {
 			return getID1(p);
 		} else {
 			return getID2(p, typeid(T));
@@ -416,11 +417,12 @@ protected:
 	OutputArchiveBase2() = default;
 
 private:
-	unsigned generateID1(const void* p);
-	unsigned generateID2(const void* p, const std::type_info& typeInfo);
-	unsigned getID1(const void* p);
-	unsigned getID2(const void* p, const std::type_info& typeInfo);
+	[[nodiscard]] unsigned generateID1(const void* p);
+	[[nodiscard]] unsigned generateID2(const void* p, const std::type_info& typeInfo);
+	[[nodiscard]] unsigned getID1(const void* p);
+	[[nodiscard]] unsigned getID2(const void* p, const std::type_info& typeInfo);
 
+private:
 	hash_map<std::pair<const void*, std::type_index>, unsigned, HashPair> idMap;
 	hash_map<const void*, unsigned> polyIdMap;
 	unsigned lastId = 0;
@@ -475,7 +477,7 @@ public:
 	}
 	template<typename T> void serializePolymorphic(const char* tag, const T& t)
 	{
-		static_assert(std::is_polymorphic<T>::value,
+		static_assert(std::is_polymorphic_v<T>,
 		              "must be a polymorphic type");
 		PolymorphicSaverRegistry<Derived>::save(tag, this->self(), t);
 	}
@@ -503,7 +505,7 @@ protected:
 class InputArchiveBase2
 {
 public:
-	inline bool isLoader() const { return true; }
+	[[nodiscard]] inline bool isLoader() const { return true; }
 
 	void beginSection()
 	{
@@ -515,9 +517,9 @@ public:
 	}
 
 /*internal*/
-	void* getPointer(unsigned id);
+	[[nodiscard]] void* getPointer(unsigned id);
 	void addPointer(unsigned id, const void* p);
-	unsigned getId(const void* p) const;
+	[[nodiscard]] unsigned getId(const void* p) const;
 
 	template<typename T> void resetSharedPtr(std::shared_ptr<T>& s, T* r)
 	{
@@ -561,7 +563,7 @@ public:
 		using TNC = std::remove_const_t<T>;
 		auto& tnc = const_cast<TNC&>(t);
 		Loader<TNC> loader;
-		loader(this->self(), tnc, std::make_tuple(), -1); // don't load id
+		loader(this->self(), tnc, std::tuple<>(), -1); // don't load id
 		this->self().endTag(tag);
 	}
 	template<typename T> void serializePointerID(const char* tag, const T& t)
@@ -575,7 +577,7 @@ public:
 	}
 	template<typename T> void serializePolymorphic(const char* tag, T& t)
 	{
-		static_assert(std::is_polymorphic<T>::value,
+		static_assert(std::is_polymorphic_v<T>,
 		              "must be a polymorphic type");
 		PolymorphicInitializerRegistry<Derived>::init(tag, this->self(), &t);
 	}
@@ -649,10 +651,10 @@ public:
 		assert(openSections.empty());
 	}
 
-	bool needVersion() const { return false; }
-	bool isReverseSnapshot() const { return reverseSnapshot; }
+	[[nodiscard]] bool needVersion() const { return false; }
+	[[nodiscard]] bool isReverseSnapshot() const { return reverseSnapshot; }
 
-	template <typename T> void save(const T& t)
+	template<typename T> void save(const T& t)
 	{
 		put(&t, sizeof(t));
 	}
@@ -674,11 +676,11 @@ public:
 		// - Only do this when there are at least two pairs (it is
 		//   correct for a single pair, but it's less tuned for that
 		//   case).
-		serialize_group(std::make_tuple(), tag, t, std::forward<Args>(args)...);
+		serialize_group(std::tuple<>(), tag, t, std::forward<Args>(args)...);
 	}
 	template<typename T, size_t N>
 	ALWAYS_INLINE void serialize(const char* /*tag*/, const T(&t)[N],
-		typename std::enable_if<SerializeAsMemcpy<T>::value>::type* = nullptr)
+		std::enable_if_t<SerializeAsMemcpy<T>::value>* = nullptr)
 	{
 		buffer.insert(&t[0], N * sizeof(T));
 	}
@@ -701,7 +703,7 @@ public:
 		                &skip, sizeof(skip));
 	}
 
-	MemBuffer<uint8_t> releaseBuffer(size_t& size);
+	[[nodiscard]] MemBuffer<uint8_t> releaseBuffer(size_t& size);
 
 private:
 	void put(const void* data, size_t len)
@@ -722,22 +724,17 @@ private:
 		buffer.insert_tuple_ptr(tuple);
 	}
 	template<typename TUPLE, typename T, typename ...Args>
-	ALWAYS_INLINE void serialize_group_impl(std::true_type, const TUPLE& tuple, const char* /*tag*/, const T& t, Args&& ...args)
-	{
-		// add to the group and continue categorizing
-		serialize_group(std::tuple_cat(tuple, std::make_tuple(&t)), std::forward<Args>(args)...);
-	}
-	template<typename TUPLE, typename T, typename ...Args>
-	ALWAYS_INLINE void serialize_group_impl(std::false_type, const TUPLE& tuple, const char* tag, const T& t, Args&& ...args)
-	{
-		serialize(tag, t);      // process single (ungroupable) element
-		serialize_group(tuple, std::forward<Args>(args)...); // continue categorizing
-	}
-	template<typename TUPLE, typename T, typename ...Args>
 	ALWAYS_INLINE void serialize_group(const TUPLE& tuple, const char* tag, const T& t, Args&& ...args)
 	{
 		// categorize one element
-		serialize_group_impl(typename SerializeAsMemcpy<T>::type(), tuple, tag, t, std::forward<Args>(args)...);
+		if constexpr (SerializeAsMemcpy<T>::value) {
+			// add to the group and continue categorizing
+			(void)tag;
+			serialize_group(std::tuple_cat(tuple, std::tuple(&t)), std::forward<Args>(args)...);
+		} else {
+			serialize(tag, t);      // process single (ungroupable) element
+			serialize_group(tuple, std::forward<Args>(args)...); // continue categorizing
+		}
 	}
 
 private:
@@ -758,12 +755,12 @@ public:
 	{
 	}
 
-	bool needVersion() const { return false; }
-	inline bool versionAtLeast(unsigned /*actual*/, unsigned /*required*/) const
+	[[nodiscard]] bool needVersion() const { return false; }
+	[[nodiscard]] inline bool versionAtLeast(unsigned /*actual*/, unsigned /*required*/) const
 	{
 		return true;
 	}
-	inline bool versionBelow(unsigned /*actual*/, unsigned /*required*/) const
+	[[nodiscard]] inline bool versionBelow(unsigned /*actual*/, unsigned /*required*/) const
 	{
 		return false;
 	}
@@ -777,7 +774,7 @@ public:
 		load(c);
 	}
 	void load(std::string& s);
-	string_view loadStr();
+	[[nodiscard]] std::string_view loadStr();
 	void serialize_blob(const char* tag, void* data, size_t len,
 	                    bool diff = true);
 
@@ -786,12 +783,12 @@ public:
 	ALWAYS_INLINE void serialize(const char* tag, T& t, Args&& ...args)
 	{
 		// see comments in MemOutputArchive
-		serialize_group(std::make_tuple(), tag, t, std::forward<Args>(args)...);
+		serialize_group(std::tuple<>(), tag, t, std::forward<Args>(args)...);
 	}
 
 	template<typename T, size_t N>
 	ALWAYS_INLINE void serialize(const char* /*tag*/, T(&t)[N],
-		typename std::enable_if<SerializeAsMemcpy<T>::value>::type* = nullptr)
+		std::enable_if_t<SerializeAsMemcpy<T>::value>* = nullptr)
 	{
 		buffer.read(&t[0], N * sizeof(T));
 	}
@@ -813,43 +810,23 @@ private:
 		}
 	}
 
-	template<int I, int N, typename TUPLE> struct GroupLoader {
-		ALWAYS_INLINE void operator()(InputBuffer& buf, const TUPLE& tuple) const {
-			using ElemPtr = typename std::tuple_element<I, TUPLE>::type;
-			using Elem = typename std::remove_pointer<ElemPtr>::type;
-			buf.read(std::get<I>(tuple), sizeof(Elem));
-			GroupLoader<I + 1, N, TUPLE> nextLoader;
-			nextLoader(buf, tuple);
-		}
-	};
-	template<int N, typename TUPLE> struct GroupLoader<N, N, TUPLE> {
-		ALWAYS_INLINE void operator()(InputBuffer& /*buf*/, const TUPLE& /*tuple*/) const {
-			// nothing
-		}
-	};
-
 	// See comments in MemOutputArchive
 	template<typename TUPLE>
 	ALWAYS_INLINE void serialize_group(const TUPLE& tuple)
 	{
-		GroupLoader<0, std::tuple_size<TUPLE>::value, TUPLE> groupLoader;
-		groupLoader(buffer, tuple);
-	}
-	template<typename TUPLE, typename T, typename ...Args>
-	ALWAYS_INLINE void serialize_group_impl(std::true_type, const TUPLE& tuple, const char* /*tag*/, T& t, Args&& ...args)
-	{
-		serialize_group(std::tuple_cat(tuple, std::make_tuple(&t)), std::forward<Args>(args)...);
-	}
-	template<typename TUPLE, typename T, typename ...Args>
-	ALWAYS_INLINE void serialize_group_impl(std::false_type, const TUPLE& tuple, const char* tag, T& t, Args&& ...args)
-	{
-		serialize(tag, t);
-		serialize_group(tuple, std::forward<Args>(args)...);
+		auto read = [&](auto* p) { buffer.read(p, sizeof(*p)); };
+		std::apply([&](auto&&... args) { (read(args), ...); }, tuple);
 	}
 	template<typename TUPLE, typename T, typename ...Args>
 	ALWAYS_INLINE void serialize_group(const TUPLE& tuple, const char* tag, T& t, Args&& ...args)
 	{
-		serialize_group_impl(typename SerializeAsMemcpy<T>::type(), tuple, tag, t, std::forward<Args>(args)...);
+		if constexpr (SerializeAsMemcpy<T>::value) {
+			(void)tag;
+			serialize_group(std::tuple_cat(tuple, std::tuple(&t)), std::forward<Args>(args)...);
+		} else {
+			serialize(tag, t);
+			serialize_group(tuple, std::forward<Args>(args)...);
+		}
 	}
 
 private:
@@ -862,17 +839,17 @@ private:
 class XmlOutputArchive final : public OutputArchiveBase<XmlOutputArchive>
 {
 public:
-	explicit XmlOutputArchive(const std::string& filename);
+	explicit XmlOutputArchive(zstring_view filename);
 	void close();
 	~XmlOutputArchive();
 
-	template <typename T> void saveImpl(const T& t)
+	template<typename T> void saveImpl(const T& t)
 	{
 		// TODO make sure floating point is printed with enough digits
 		//      maybe print as hex?
 		save(strCat(t));
 	}
-	template <typename T> void save(const T& t)
+	template<typename T> void save(const T& t)
 	{
 		saveImpl(t);
 	}
@@ -901,9 +878,9 @@ public:
 	}
 
 //internal:
-	inline bool translateEnumToString() const { return true; }
-	inline bool canHaveOptionalAttributes() const { return true; }
-	inline bool canCountChildren() const { return true; }
+	[[nodiscard]] inline bool translateEnumToString() const { return true; }
+	[[nodiscard]] inline bool canHaveOptionalAttributes() const { return true; }
+	[[nodiscard]] inline bool canCountChildren() const { return true; }
 
 	void beginTag(const char* tag);
 	void endTag(const char* tag);
@@ -916,7 +893,7 @@ public:
 	{
 		attributeImpl(name, t);
 	}
-	void attribute(const char* name, const std::string& str);
+	void attribute(const char* name, std::string str);
 	void attribute(const char* name, int i);
 	void attribute(const char* name, unsigned u);
 
@@ -931,11 +908,11 @@ class XmlInputArchive final : public InputArchiveBase<XmlInputArchive>
 public:
 	explicit XmlInputArchive(const std::string& filename);
 
-	inline bool versionAtLeast(unsigned actual, unsigned required) const
+	[[nodiscard]] inline bool versionAtLeast(unsigned actual, unsigned required) const
 	{
 		return actual >= required;
 	}
-	inline bool versionBelow(unsigned actual, unsigned required) const
+	[[nodiscard]] inline bool versionBelow(unsigned actual, unsigned required) const
 	{
 		return actual < required;
 	}
@@ -956,7 +933,7 @@ public:
 	void load(unsigned& u);             // but having them non-inline
 	void load(unsigned long long& ull); // saves quite a bit of code
 	void load(std::string& t);
-	string_view loadStr();
+	[[nodiscard]] std::string_view loadStr();
 
 	void skipSection(bool /*skip*/) { /*nothing*/ }
 
@@ -972,9 +949,9 @@ public:
 	}
 
 //internal:
-	inline bool translateEnumToString() const { return true; }
-	inline bool canHaveOptionalAttributes() const { return true; }
-	inline bool canCountChildren() const { return true; }
+	[[nodiscard]] inline bool translateEnumToString() const { return true; }
+	[[nodiscard]] inline bool canHaveOptionalAttributes() const { return true; }
+	[[nodiscard]] inline bool canCountChildren() const { return true; }
 
 	void beginTag(const char* tag);
 	void endTag(const char* tag);
@@ -994,9 +971,9 @@ public:
 	void attribute(const char* name, int& i);
 	void attribute(const char* name, unsigned& u);
 
-	bool hasAttribute(const char* name);
+	[[nodiscard]] bool hasAttribute(const char* name);
 	bool findAttribute(const char* name, unsigned& value);
-	int countChildren() const;
+	[[nodiscard]] int countChildren() const;
 
 private:
 	XMLElement rootElem;

@@ -22,18 +22,18 @@ public:
 
 	// CassetteImage
 	int16_t getSampleAt(EmuTime::param time) override;
-	EmuTime getEndTime() const override;
-	unsigned getFrequency() const override;
+	[[nodiscard]] EmuTime getEndTime() const override;
+	[[nodiscard]] unsigned getFrequency() const override;
 	void fillBuffer(unsigned pos, float** bufs, unsigned num) const override;
-	float getAmplificationFactorImpl() const override;
+	[[nodiscard]] float getAmplificationFactorImpl() const override;
 
 private:
 	void write0();
 	void write1();
-	void writeHeader(int s);
-	void writeSilence(int s);
+	void writeHeader(unsigned s);
+	void writeSilence(unsigned s);
 	void writeByte(byte b);
-	bool writeData(span<byte> buf, size_t& pos);
+	bool writeData(span<const byte> buf, size_t& pos);
 	void convert(const Filename& filename, FilePool& filePool, CliComm& cliComm);
 
 	std::vector<signed char> output;

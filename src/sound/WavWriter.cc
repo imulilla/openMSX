@@ -1,8 +1,10 @@
 #include "WavWriter.hh"
 #include "MSXException.hh"
 #include "Math.hh"
-#include "vla.hh"
 #include "endian.hh"
+#include "one_of.hh"
+#include "vla.hh"
+#include "xrange.hh"
 #include <cstring>
 #include <vector>
 
@@ -42,7 +44,7 @@ WavWriter::WavWriter(const Filename& filename,
 	header.blockAlign    = (channels * bits) / 8;
 	header.bitsPerSample = bits;
 	memcpy(header.subChunk2ID, "data", sizeof(header.subChunk2ID));
-	header.subChunk2Size = 0; // actaul value filled in later
+	header.subChunk2Size = 0; // actual value filled in later
 
 	file.write(&header, sizeof(header));
 }
@@ -108,17 +110,17 @@ static int16_t float2int16(float f)
 void Wav16Writer::write(const float* buffer, unsigned stereo, unsigned samples,
                         float ampLeft, float ampRight)
 {
-	assert(stereo == 1 || stereo == 2);
+	assert(stereo == one_of(1u, 2u));
 	std::vector<Endian::L16> buf(samples * stereo);
 	if (stereo == 1) {
 		assert(ampLeft == ampRight);
-		for (unsigned i = 0; i < samples; ++i) {
+		for (auto i : xrange(samples)) {
 			buf[i] = float2int16(buffer[i] * ampLeft);
 		}
 	} else {
-		for (unsigned i = 0; i < samples; ++i) {
+		for (auto i : xrange(samples)) {
 			buf[2 * i + 0] = float2int16(buffer[2 * i + 0] * ampLeft);
-			buf[2 * i + 0] = float2int16(buffer[2 * i + 0] * ampRight);
+			buf[2 * i + 1] = float2int16(buffer[2 * i + 1] * ampRight);
 		}
 	}
 	unsigned size = sizeof(int16_t) * samples * stereo;

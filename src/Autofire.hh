@@ -5,7 +5,7 @@
 #include "DynamicClock.hh"
 #include "EmuTime.hh"
 #include "IntegerSetting.hh"
-#include "string_view.hh"
+#include <string_view>
 
 namespace openmsx {
 
@@ -24,14 +24,14 @@ class Autofire final : private Observer<Setting>
 public:
 	Autofire(CommandController& commandController,
 	         unsigned newMinInts, unsigned newMaxInts,
-	         string_view name);
+	         std::string_view name);
 	~Autofire();
 
 	/** Get the output signal in negative logic.
 	  * @result When auto-fire is on, result will alternate between true
 	  *         and false. When auto-fire if off result is false.
 	  */
-	bool getSignal(EmuTime::param time);
+	[[nodiscard]] bool getSignal(EmuTime::param time);
 
 private:
 	/** Sets the clock frequency according to the current value of the speed
@@ -41,6 +41,7 @@ private:
 
 	void update(const Setting& setting) override;
 
+private:
 	// Following two values specify the range of the autofire
 	// as measured by the test program:
 	/** Number of interrupts at fastest setting (>=1).

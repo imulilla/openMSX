@@ -50,7 +50,7 @@ differences:
 
 namespace openmsx {
 
-static std::vector<AmdFlash::SectorInfo> getSectorInfo()
+[[nodiscard]] static std::vector<AmdFlash::SectorInfo> getSectorInfo()
 {
 	std::vector<AmdFlash::SectorInfo> sectorInfo;
 	// 8 * 8kB
@@ -103,9 +103,7 @@ void ReproCartridgeV2::reset(EmuTime::param time)
 	setVolume(time, 0b10'000'10);
 	mapperTypeReg = 0;
 	sccMode = 0;
-	for (int bank = 0; bank < 4; ++bank) {
-		bankRegs[bank] = bank;
-	}
+	ranges::iota(bankRegs, 0);
 
 	scc.reset(time);
 	psg0x10Latch = 0;
@@ -115,7 +113,7 @@ void ReproCartridgeV2::reset(EmuTime::param time)
 
 	flash.reset();
 
-	invalidateMemCache(0x0000, 0x10000); // flush all to be sure
+	invalidateDeviceRCache(); // flush all to be sure
 }
 
 unsigned ReproCartridgeV2::getFlashAddr(unsigned addr) const
@@ -206,12 +204,12 @@ void ReproCartridgeV2::writeMem(word addr, byte value, EmuTime::param time)
 	// Main mapper register
 	if (addr == 0x7FFF) {
 		flashRomWriteEnabled = (value == 0x50);
-		invalidateMemCache(0x0000, 0x10000); // flush all to be sure
+		invalidateDeviceRCache(); // flush all to be sure
 	}
 	// Mapper selection register
 	if (addr == 0x7FFE) {
 		mapperTypeReg = value & 3; // other bits are ignored, so no need to store
-		invalidateMemCache(0x0000, 0x10000); // flush all to be sure
+		invalidateDeviceRCache(); // flush all to be sure
 	}
 
 	if (!flashRomWriteEnabled) {
@@ -222,7 +220,7 @@ void ReproCartridgeV2::writeMem(word addr, byte value, EmuTime::param time)
 				// [0x5000,0x57FF] [0x7000,0x77FF]
 				// [0x9000,0x97FF] [0xB000,0xB7FF]
 				bankRegs[page8kB] = value;
-				invalidateMemCache(0x4000 + 0x2000 * page8kB, 0x2000);
+				invalidateDeviceRCache(0x4000 + 0x2000 * page8kB, 0x2000);
 			}
 
 			// SCC mode register
@@ -230,8 +228,8 @@ void ReproCartridgeV2::writeMem(word addr, byte value, EmuTime::param time)
 				sccMode = value;
 				scc.setChipMode((value & 0x20) ? SCC::SCC_plusmode
 							       : SCC::SCC_Compatible);
-				invalidateMemCache(0x9800, 0x800);
-				invalidateMemCache(0xB800, 0x800);
+				invalidateDeviceRCache(0x9800, 0x800);
+				invalidateDeviceRCache(0xB800, 0x800);
 			}
 			break;
 		case 1:
@@ -242,7 +240,7 @@ void ReproCartridgeV2::writeMem(word addr, byte value, EmuTime::param time)
 			// write (and only in Konami(-scc) mode)
 			if ((addr < 0x5000) || ((0x5800 <= addr) && (addr < 0x6000))) break; // only SCC range works
 			bankRegs[page8kB] = value & 0x7F;
-			invalidateMemCache(0x4000 + 0x2000 * page8kB, 0x2000);
+			invalidateDeviceRCache(0x4000 + 0x2000 * page8kB, 0x2000);
 			break;
 		}
 		case 2:
@@ -251,7 +249,7 @@ void ReproCartridgeV2::writeMem(word addr, byte value, EmuTime::param time)
 			if ((0x6000 <= addr) && (addr < 0x8000)) {
 				byte bank = (addr >> 11) & 0x03;
 				bankRegs[bank] = value;
-				invalidateMemCache(0x4000 + 0x2000 * bank, 0x2000);
+				invalidateDeviceRCache(0x4000 + 0x2000 * bank, 0x2000);
 			}
 			break;
 		case 3:
@@ -266,12 +264,12 @@ void ReproCartridgeV2::writeMem(word addr, byte value, EmuTime::param time)
 			if ((0x6000 <= addr) && (addr < 0x6800)) {
 				bankRegs[0] = 2 * value + 0;
 				bankRegs[1] = 2 * value + 1;
-				invalidateMemCache(0x4000, 0x4000);
+				invalidateDeviceRCache(0x4000, 0x4000);
 			}
 			if ((0x7000 <= addr) && (addr < 0x7800)) {
 				bankRegs[2] = 2 * value + 0;
 				bankRegs[3] = 2 * value + 1;
-				invalidateMemCache(0x8000, 0x4000);
+				invalidateDeviceRCache(0x8000, 0x4000);
 			}
 			break;
 		default:
@@ -312,7 +310,7 @@ void ReproCartridgeV2::writeIO(word port, byte value, EmuTime::param time)
 			break;
 		case 0x33:
 			mainBankReg = value & 7;
-			invalidateMemCache(0x0000, 0x10000); // flush all to be sure
+			invalidateDeviceRCache(); // flush all to be sure
 			break;
 		default: UNREACHABLE;
 	}

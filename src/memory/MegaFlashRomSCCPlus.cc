@@ -2,7 +2,9 @@
 #include "DummyAY8910Periphery.hh"
 #include "MSXCPUInterface.hh"
 #include "CacheLine.hh"
+#include "ranges.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <vector>
 
@@ -163,7 +165,7 @@ Main features:
 
 namespace openmsx {
 
-static std::vector<AmdFlash::SectorInfo> getSectorInfo() {
+[[nodiscard]] static std::vector<AmdFlash::SectorInfo> getSectorInfo() {
 	std::vector<AmdFlash::SectorInfo> sectorInfo;
 	// 1 * 16kB
 	sectorInfo.insert(sectorInfo.end(), 1, {16 * 1024, false});
@@ -207,16 +209,12 @@ void MegaFlashRomSCCPlus::reset(EmuTime::param time)
 	configReg = 0;
 	offsetReg = 0;
 	subslotReg = 0;
-	for (int subslot = 0; subslot < 4; ++subslot) {
-		for (int bank = 0; bank < 4; ++bank) {
-			bankRegs[subslot][bank] = bank;
-		}
+	for (auto& regs : bankRegs) {
+		ranges::iota(regs, 0);
 	}
 
 	sccMode = 0;
-	for (int i = 0; i < 4; ++i) {
-		sccBanks[i] = i;
-	}
+	ranges::iota(sccBanks, 0);
 	scc.reset(time);
 
 	psgLatch = 0;
@@ -224,7 +222,7 @@ void MegaFlashRomSCCPlus::reset(EmuTime::param time)
 
 	flash.reset();
 
-	invalidateMemCache(0x0000, 0x10000); // flush all to be sure
+	invalidateDeviceRCache(); // flush all to be sure
 }
 
 MegaFlashRomSCCPlus::SCCEnable MegaFlashRomSCCPlus::getSCCEnable() const
@@ -248,21 +246,22 @@ unsigned MegaFlashRomSCCPlus::getSubslot(unsigned addr) const
 unsigned MegaFlashRomSCCPlus::getFlashAddr(unsigned addr) const
 {
 	unsigned subslot = getSubslot(addr);
-	unsigned tmp;
-	if ((configReg & 0xC0) == 0x40) {
-		unsigned bank = bankRegs[subslot][addr >> 14] + offsetReg;
-		tmp = (bank * 0x4000) + (addr & 0x3FFF);
-	} else {
-		unsigned page = (addr >> 13) - 2;
-		if (page >= 4) {
-			// Bank: -2, -1, 4, 5. So not mapped in this region,
-			// returned value should not be used. But querying it
-			// anyway is easier, see start of writeMem().
-			return unsigned(-1);
+	unsigned tmp = [&] {
+		if ((configReg & 0xC0) == 0x40) {
+			unsigned bank = bankRegs[subslot][addr >> 14] + offsetReg;
+			return (bank * 0x4000) + (addr & 0x3FFF);
+		} else {
+			unsigned page = (addr >> 13) - 2;
+			if (page >= 4) {
+				// Bank: -2, -1, 4, 5. So not mapped in this region,
+				// returned value should not be used. But querying it
+				// anyway is easier, see start of writeMem().
+				return unsigned(-1);
+			}
+			unsigned bank = bankRegs[subslot][page] + offsetReg;
+			return (bank * 0x2000) + (addr & 0x1FFF);
 		}
-		unsigned bank = bankRegs[subslot][page] + offsetReg;
-		tmp = (bank * 0x2000) + (addr & 0x1FFF);
-	}
+	}();
 	return ((0x40000 * subslot) + tmp) & 0xFFFFF; // wrap at 1MB
 }
 
@@ -361,9 +360,9 @@ void MegaFlashRomSCCPlus::writeMem(word addr, byte value, EmuTime::param time)
 		// write subslot register
 		byte diff = value ^ subslotReg;
 		subslotReg = value;
-		for (int i = 0; i < 4; ++i) {
+		for (auto i : xrange(4)) {
 			if (diff & (3 << (2 * i))) {
-				invalidateMemCache(0x4000 * i, 0x4000);
+				invalidateDeviceRCache(0x4000 * i, 0x4000);
 			}
 		}
 	}
@@ -371,7 +370,7 @@ void MegaFlashRomSCCPlus::writeMem(word addr, byte value, EmuTime::param time)
 	if (((configReg & 0x04) == 0x00) && ((addr & 0xFFFE) == 0x7FFE)) {
 		// write config register
 		configReg = value;
-		invalidateMemCache(0x0000, 0x10000); // flush all to be sure
+		invalidateDeviceRCache(); // flush all to be sure
 	}
 
 	if ((configReg & 0xE0) == 0x00) {
@@ -380,8 +379,8 @@ void MegaFlashRomSCCPlus::writeMem(word addr, byte value, EmuTime::param time)
 			sccMode = value;
 			scc.setChipMode((value & 0x20) ? SCC::SCC_plusmode
 			                               : SCC::SCC_Compatible);
-			invalidateMemCache(0x9800, 0x800);
-			invalidateMemCache(0xB800, 0x800);
+			invalidateDeviceRCache(0x9800, 0x800);
+			invalidateDeviceRCache(0xB800, 0x800);
 		}
 		SCCEnable enable = getSCCEnable();
 		bool isRamSegment2 = ((sccMode & 0x24) == 0x24) ||
@@ -410,13 +409,13 @@ void MegaFlashRomSCCPlus::writeMem(word addr, byte value, EmuTime::param time)
 				sccBanks[page8kB] = value;
 				if ((value & 0x80) && (page8kB == 0)) {
 					offsetReg = value & 0x7F;
-					invalidateMemCache(0x4000, 0x8000);
+					invalidateDeviceRCache(0x4000, 0x8000);
 				} else {
 					// Masking of the mapper bits is done on
 					// write (and only in Konami(-scc) mode)
 					byte mask = (configReg & 0x01) ? 0x3F : 0x7F;
 					bankRegs[subslot][page8kB] = value & mask;
-					invalidateMemCache(0x4000 + 0x2000 * page8kB, 0x2000);
+					invalidateDeviceRCache(0x4000 + 0x2000 * page8kB, 0x2000);
 				}
 			}
 			break;
@@ -434,14 +433,14 @@ void MegaFlashRomSCCPlus::writeMem(word addr, byte value, EmuTime::param time)
 			if ((addr < 0x5000) || ((0x5800 <= addr) && (addr < 0x6000))) break; // only SCC range works
 			byte mask = (configReg & 0x01) ? 0x1F : 0x7F;
 			bankRegs[subslot][page8kB] = value & mask;
-			invalidateMemCache(0x4000 + 0x2000 * page8kB, 0x2000);
+			invalidateDeviceRCache(0x4000 + 0x2000 * page8kB, 0x2000);
 			break;
 		}
 		case 0x40:
 		case 0x60:
 			// 64kB
 			bankRegs[subslot][page8kB] = value;
-			invalidateMemCache(0x0000 + 0x4000 * page8kB, 0x4000);
+			invalidateDeviceRCache(0x0000 + 0x4000 * page8kB, 0x4000);
 			break;
 		case 0x80:
 		case 0xA0:
@@ -449,7 +448,7 @@ void MegaFlashRomSCCPlus::writeMem(word addr, byte value, EmuTime::param time)
 			if ((0x6000 <= addr) && (addr < 0x8000)) {
 				byte bank = (addr >> 11) & 0x03;
 				bankRegs[subslot][bank] = value;
-				invalidateMemCache(0x4000 + 0x2000 * bank, 0x2000);
+				invalidateDeviceRCache(0x4000 + 0x2000 * bank, 0x2000);
 			}
 			break;
 		case 0xC0:
@@ -464,12 +463,12 @@ void MegaFlashRomSCCPlus::writeMem(word addr, byte value, EmuTime::param time)
 			if ((0x6000 <= addr) && (addr < 0x6800)) {
 				bankRegs[subslot][0] = 2 * value + 0;
 				bankRegs[subslot][1] = 2 * value + 1;
-				invalidateMemCache(0x4000, 0x4000);
+				invalidateDeviceRCache(0x4000, 0x4000);
 			}
 			if ((0x7000 <= addr) && (addr < 0x7800)) {
 				bankRegs[subslot][2] = 2 * value + 0;
 				bankRegs[subslot][3] = 2 * value + 1;
-				invalidateMemCache(0x8000, 0x4000);
+				invalidateDeviceRCache(0x8000, 0x4000);
 			}
 			break;
 		}

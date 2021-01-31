@@ -9,14 +9,15 @@
 #include <cassert>
 #include <cstring>
 #include <ctime>
+#include <limits>
 
 namespace openmsx {
 
-static const unsigned AVI_HEADER_SIZE = 500;
+constexpr unsigned AVI_HEADER_SIZE = 500;
 
 AviWriter::AviWriter(const Filename& filename, unsigned width_,
                      unsigned height_, unsigned bpp, unsigned channels_,
-		     unsigned freq_)
+                     unsigned freq_)
 	: file(filename, "wb")
 	, codec(width_, height_, bpp)
 	, fps(0.0f) // will be filled in later
@@ -25,8 +26,7 @@ AviWriter::AviWriter(const Filename& filename, unsigned width_,
 	, channels(channels_)
 	, audiorate(freq_)
 {
-	char dummy[AVI_HEADER_SIZE];
-	memset(dummy, 0, sizeof(dummy));
+	uint8_t dummy[AVI_HEADER_SIZE] = {};
 	file.write(dummy, sizeof(dummy));
 
 	index.resize(2);
@@ -49,14 +49,27 @@ AviWriter::~AviWriter()
 
 	// Possible cleanup: use structs for the different headers, that
 	// also allows to use the aligned versions of the Endian routines.
-	unsigned char avi_header[AVI_HEADER_SIZE];
-	memset(&avi_header, 0, sizeof(avi_header));
+	uint8_t avi_header[AVI_HEADER_SIZE] = {};
 	unsigned header_pos = 0;
 
-#define AVIOUT4(_S_) memcpy(&avi_header[header_pos],_S_,4);header_pos+=4;
-#define AVIOUTw(_S_) Endian::write_UA_L16(&avi_header[header_pos], _S_);header_pos+=2;
-#define AVIOUTd(_S_) Endian::write_UA_L32(&avi_header[header_pos], _S_);header_pos+=4;
-#define AVIOUTs(_S_) memcpy(&avi_header[header_pos],_S_,strlen(_S_)+1);header_pos+=(strlen(_S_)+1 + 1) & ~1;
+	auto AVIOUT4 = [&](const char (&s)[5]) { // expect a string-literal of 4 chars (+ zero terminator)
+		assert(s[4] == '\0');
+		memcpy(&avi_header[header_pos], s, 4);
+		header_pos += 4;
+	};
+	auto AVIOUTw = [&](uint16_t w) {
+		Endian::write_UA_L16(&avi_header[header_pos], w);
+		header_pos += sizeof(w);
+	};
+	auto AVIOUTd = [&](uint32_t d) {
+		Endian::write_UA_L32(&avi_header[header_pos], d);
+		header_pos += sizeof(d);
+	};
+	auto AVIOUTs = [&](const char* s) {
+		auto len1 = strlen(s) + 1; // +1 for zero-terminator
+		memcpy(&avi_header[header_pos], s, len1);
+		header_pos += (len1 + 1) & ~1; // round-up to even
+	};
 
 	bool hasAudio = audiorate != 0;
 
@@ -175,7 +188,7 @@ AviWriter::~AviWriter()
 	// snprintf output could be truncated (e.g. because the year is
 	// -2147483647). To silence this warning (and also to work around the
 	// windows _snprintf stuff) we add some extra buffer space.
-	static constexpr size_t size = (4 + 1 + 2 + 1 + 2 + 1) + 22;
+	constexpr size_t size = (4 + 1 + 2 + 1 + 2 + 1) + 22;
 	char dateStr[size];
 	time_t t = time(nullptr);
 	struct tm *tm = localtime(&t);
@@ -199,14 +212,14 @@ AviWriter::~AviWriter()
 	// a much nicer way
 
 	// Finish stream list, i.e. put number of bytes in the list to proper pos
-	int nmain = header_pos - main_list - 4;
-	int njunk = AVI_HEADER_SIZE - 8 - 12 - header_pos;
-	assert(njunk > 0); // increase AVI_HEADER_SIZE if this occurs
+	int nMain = header_pos - main_list - 4;
+	int nJunk = AVI_HEADER_SIZE - 8 - 12 - header_pos;
+	assert(nJunk > 0); // increase AVI_HEADER_SIZE if this occurs
 	AVIOUT4("JUNK");
-	AVIOUTd(njunk);
+	AVIOUTd(nJunk);
 	// Fix the size of the main list
 	header_pos = main_list;
-	AVIOUTd(nmain);
+	AVIOUTd(nMain);
 	header_pos = AVI_HEADER_SIZE - 12;
 
 	AVIOUT4("LIST");
@@ -220,18 +233,22 @@ AviWriter::~AviWriter()
 		index[1] = idxSize - 8;
 		file.write(&index[0], idxSize);
 		file.seek(0);
-		file.write(&avi_header, AVI_HEADER_SIZE);
+		file.write(avi_header, AVI_HEADER_SIZE);
 	} catch (MSXException&) {
 		// can't throw from destructor
 	}
 }
 
-void AviWriter::addAviChunk(const char* tag, unsigned size, void* data, unsigned flags)
+void AviWriter::addAviChunk(const char* tag, size_t size_, const void* data, unsigned flags)
 {
 	struct {
 		char t[4];
 		Endian::L32 s;
 	} chunk;
+
+	assert(size_ <= std::numeric_limits<uint32_t>::max());
+	auto size = uint32_t(size_);
+
 	memcpy(chunk.t, tag, sizeof(chunk.t));
 	chunk.s = size;
 	file.write(&chunk, sizeof(chunk));
@@ -252,10 +269,8 @@ void AviWriter::addAviChunk(const char* tag, unsigned size, void* data, unsigned
 void AviWriter::addFrame(FrameSource* frame, unsigned samples, int16_t* sampleData)
 {
 	bool keyFrame = (frames++ % 300 == 0);
-	void* buffer;
-	unsigned size;
-	codec.compressFrame(keyFrame, frame, buffer, size);
-	addAviChunk("00dc", size, buffer, keyFrame ? 0x10 : 0x0);
+	auto buffer = codec.compressFrame(keyFrame, frame);
+	addAviChunk("00dc", buffer.size(), buffer.data(), keyFrame ? 0x10 : 0x0);
 
 	if (samples) {
 		assert((samples % channels) == 0);

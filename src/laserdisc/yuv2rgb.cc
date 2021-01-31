@@ -1,15 +1,15 @@
 #include "yuv2rgb.hh"
 #include "RawFrame.hh"
 #include "Math.hh"
+#include "PixelFormat.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <cstdint>
-#include <SDL.h>
 #ifdef __SSE2__
 #include <emmintrin.h>
 #endif
 
-namespace openmsx {
-namespace yuv2rgb {
+namespace openmsx::yuv2rgb {
 
 #ifdef __SSE2__
 
@@ -46,12 +46,12 @@ static inline void yuv2rgb_sse2(
 	// This routine calculates 32x2 RGBA pixels. Each output pixel uses a
 	// unique corresponding input Y value, but a group of 2x2 ouput pixels
 	// shares the same U and V input value.
-	auto* u    = reinterpret_cast<const __m128i*>(u_);
-	auto* v    = reinterpret_cast<const __m128i*>(v_);
-	auto* y0   = reinterpret_cast<const __m128i*>(y0_);
-	auto* y1   = reinterpret_cast<const __m128i*>(y1_);
-	auto* out0 = reinterpret_cast<      __m128i*>(out0_);
-	auto* out1 = reinterpret_cast<      __m128i*>(out1_);
+	const auto* u    = reinterpret_cast<const __m128i*>(u_);
+	const auto* v    = reinterpret_cast<const __m128i*>(v_);
+	const auto* y0   = reinterpret_cast<const __m128i*>(y0_);
+	const auto* y1   = reinterpret_cast<const __m128i*>(y1_);
+	      auto* out0 = reinterpret_cast<      __m128i*>(out0_);
+	      auto* out1 = reinterpret_cast<      __m128i*>(out1_);
 
 	// constants
 	const __m128i ZERO    = _mm_setzero_si128();
@@ -253,12 +253,12 @@ static inline void convertHelperSSE2(
 
 #endif // __SSE2__
 
-static constexpr int PREC = 15;
-static constexpr int COEF_Y  = int(1.164 * (1 << PREC) + 0.5); // prefer to use lrint() to round
-static constexpr int COEF_RV = int(1.596 * (1 << PREC) + 0.5); // but that's not (yet) constexpr
-static constexpr int COEF_GU = int(0.391 * (1 << PREC) + 0.5); // in current versions of c++
-static constexpr int COEF_GV = int(0.813 * (1 << PREC) + 0.5);
-static constexpr int COEF_BU = int(2.018 * (1 << PREC) + 0.5);
+constexpr int PREC = 15;
+constexpr int COEF_Y  = int(1.164 * (1 << PREC) + 0.5); // prefer to use lrint() to round
+constexpr int COEF_RV = int(1.596 * (1 << PREC) + 0.5); // but that's not (yet) constexpr
+constexpr int COEF_GU = int(0.391 * (1 << PREC) + 0.5); // in current versions of c++
+constexpr int COEF_GV = int(0.813 * (1 << PREC) + 0.5);
+constexpr int COEF_BU = int(2.018 * (1 << PREC) + 0.5);
 
 struct Coefs {
 	int gu[256];
@@ -268,10 +268,10 @@ struct Coefs {
 	int y [256];
 };
 
-static constexpr Coefs getCoefs()
+[[nodiscard]] static constexpr Coefs getCoefs()
 {
 	Coefs coefs = {};
-	for (int i = 0; i < 256; ++i) {
+	for (auto i : xrange(256)) {
 		coefs.gu[i] = -COEF_GU * (i - 128);
 		coefs.gv[i] = -COEF_GV * (i - 128);
 		coefs.bu[i] =  COEF_BU * (i - 128);
@@ -282,8 +282,8 @@ static constexpr Coefs getCoefs()
 }
 
 template<typename Pixel>
-static inline Pixel calc(const SDL_PixelFormat& format,
-                         int y, int ruv, int guv, int buv)
+[[nodiscard]] static inline Pixel calc(
+	const PixelFormat& format, int y, int ruv, int guv, int buv)
 {
 	uint8_t r = Math::clipIntToByte((y + ruv) >> PREC);
 	uint8_t g = Math::clipIntToByte((y + guv) >> PREC);
@@ -291,13 +291,13 @@ static inline Pixel calc(const SDL_PixelFormat& format,
 	if (sizeof(Pixel) == 4) {
 		return (r << 16) | (g << 8) | (b << 0);
 	} else {
-		return static_cast<Pixel>(SDL_MapRGB(&format, r, g, b));
+		return static_cast<Pixel>(format.map(r, g, b));
 	}
 }
 
 template<typename Pixel>
 static void convertHelper(const th_ycbcr_buffer& buffer, RawFrame& output,
-                          const SDL_PixelFormat& format)
+                          const PixelFormat& format)
 {
 	assert(buffer[1].width  * 2 == buffer[0].width);
 	assert(buffer[1].height * 2 == buffer[0].height);
@@ -341,18 +341,17 @@ static void convertHelper(const th_ycbcr_buffer& buffer, RawFrame& output,
 
 void convert(const th_ycbcr_buffer& input, RawFrame& output)
 {
-	const SDL_PixelFormat& format = output.getSDLPixelFormat();
-	if (format.BytesPerPixel == 4) {
+	const PixelFormat& format = output.getPixelFormat();
+	if (format.getBytesPerPixel() == 4) {
 #ifdef __SSE2__
 		convertHelperSSE2(input, output);
 #else
 		convertHelper<uint32_t>(input, output, format);
 #endif
 	} else {
-		assert(format.BytesPerPixel == 2);
+		assert(format.getBytesPerPixel() == 2);
 		convertHelper<uint16_t>(input, output, format);
 	}
 }
 
-} // namespace yuv2rgb
-} // namespace openmsx
+} // namespace openmsx::yuv2rgb

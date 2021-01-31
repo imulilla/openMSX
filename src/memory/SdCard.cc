@@ -16,23 +16,23 @@
 namespace openmsx {
 
 // data response tokens
-static const byte DRT_ACCEPTED    = 0x05;
-static const byte DRT_WRITE_ERROR = 0x0D;
+constexpr byte DRT_ACCEPTED    = 0x05;
+constexpr byte DRT_WRITE_ERROR = 0x0D;
 
 // start block tokens and stop tran token
-static const byte START_BLOCK_TOKEN     = 0xFE;
-static const byte START_BLOCK_TOKEN_MBW = 0xFC;
-static const byte STOP_TRAN_TOKEN       = 0xFD;
+constexpr byte START_BLOCK_TOKEN     = 0xFE;
+constexpr byte START_BLOCK_TOKEN_MBW = 0xFC;
+constexpr byte STOP_TRAN_TOKEN       = 0xFD;
 
 // data error token
-static const byte DATA_ERROR_TOKEN_ERROR        = 0x01;
-static const byte DATA_ERROR_TOKEN_OUT_OF_RANGE = 0x08;
+constexpr byte DATA_ERROR_TOKEN_ERROR        = 0x01;
+constexpr byte DATA_ERROR_TOKEN_OUT_OF_RANGE = 0x08;
 
 // responses
-static const byte R1_BUSY            = 0x00;
-static const byte R1_IDLE            = 0x01; // TODO: why is lots of code checking for this instead of R1_BUSY?
-static const byte R1_ILLEGAL_COMMAND = 0x04;
-static const byte R1_PARAMETER_ERROR = 0x80;
+constexpr byte R1_BUSY            = 0x00;
+constexpr byte R1_IDLE            = 0x01; // TODO: why is lots of code checking for this instead of R1_BUSY?
+constexpr byte R1_ILLEGAL_COMMAND = 0x04;
+constexpr byte R1_PARAMETER_ERROR = 0x80;
 
 SdCard::SdCard(const DeviceConfig& config)
 	: hd(config.getXML() ? std::make_unique<HD>(config) : nullptr)
@@ -47,24 +47,26 @@ SdCard::SdCard(const DeviceConfig& config)
 SdCard::~SdCard() = default;
 
 // helper methods for 'transfer' to avoid duplication
-byte SdCard::readCurrentByteFromCurrentSector() {
-	byte retval;
-	if (currentByteInSector == -1) {
-		retval = START_BLOCK_TOKEN;
-		try {
-			hd->readSector(currentSector, sectorBuf);
-		} catch (MSXException&) {
-			retval = DATA_ERROR_TOKEN_ERROR;
+byte SdCard::readCurrentByteFromCurrentSector()
+{
+	byte result = [&] {
+		if (currentByteInSector == -1) {
+			try {
+				hd->readSector(currentSector, sectorBuf);
+				return START_BLOCK_TOKEN;
+			} catch (MSXException&) {
+				return DATA_ERROR_TOKEN_ERROR;
+			}
+		} else {
+			// output next byte from stream
+			return sectorBuf.raw[currentByteInSector];
 		}
-	} else {
-		// output next byte from stream
-		retval = sectorBuf.raw[currentByteInSector];
-	}
+	}();
 	currentByteInSector++;
 	if (currentByteInSector == sizeof(sectorBuf)) {
 		responseQueue.push_back({0x00, 0x00}); // 2 CRC's (dummy)
 	}
-	return retval;
+	return result;
 }
 
 byte SdCard::transfer(byte value, bool cs)
@@ -201,7 +203,7 @@ byte SdCard::transfer(byte value, bool cs)
 		}
 		break;
 	}
-	
+
 	return retval;
 }
 
@@ -226,7 +228,7 @@ void SdCard::executeCommand()
 			byte(0x01), // voltage accepted
 			cmdBuf[4]});// check pattern
 		break;
-	case 9:{ // SEND_CSD 
+	case 9:{ // SEND_CSD
 		responseQueue.push_back({
 			R1_BUSY, // OK (ignored on MegaSD code, used in FUZIX)
 		// now follows a CSD version 2.0 (for SDHC)
@@ -315,14 +317,14 @@ void SdCard::executeCommand()
 			byte(0x00),   // OCR Reg part 3
 			byte(0x00)}); // OCR Reg part 4
 		break;
-	
+
 	default:
 		responseQueue.push_back(R1_ILLEGAL_COMMAND);
 		break;
 	}
 }
 
-static std::initializer_list<enum_string<SdCard::Mode>> modeInfo = {
+static constexpr std::initializer_list<enum_string<SdCard::Mode>> modeInfo = {
 	{ "COMMAND",     SdCard::COMMAND  },
 	{ "READ",        SdCard::READ },
 	{ "MULTI_READ",  SdCard::MULTI_READ },

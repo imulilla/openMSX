@@ -5,13 +5,14 @@
 #include "outer.hh"
 #include "serialize.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 #include <cassert>
 
 namespace openmsx {
 
 // Documented in MSX-Datapack Vol. 3, section 4 (MSX-MIDI), from page 634
-static const byte LIMITED_RANGE_VALUE = 0x01; // b0 = "E8" => determines port range
-static const byte DISABLED_VALUE      = 0x80; // b7 = EN
+constexpr byte LIMITED_RANGE_VALUE = 0x01; // b0 = "E8" => determines port range
+constexpr byte DISABLED_VALUE      = 0x80; // b7 = EN
 
 MSXMidi::MSXMidi(const DeviceConfig& config)
 	: MSXDevice(config)
@@ -198,14 +199,14 @@ void MSXMidi::registerIOports(byte value)
 
 void MSXMidi::registerRange(byte port, unsigned num)
 {
-	for (unsigned i = 0; i < num; ++i) {
+	for (auto i : xrange(num)) {
 		getCPUInterface().register_IO_In (port + i, this);
 		getCPUInterface().register_IO_Out(port + i, this);
 	}
 }
 void MSXMidi::unregisterRange(byte port, unsigned num)
 {
-	for (unsigned i = 0; i < num; ++i) {
+	for (auto i : xrange(num)) {
 		getCPUInterface().unregister_IO_In (port + i, this);
 		getCPUInterface().unregister_IO_Out(port + i, this);
 	}

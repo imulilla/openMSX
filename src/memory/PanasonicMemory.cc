@@ -11,7 +11,7 @@
 
 namespace openmsx {
 
-static std::unique_ptr<Rom> createRom(MSXMotherBoard& motherBoard)
+[[nodiscard]] static std::unique_ptr<Rom> createRom(MSXMotherBoard& motherBoard)
 {
 	const XMLElement* elem = motherBoard.getMachineConfig()->
 	                      getConfig().findChild("PanasonicRom");
@@ -99,7 +99,7 @@ void PanasonicMemory::setDRAM(bool dram_)
 {
 	if (dram_ != dram) {
 		dram = dram_;
-		msxcpu.invalidateMemCache(0x0000, 0x10000);
+		msxcpu.invalidateAllSlotsRWCache(0x0000, 0x10000);
 	}
 }
 

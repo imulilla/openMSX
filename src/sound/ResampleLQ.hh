@@ -10,48 +10,43 @@ namespace openmsx {
 
 class ResampledSoundDevice;
 
-template <unsigned CHANNELS>
+template<unsigned CHANNELS>
 class ResampleLQ : public ResampleAlgo
 {
 public:
 	static std::unique_ptr<ResampleLQ<CHANNELS>> create(
-		ResampledSoundDevice& input,
-		const DynamicClock& hostClock, unsigned emuSampleRate);
+		ResampledSoundDevice& input, const DynamicClock& hostClock);
 
 protected:
-	ResampleLQ(ResampledSoundDevice& input,
-	           const DynamicClock& hostClock, unsigned emuSampleRate);
-	bool fetchData(EmuTime::param time, unsigned& valid);
+	ResampleLQ(ResampledSoundDevice& input, const DynamicClock& hostClock);
+	[[nodiscard]] bool fetchData(EmuTime::param time, unsigned& valid);
 
-	ResampledSoundDevice& input;
+protected:
 	const DynamicClock& hostClock;
-	DynamicClock emuClock;
 	using FP = FixedPoint<14>;
 	const FP step;
 	float lastInput[2 * CHANNELS];
 };
 
-template <unsigned CHANNELS>
+template<unsigned CHANNELS>
 class ResampleLQDown final : public ResampleLQ<CHANNELS>
 {
 public:
-	ResampleLQDown(ResampledSoundDevice& input,
-	               const DynamicClock& hostClock, unsigned emuSampleRate);
+	ResampleLQDown(ResampledSoundDevice& input, const DynamicClock& hostClock);
 private:
-	bool generateOutput(float* dataOut, unsigned num,
-	                    EmuTime::param time) override;
+	bool generateOutputImpl(float* dataOut, unsigned num,
+	                        EmuTime::param time) override;
 	using FP = typename ResampleLQ<CHANNELS>::FP;
 };
 
-template <unsigned CHANNELS>
+template<unsigned CHANNELS>
 class ResampleLQUp final : public ResampleLQ<CHANNELS>
 {
 public:
-	ResampleLQUp(ResampledSoundDevice& input,
-	             const DynamicClock& hostClock, unsigned emuSampleRate);
+	ResampleLQUp(ResampledSoundDevice& input, const DynamicClock& hostClock);
 private:
-	bool generateOutput(float* dataOut, unsigned num,
-	                    EmuTime::param time) override;
+	bool generateOutputImpl(float* dataOut, unsigned num,
+	                        EmuTime::param time) override;
 	using FP = typename ResampleLQ<CHANNELS>::FP;
 };
 

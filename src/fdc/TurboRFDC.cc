@@ -20,7 +20,7 @@
 
 namespace openmsx {
 
-static TurboRFDC::Type parseType(const DeviceConfig& config)
+[[nodiscard]] static TurboRFDC::Type parseType(const DeviceConfig& config)
 {
 	auto ioregs = config.getChildData("io_regs", {});
 	if (ioregs == "7FF2") {
@@ -186,7 +186,7 @@ void TurboRFDC::writeMem(word address, byte value, EmuTime::param time_)
 
 void TurboRFDC::setBank(byte value)
 {
-	invalidateMemCache(0x4000, 0x4000);
+	invalidateDeviceRCache(0x4000, 0x4000);
 	bank = value & blockMask;
 	memory = &(*rom)[0x4000 * bank];
 }

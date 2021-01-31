@@ -18,6 +18,7 @@
 #include "checked_cast.hh"
 #include "serialize.hh"
 #include "serialize_meta.hh"
+#include "xrange.hh"
 #include <iostream>
 
 using std::shared_ptr;
@@ -33,10 +34,10 @@ public:
 	              byte x_, byte y_, bool touch_, bool button_)
 		: StateChange(time_)
 		, x(x_), y(y_), touch(touch_), button(button_) {}
-	byte getX()      const { return x; }
-	byte getY()      const { return y; }
-	bool getTouch()  const { return touch; }
-	bool getButton() const { return button; }
+	[[nodiscard]] byte getX()      const { return x; }
+	[[nodiscard]] byte getY()      const { return y; }
+	[[nodiscard]] bool getTouch()  const { return touch; }
+	[[nodiscard]] bool getButton() const { return button; }
 
 	template<typename Archive> void serialize(Archive& ar, unsigned /*version*/)
 	{
@@ -65,7 +66,7 @@ Touchpad::Touchpad(MSXEventDistributor& eventDistributor_,
 		"2x3 matrix to transform host mouse coordinates to "
 		"MSX touchpad coordinates, see manual for details",
 		"{ 256 0 0 } { 0 256 0 }")
-	, start(EmuTime::zero)
+	, start(EmuTime::zero())
 	, hostButtons(0)
 	, x(0), y(0), touch(false), button(false)
 	, shift(0), channel(0), last(0)
@@ -102,12 +103,12 @@ void Touchpad::parseTransformMatrix(Interpreter& interp, const TclObject& value)
 	if (value.getListLength(interp) != 2) {
 		throw CommandException("must have 2 rows");
 	}
-	for (int i = 0; i < 2; ++i) {
+	for (auto i : xrange(2)) {
 		TclObject row = value.getListIndex(interp, i);
 		if (row.getListLength(interp) != 3) {
 			throw CommandException("each row must have 3 elements");
 		}
-		for (int j = 0; j < 3; ++j) {
+		for (auto j : xrange(3)) {
 			m[j][i] = row.getListIndex(interp, j).getDouble(interp);
 		}
 	}
@@ -120,7 +121,7 @@ const std::string& Touchpad::getName() const
 	return name;
 }
 
-string_view Touchpad::getDescription() const
+std::string_view Touchpad::getDescription() const
 {
 	return "MSX Touchpad";
 }
@@ -138,13 +139,13 @@ void Touchpad::unplugHelper(EmuTime::param /*time*/)
 }
 
 // JoystickDevice
-static const byte SENSE  = JoystickDevice::RD_PIN1;
-static const byte EOC    = JoystickDevice::RD_PIN2;
-static const byte SO     = JoystickDevice::RD_PIN3;
-static const byte BUTTON = JoystickDevice::RD_PIN4;
-static const byte SCK    = JoystickDevice::WR_PIN6;
-static const byte SI     = JoystickDevice::WR_PIN7;
-static const byte CS     = JoystickDevice::WR_PIN8;
+constexpr byte SENSE  = JoystickDevice::RD_PIN1;
+constexpr byte EOC    = JoystickDevice::RD_PIN2;
+constexpr byte SO     = JoystickDevice::RD_PIN3;
+constexpr byte BUTTON = JoystickDevice::RD_PIN4;
+constexpr byte SCK    = JoystickDevice::WR_PIN6;
+constexpr byte SI     = JoystickDevice::WR_PIN7;
+constexpr byte CS     = JoystickDevice::WR_PIN8;
 
 byte Touchpad::read(EmuTime::param time)
 {
@@ -155,7 +156,7 @@ byte Touchpad::read(EmuTime::param time)
 	// EOC remains zero for 56 cycles after CS 0->1
 	// TODO at what clock frequency does the UPD7001 run?
 	//    400kHz is only the recommended value from the UPD7001 datasheet.
-	static const EmuDuration delta = Clock<400000>::duration(56);
+	constexpr EmuDuration delta = Clock<400000>::duration(56);
 	if ((time - start) > delta) {
 		result |= EOC;
 	}
@@ -209,12 +210,12 @@ void Touchpad::signalMSXEvent(const shared_ptr<const Event>& event,
 	int b = hostButtons;
 	switch (event->getType()) {
 	case OPENMSX_MOUSE_MOTION_EVENT: {
-		auto& mev = checked_cast<const MouseMotionEvent&>(*event);
+		const auto& mev = checked_cast<const MouseMotionEvent&>(*event);
 		pos = transformCoords(ivec2(mev.getAbsX(), mev.getAbsY()));
 		break;
 	}
 	case OPENMSX_MOUSE_BUTTON_DOWN_EVENT: {
-		auto& butEv = checked_cast<const MouseButtonEvent&>(*event);
+		const auto& butEv = checked_cast<const MouseButtonEvent&>(*event);
 		switch (butEv.getButton()) {
 		case MouseButtonEvent::LEFT:
 			b |= 1;
@@ -229,7 +230,7 @@ void Touchpad::signalMSXEvent(const shared_ptr<const Event>& event,
 		break;
 	}
 	case OPENMSX_MOUSE_BUTTON_UP_EVENT: {
-		auto& butEv = checked_cast<const MouseButtonEvent&>(*event);
+		const auto& butEv = checked_cast<const MouseButtonEvent&>(*event);
 		switch (butEv.getButton()) {
 		case MouseButtonEvent::LEFT:
 			b &= ~1;

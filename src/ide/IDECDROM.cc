@@ -8,7 +8,9 @@
 #include "TclObject.hh"
 #include "CliComm.hh"
 #include "endian.hh"
+#include "one_of.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -27,7 +29,7 @@ public:
 	           Scheduler& scheduler, IDECDROM& cd);
 	void execute(span<const TclObject> tokens,
 		TclObject& result, EmuTime::param time) override;
-	string help(const vector<string>& tokens) const override;
+	[[nodiscard]] string help(const vector<string>& tokens) const override;
 	void tabCompletion(vector<string>& tokens) const override;
 private:
 	IDECDROM& cd;
@@ -215,7 +217,7 @@ void IDECDROM::executePacketCommand(AlignedBuffer& packet)
 	// It seems that unlike ATA which uses words at the basic data unit,
 	// ATAPI uses bytes.
 	//fprintf(stderr, "ATAPI Packet:");
-	//for (unsigned i = 0; i < 12; i++) {
+	//for (auto i : xrange(12)) {
 	//	fprintf(stderr, " %02X", packet[i]);
 	//}
 	//fprintf(stderr, "\n");
@@ -233,7 +235,7 @@ void IDECDROM::executePacketCommand(AlignedBuffer& packet)
 		const int byteCount = 18;
 		startPacketReadTransfer(byteCount);
 		auto& buf = startShortReadTransfer(byteCount);
-		for (int i = 0; i < byteCount; i++) {
+		for (auto i : xrange(byteCount)) {
 			buf[i] = 0x00;
 		}
 		buf[ 0] = 0xF0;
@@ -340,11 +342,10 @@ void CDXCommand::execute(span<const TclObject> tokens, TclObject& result,
 {
 	if (tokens.size() == 1) {
 		auto& file = cd.file;
-		result.addListElement(cd.name + ':',
+		result.addListElement(tmpStrCat(cd.name, ':'),
 		                      file.is_open() ? file.getURL() : string{});
 		if (!file.is_open()) result.addListElement("empty");
-	} else if ((tokens.size() == 2) &&
-	           ((tokens[1] == "eject") || (tokens[1] == "-eject"))) {
+	} else if ((tokens.size() == 2) && (tokens[1] == one_of("eject", "-eject"))) {
 		cd.eject();
 		// TODO check for locked tray
 		if (tokens[1] == "-eject") {
@@ -364,7 +365,7 @@ void CDXCommand::execute(span<const TclObject> tokens, TclObject& result,
 		}
 		try {
 			string filename = userFileContext().resolve(
-				tokens[fileToken].getString().str());
+				tokens[fileToken].getString());
 			cd.insert(filename);
 			// return filename; // Note: the diskX command doesn't do this either, so this has not been converted to TclObject style here
 		} catch (FileException& e) {
@@ -379,15 +380,15 @@ void CDXCommand::execute(span<const TclObject> tokens, TclObject& result,
 string CDXCommand::help(const vector<string>& /*tokens*/) const
 {
 	return strCat(
-		cd.name, "                   : display the cd image for this CDROM drive\n",
-		cd.name, " eject             : eject the cd image from this CDROM drive\n",
-		cd.name, " insert <filename> : change the cd image for this CDROM drive\n",
-		cd.name, " <filename>        : change the cd image for this CDROM drive\n");
+		cd.name, "                   : display the cd image for this CD-ROM drive\n",
+		cd.name, " eject             : eject the cd image from this CD-ROM drive\n",
+		cd.name, " insert <filename> : change the cd image for this CD-ROM drive\n",
+		cd.name, " <filename>        : change the cd image for this CD-ROM drive\n");
 }
 
 void CDXCommand::tabCompletion(vector<string>& tokens) const
 {
-	static const char* const extra[] = { "eject", "insert" };
+	static constexpr const char* const extra[] = { "eject", "insert" };
 	completeFileName(tokens, userFileContext(), extra);
 }
 
@@ -400,7 +401,7 @@ void IDECDROM::serialize(Archive& ar, unsigned /*version*/)
 	string filename = file.is_open() ? file.getURL() : string{};
 	ar.serialize("filename", filename);
 	if (ar.isLoader()) {
-		// re-insert CDROM before restoring 'mediaChanged', 'senseKey'
+		// re-insert CD-ROM before restoring 'mediaChanged', 'senseKey'
 		if (filename.empty()) {
 			eject();
 		} else {

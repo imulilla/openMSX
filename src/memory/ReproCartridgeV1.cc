@@ -27,7 +27,7 @@ Otherwise, the mapper is enabled and the flash is readonly.
 
 namespace openmsx {
 
-static std::vector<AmdFlash::SectorInfo> getSectorInfo()
+[[nodiscard]] static std::vector<AmdFlash::SectorInfo> getSectorInfo()
 {
 	std::vector<AmdFlash::SectorInfo> sectorInfo;
 	// 8 * 8kB
@@ -70,9 +70,7 @@ void ReproCartridgeV1::reset(EmuTime::param time)
 	flashRomWriteEnabled = false;
 	mainBankReg = 0;
 	sccMode = 0;
-	for (int bank = 0; bank < 4; ++bank) {
-		bankRegs[bank] = bank;
-	}
+	ranges::iota(bankRegs, 0);
 
 	scc.reset(time);
 	psgLatch = 0;
@@ -80,7 +78,7 @@ void ReproCartridgeV1::reset(EmuTime::param time)
 
 	flash.reset();
 
-	invalidateMemCache(0x0000, 0x10000); // flush all to be sure
+	invalidateDeviceRCache(); // flush all to be sure
 }
 
 unsigned ReproCartridgeV1::getFlashAddr(unsigned addr) const
@@ -171,7 +169,7 @@ void ReproCartridgeV1::writeMem(word addr, byte value, EmuTime::param time)
 	// Main mapper register
 	if (addr == 0x7FFF) {
 		flashRomWriteEnabled = (value == 0x50);
-		invalidateMemCache(0x0000, 0x10000); // flush all to be sure
+		invalidateDeviceRCache(); // flush all to be sure
 	}
 
 	if (!flashRomWriteEnabled) {
@@ -180,7 +178,7 @@ void ReproCartridgeV1::writeMem(word addr, byte value, EmuTime::param time)
 			// [0x5000,0x57FF] [0x7000,0x77FF]
 			// [0x9000,0x97FF] [0xB000,0xB7FF]
 			bankRegs[page8kB] = value;
-			invalidateMemCache(0x4000 + 0x2000 * page8kB, 0x2000);
+			invalidateDeviceRCache(0x4000 + 0x2000 * page8kB, 0x2000);
 		}
 
 		// SCC mode register
@@ -188,8 +186,8 @@ void ReproCartridgeV1::writeMem(word addr, byte value, EmuTime::param time)
 			sccMode = value;
 			scc.setChipMode((value & 0x20) ? SCC::SCC_plusmode
 						       : SCC::SCC_Compatible);
-			invalidateMemCache(0x9800, 0x800);
-			invalidateMemCache(0xB800, 0x800);
+			invalidateDeviceRCache(0x9800, 0x800);
+			invalidateDeviceRCache(0xB800, 0x800);
 		}
 	} else {
 		if (flashAddr != unsigned(-1)) {
@@ -217,7 +215,7 @@ void ReproCartridgeV1::writeIO(word port, byte value, EmuTime::param time)
 			break;
 		case 0x13:
 			mainBankReg = value & 3;
-			invalidateMemCache(0x0000, 0x10000); // flush all to be sure
+			invalidateDeviceRCache(); // flush all to be sure
 			break;
 		default: UNREACHABLE;
 	}

@@ -12,15 +12,16 @@ namespace openmsx {
 class DoubledFrame final : public FrameSource
 {
 public:
-	explicit DoubledFrame(const SDL_PixelFormat& format);
+	explicit DoubledFrame(const PixelFormat& format);
 	void init(FrameSource* field, unsigned skip);
 
 private:
-	unsigned getLineWidth(unsigned line) const override;
-	const void* getLineInfo(
+	[[nodiscard]] unsigned getLineWidth(unsigned line) const override;
+	[[nodiscard]] const void* getLineInfo(
 		unsigned line, unsigned& width,
 		void* buf, unsigned bufWidth) const override;
 
+private:
 	/** The original frame whose data will be doubled.
 	  */
 	FrameSource* field;

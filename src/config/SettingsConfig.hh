@@ -4,8 +4,8 @@
 #include "SettingsManager.hh"
 #include "Command.hh"
 #include "XMLElement.hh"
-#include "string_view.hh"
 #include <string>
+#include <string_view>
 
 namespace openmsx {
 
@@ -21,13 +21,13 @@ public:
 	               HotKey& hotKey);
 	~SettingsConfig();
 
-	void loadSetting(const FileContext& context, string_view filename);
-	void saveSetting(string_view filename = {});
+	void loadSetting(const FileContext& context, std::string_view filename);
+	void saveSetting(std::string filename = {});
 	void setSaveSettings(bool save) { mustSaveSettings = save; }
-	void setSaveFilename(const FileContext& context, string_view filename);
+	void setSaveFilename(const FileContext& context, std::string_view filename);
 
-	SettingsManager& getSettingsManager() { return settingsManager; }
-	XMLElement& getXMLElement() { return xmlElement; }
+	[[nodiscard]] SettingsManager& getSettingsManager() { return settingsManager; }
+	[[nodiscard]] XMLElement& getXMLElement() { return xmlElement; }
 
 private:
 	CommandController& commandController;
@@ -35,14 +35,14 @@ private:
 	struct SaveSettingsCommand final : Command {
 		explicit SaveSettingsCommand(CommandController& commandController);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 		void tabCompletion(std::vector<std::string>& tokens) const override;
 	} saveSettingsCommand;
 
 	struct LoadSettingsCommand final : Command {
 		explicit LoadSettingsCommand(CommandController& commandController);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 		void tabCompletion(std::vector<std::string>& tokens) const override;
 	} loadSettingsCommand;
 

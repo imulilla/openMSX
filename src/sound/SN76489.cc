@@ -2,12 +2,17 @@
 #include "DeviceConfig.hh"
 #include "Math.hh"
 #include "cstd.hh"
+#include "one_of.hh"
 #include "outer.hh"
+#include "ranges.hh"
 #include "serialize.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
+#include <iostream>
 
 using std::string;
 
@@ -15,7 +20,21 @@ namespace openmsx {
 
 // The SN76489 divides the clock input by 8, but all users of the clock apply
 // another divider of 2.
-static constexpr auto NATIVE_FREQ_INT = unsigned(cstd::round((3579545.0 / 8) / 2));
+constexpr auto NATIVE_FREQ_INT = unsigned(cstd::round((3579545.0 / 8) / 2));
+
+static constexpr auto volTable = [] {
+	std::array<unsigned, 16> result = {};
+	// 2dB per step -> 0.2, sqrt for amplitude -> 0.5
+	double factor = cstd::pow<5, 3>(0.1, 0.2 * 0.5);
+	double out = 32768.0;
+	for (auto i : xrange(15)) {
+		result[i] = cstd::round(out);
+		out *= factor;
+	}
+	result[15] = 0;
+	return result;
+}();
+
 
 // NoiseShifter:
 
@@ -75,7 +94,11 @@ SN76489::SN76489(const DeviceConfig& config)
 	: ResampledSoundDevice(config.getMotherBoard(), "SN76489", "DCSG", 4, NATIVE_FREQ_INT, false)
 	, debuggable(config.getMotherBoard(), getName())
 {
-	initVolumeTable(32768);
+	if (false) {
+		std::cout << "volTable:";
+		for (const auto& e : volTable) std::cout << ' ' << e;
+		std::cout << '\n';
+	}
 	initState();
 
 	registerSound(config);
@@ -86,18 +109,6 @@ SN76489::~SN76489()
 	unregisterSound();
 }
 
-void SN76489::initVolumeTable(int volume)
-{
-	float out = volume;
-	// 2dB per step -> 0.2f, sqrt for amplitude -> 0.5f
-	float factor = powf(0.1f, 0.2f * 0.5f);
-	for (int i = 0; i < 15; i++) {
-		volTable[i] = lrintf(out);
-		out *= factor;
-	}
-	volTable[15] = 0;
-}
-
 void SN76489::initState()
 {
 	registerLatch = 0; // TODO: 3 for Sega.
@@ -105,12 +116,12 @@ void SN76489::initState()
 	// The Sega integrated versions start zeroed (max volume), while discrete
 	// chips seem to start with random values (for lack of a reset pin).
 	// For the user's comfort, we init to silence instead.
-	for (unsigned chan = 0; chan < 4; chan++) {
-		regs[chan * 2] = 0;
+	for (auto chan : xrange(4)) {
+		regs[chan * 2 + 0] = 0x0;
 		regs[chan * 2 + 1] = 0xF;
-		counters[chan] = 0;
-		outputs[chan] = 0;
 	}
+	ranges::fill(counters, 0);
+	ranges::fill(outputs, 0);
 
 	initNoise();
 }
@@ -119,16 +130,12 @@ void SN76489::initNoise()
 {
 	// Note: These are the noise patterns for the SN76489A.
 	//       Other chip variants have different noise patterns.
-	unsigned pattern, period;
-	if (regs[6] & 0x4) {
-		// "White" noise: pseudo-random bit sequence.
-		pattern = 0x6000;
-		period = (1 << 15) - 1;
-	} else {
-		// "Periodic" noise: produces a square wave with a short duty cycle.
-		period = 15;
-		pattern = 1 << (period - 1);
-	}
+	unsigned period = (regs[6] & 0x4)
+	                ? ((1 << 15) - 1) // "White" noise: pseudo-random bit sequence.
+	                : 15;          // "Periodic" noise: produces a square wave with a short duty cycle.
+	unsigned pattern = (regs[6] & 0x4)
+	                 ? 0x6000
+	                 : (1 << (period - 1));
 	noiseShifter.initState(pattern, period);
 }
 
@@ -145,32 +152,30 @@ void SN76489::write(byte value, EmuTime::param time)
 	}
 	auto& reg = regs[registerLatch];
 
-	word data;
-	switch (registerLatch) {
-	case 0:
-	case 2:
-	case 4:
-		// Tone period.
-		if (value & 0x80) {
-			data = (reg & 0x3F0) | (value & 0x0F);
-		}  else {
-			data = (reg & 0x00F) | ((value & 0x3F) << 4);
+	word data = [&] {
+		switch (registerLatch) {
+		case 0:
+		case 2:
+		case 4:
+			// Tone period.
+			if (value & 0x80) {
+				return (reg & 0x3F0) | (value & 0x0F);
+			}  else {
+				return (reg & 0x00F) | ((value & 0x3F) << 4);
+			}
+		case 6:
+			// Noise control.
+			return value & 0x07;
+		case 1:
+		case 3:
+		case 5:
+		case 7:
+			// Attenuation.
+			return value & 0x0F;
+		default:
+			UNREACHABLE; return 0;
 		}
-		break;
-	case 6:
-		// Noise control.
-		data = value & 0x07;
-		break;
-	case 1:
-	case 3:
-	case 5:
-	case 7:
-		// Attenuation.
-		data = value & 0x0F;
-		break;
-	default:
-		UNREACHABLE;
-	}
+	}();
 
 	// TODO: Warn about access while chip is not ready.
 
@@ -206,21 +211,23 @@ void SN76489::writeRegister(unsigned reg, word value, EmuTime::param time)
  * channel are in phase, but do end up in their own separate mixing buffers.
  */
 
-template <bool NOISE> void SN76489::synthesizeChannel(
+template<bool NOISE> void SN76489::synthesizeChannel(
 		float*& buffer, unsigned num, unsigned generator)
 {
-	unsigned period;
-	if (generator == 3) {
-		// Noise channel using its own generator.
-		period = 16 << (regs[6] & 3);
-	} else {
-		// Tone or noise channel using a tone generator.
-		period = regs[2 * generator];
-		if (period == 0) {
-			// TODO: Sega variants have a non-flipping output for period 0.
-			period = 0x400;
+	unsigned period = [&] {
+		if (generator == 3) {
+			// Noise channel using its own generator.
+			return unsigned(16 << (regs[6] & 3));
+		} else {
+			// Tone or noise channel using a tone generator.
+			unsigned p = regs[2 * generator];
+			if (p == 0) {
+				// TODO: Sega variants have a non-flipping output for period 0.
+				p = 0x400;
+			}
+			return p;
 		}
-	}
+	}();
 
 	auto output = outputs[generator];
 	unsigned counter = counters[generator];
@@ -294,7 +301,7 @@ void SN76489::generateChannels(float** buffers, unsigned num)
 	}
 
 	// Channels 0, 1, 2: tone.
-	for (unsigned channel = 0; channel < 3; channel++) {
+	for (auto channel : xrange(3)) {
 		synthesizeChannel<false>(buffers[channel], num, channel);
 	}
 }
@@ -302,8 +309,6 @@ void SN76489::generateChannels(float** buffers, unsigned num)
 template<typename Archive>
 void SN76489::serialize(Archive& ar, unsigned version)
 {
-	// Don't serialize volTable since it holds computed constants, not state.
-
 	ar.serialize("regs",          regs,
 	             "registerLatch", registerLatch,
 	             "counters",      counters,
@@ -325,7 +330,7 @@ INSTANTIATE_SERIALIZE_METHODS(SN76489);
 
 // The frequency registers are 10 bits wide, so we have to split them over
 // two debuggable entries.
-static const byte SN76489_DEBUG_MAP[][2] = {
+constexpr byte SN76489_DEBUG_MAP[][2] = {
 	{0, 0}, {0, 1}, {1, 0},
 	{2, 0}, {2, 1}, {3, 0},
 	{4, 0}, {4, 1}, {5, 0},
@@ -355,17 +360,18 @@ void SN76489::Debuggable::write(unsigned address, byte value, EmuTime::param tim
 	byte hi = SN76489_DEBUG_MAP[address][1];
 
 	auto& sn76489 = OUTER(SN76489, debuggable);
-	word data;
-	if (reg == 0 || reg == 2 || reg == 4) {
-		data = sn76489.peekRegister(reg, time);
-		if (hi) {
-			data = ((value & 0x3F) << 4) | (data & 0x0F);
+	word data = [&] {
+		if (reg == one_of(0, 2, 4)) {
+			word d = sn76489.peekRegister(reg, time);
+			if (hi) {
+				return ((value & 0x3F) << 4) | (d & 0x0F);
+			} else {
+				return (d & 0x3F0) | (value & 0x0F);
+			}
 		} else {
-			data = (data & 0x3F0) | (value & 0x0F);
+			return value & 0x0F;
 		}
-	} else {
-		data = value & 0x0F;
-	}
+	}();
 	sn76489.writeRegister(reg, data, time);
 }
 

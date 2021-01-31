@@ -7,7 +7,10 @@
 #include "MSXException.hh"
 #include "CliComm.hh"
 #include "unreachable.hh"
+#include "one_of.hh"
 #include "outer.hh"
+#include "ranges.hh"
+#include "StringOp.hh"
 #include "xrange.hh"
 #include <cassert>
 #include <memory>
@@ -53,7 +56,7 @@ CartridgeSlotManager::~CartridgeSlotManager()
 	}
 }
 
-int CartridgeSlotManager::getSlotNum(string_view slot)
+int CartridgeSlotManager::getSlotNum(std::string_view slot)
 {
 	if (slot.size() == 1) {
 		if (('0' <= slot[0]) && (slot[0] <= '3')) {
@@ -263,21 +266,17 @@ void CartridgeSlotManager::freeSlot(
 
 bool CartridgeSlotManager::isExternalSlot(int ps, int ss, bool convert) const
 {
-	for (auto slot : xrange(MAX_SLOTS)) {
+	return ranges::any_of(xrange(MAX_SLOTS), [&](auto slot) {
 		int tmp = (convert && (slots[slot].ss == -1)) ? 0 : slots[slot].ss;
-		if (slots[slot].exists() &&
-		    (slots[slot].ps == ps) && (tmp == ss)) {
-			return true;
-		}
-	}
-	return false;
+		return slots[slot].exists() && (slots[slot].ps == ps) && (tmp == ss);
+	});
 }
 
 
 // CartCmd
 CartridgeSlotManager::CartCmd::CartCmd(
 		CartridgeSlotManager& manager_, MSXMotherBoard& motherBoard_,
-		string_view commandName)
+		std::string_view commandName)
 	: RecordedCommand(motherBoard_.getCommandController(),
 	                  motherBoard_.getStateChangeDistributor(),
 	                  motherBoard_.getScheduler(),
@@ -288,7 +287,7 @@ CartridgeSlotManager::CartCmd::CartCmd(
 }
 
 const HardwareConfig* CartridgeSlotManager::CartCmd::getExtensionConfig(
-	string_view cartname)
+	std::string_view cartname)
 {
 	if (cartname.size() != 5) {
 		throw SyntaxError();
@@ -300,26 +299,25 @@ const HardwareConfig* CartridgeSlotManager::CartCmd::getExtensionConfig(
 void CartridgeSlotManager::CartCmd::execute(
 	span<const TclObject> tokens, TclObject& result, EmuTime::param /*time*/)
 {
-	string_view cartname = tokens[0].getString();
+	std::string_view cartname = tokens[0].getString();
 
 	// strip namespace qualification
 	//  TODO investigate whether it's a good idea to strip namespace at a
 	//       higher level for all commands. How does that interact with
 	//       the event recording feature?
-	auto pos = cartname.rfind("::");
-	if (pos != string_view::npos) {
+	if (auto pos = cartname.rfind("::"); pos != std::string_view::npos) {
 		cartname = cartname.substr(pos + 2);
 	}
 	if (tokens.size() == 1) {
 		// query name of cartridge
-		auto* extConf = getExtensionConfig(cartname);
-		result.addListElement(strCat(cartname, ':'),
+		const auto* extConf = getExtensionConfig(cartname);
+		result.addListElement(tmpStrCat(cartname, ':'),
 		                      extConf ? extConf->getName() : string{});
 		if (!extConf) {
 			TclObject options = makeTclList("empty");
 			result.addListElement(options);
 		}
-	} else if ((tokens[1] == "eject") || (tokens[1] == "-eject")) {
+	} else if (tokens[1] == one_of("eject", "-eject")) {
 		// remove cartridge (or extension)
 		if (tokens[1] == "-eject") {
 			result =
@@ -348,11 +346,11 @@ void CartridgeSlotManager::CartCmd::execute(
 				throw CommandException("Missing argument to insert subcommand");
 			}
 		}
-                auto options = tokens.subspan(extensionNameToken + 1);
+		auto options = tokens.subspan(extensionNameToken + 1);
 		try {
-			string_view romname = tokens[extensionNameToken].getString();
+			std::string_view romname = tokens[extensionNameToken].getString();
 			auto extension = HardwareConfig::createRomConfig(
-				manager.motherBoard, romname.str(), slotname.str(), options);
+				manager.motherBoard, string(romname), string(slotname), options);
 			if (slotname != "any") {
 				if (auto* extConf = getExtensionConfig(cartname)) {
 					// still a cartridge inserted, (try to) remove it now
@@ -422,7 +420,7 @@ void CartridgeSlotManager::CartridgeSlotInfo::execute(
 	case 3: {
 		// return info on a particular slot
 		const auto& slotName = tokens[2].getString();
-		if ((slotName.size() != 5) || (!slotName.starts_with("slot"))) {
+		if ((slotName.size() != 5) || (!StringOp::startsWith(slotName, "slot"))) {
 			throw CommandException("Invalid slot name: ", slotName);
 		}
 		unsigned num = slotName[4] - 'a';
@@ -442,7 +440,7 @@ void CartridgeSlotManager::CartridgeSlotInfo::execute(
 		if (slot.config) {
 			result.addListElement(slot.config->getName());
 		} else {
-			result.addListElement(string_view{});
+			result.addListElement(std::string_view{});
 		}
 		break;
 	}

@@ -19,8 +19,8 @@ public:
 
 	byte transfer(byte value, bool cs);
 
-        template<typename Archive>
-        void serialize(Archive& ar, unsigned version);
+	template<typename Archive>
+	void serialize(Archive& ar, unsigned version);
 
 // private:
 	enum Mode {
@@ -33,8 +33,9 @@ public:
 
 private:
 	void executeCommand();
-	byte readCurrentByteFromCurrentSector();
+	[[nodiscard]] byte readCurrentByteFromCurrentSector();
 
+private:
 	const std::unique_ptr<HD> hd; // can be nullptr
 
 	byte cmdBuf[6];

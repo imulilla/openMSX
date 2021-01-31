@@ -4,8 +4,8 @@
 #include "RTSchedulable.hh"
 #include "EventListener.hh"
 #include "Command.hh"
-#include "string_view.hh"
 #include <map>
+#include <string_view>
 #include <vector>
 #include <string>
 #include <memory>
@@ -59,7 +59,7 @@ private:
 	void unbindLayer  (const EventPtr& event, const std::string& layer);
 	void unbindFullLayer(const std::string& layer);
 	void activateLayer  (std::string layer, bool blocking);
-	void deactivateLayer(string_view layer);
+	void deactivateLayer(std::string_view layer);
 
 	int executeEvent(const EventPtr& event);
 	void executeBinding(const EventPtr& event, const HotKeyInfo& info);
@@ -71,15 +71,14 @@ private:
 	// RTSchedulable
 	void executeRT() override;
 
+private:
 	class BindCmd final : public Command {
 	public:
 		BindCmd(CommandController& commandController, HotKey& hotKey,
 			bool defaultCmd);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 	private:
-		std::string formatBinding(const HotKey::BindMap::value_type& info);
-
 		HotKey& hotKey;
 		const bool defaultCmd;
 	};
@@ -91,7 +90,7 @@ private:
 		UnbindCmd(CommandController& commandController, HotKey& hotKey,
 			  bool defaultCmd);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 	private:
 		HotKey& hotKey;
 		const bool defaultCmd;
@@ -102,13 +101,13 @@ private:
 	struct ActivateCmd final : Command {
 		explicit ActivateCmd(CommandController& commandController);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 	} activateCmd;
 
 	struct DeactivateCmd final : Command {
 		explicit DeactivateCmd(CommandController& commandController);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 	} deactivateCmd;
 
 	BindMap cmdMap;

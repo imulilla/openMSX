@@ -3,8 +3,7 @@
 
 #include "V9990Rasterizer.hh"
 #include "V9990BitmapConverter.hh"
-#include "V9990P1Converter.hh"
-#include "V9990P2Converter.hh"
+#include "V9990PxConverter.hh"
 #include "Observer.hh"
 #include <memory>
 
@@ -15,26 +14,27 @@ class V9990;
 class V9990VRAM;
 class RawFrame;
 class OutputSurface;
-class VisibleSurface;
 class RenderSettings;
 class Setting;
 class PostProcessor;
 
 /** Rasterizer using SDL.
   */
-template <class Pixel>
+template<typename Pixel>
 class V9990SDLRasterizer final : public V9990Rasterizer
                                , private Observer<Setting>
 {
 public:
 	V9990SDLRasterizer(
-		V9990& vdp, Display& display, VisibleSurface& screen,
+		V9990& vdp, Display& display, OutputSurface& screen,
 		std::unique_ptr<PostProcessor> postProcessor);
 	~V9990SDLRasterizer() override;
+	V9990SDLRasterizer(const V9990SDLRasterizer&) = delete;
+	V9990SDLRasterizer& operator=(const V9990SDLRasterizer&) = delete;
 
 	// Rasterizer interface:
-	PostProcessor* getPostProcessor() const override;
-	bool isActive() override;
+	[[nodiscard]] PostProcessor* getPostProcessor() const override;
+	[[nodiscard]] bool isActive() override;
 	void reset() override;
 	void frameStart() override;
 	void frameEnd(EmuTime::param time) override;
@@ -46,16 +46,34 @@ public:
 	void drawDisplay(int fromX, int fromY, int toX, int toY,
 	                 int displayX,
 	                 int displayY, int displayYA, int displayYB) override;
-	bool isRecording() const override;
+	[[nodiscard]] bool isRecording() const override;
+
+	/** Fill the palettes.
+	  */
+	void preCalcPalettes();
+	void resetPalette();
+
+	void drawP1Mode(int fromX, int fromY, int displayX,
+	                int displayY, int displayYA, int displayYB,
+	                int displayWidth, int displayHeight, bool drawSprites);
+	void drawP2Mode(int fromX, int fromY, int displayX,
+	                int displayY, int displayYA,
+	                int displayWidth, int displayHeight, bool drawSprites);
+	void drawBxMode(int fromX, int fromY, int displayX,
+	                int displayY, int displayYA,
+	                int displayWidth, int displayHeight, bool drawSprites);
+
+	// Observer<Setting>
+	void update(const Setting& setting) override;
 
 private:
 	/** screen width for SDLLo
 	  */
-	static const int SCREEN_WIDTH  = 320;
+	static constexpr int SCREEN_WIDTH  = 320;
 
 	/** screenheight for SDLLo
 	  */
-	static const int SCREEN_HEIGHT = 240;
+	static constexpr int SCREEN_HEIGHT = 240;
 
 	/** The VDP of which the video output is being rendered.
 	  */
@@ -118,24 +136,6 @@ private:
 	V9990BitmapConverter<Pixel> bitmapConverter;
 	V9990P1Converter<Pixel> p1Converter;
 	V9990P2Converter<Pixel> p2Converter;
-
-	/** Fill the palettes.
-	  */
-	void preCalcPalettes();
-	void resetPalette();
-
-	void drawP1Mode(int fromX, int fromY, int displayX,
-	                int displayY, int displayYA, int displayYB,
-	                int displayWidth, int displayHeight, bool drawSprites);
-	void drawP2Mode(int fromX, int fromY, int displayX,
-	                int displayY, int displayYA,
-	                int displayWidth, int displayHeight, bool drawSprites);
-	void drawBxMode(int fromX, int fromY, int displayX,
-	                int displayY, int displayYA,
-	                int displayWidth, int displayHeight, bool drawSprites);
-
-	// Observer<Setting>
-	void update(const Setting& setting) override;
 };
 
 } // namespace openmsx

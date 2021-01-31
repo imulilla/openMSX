@@ -30,26 +30,23 @@ public:
 	{
 	}
 
-	int getSource()         const { return thisSource; }
-	int getSelectedSource() const { return selectedSource; }
-	bool isSkipped() const { return skipped; }
-	bool needRender() const { return !skipped && (thisSource == selectedSource); }
+	[[nodiscard]] int getSource()         const { return thisSource; }
+	[[nodiscard]] int getSelectedSource() const { return selectedSource; }
+	[[nodiscard]] bool isSkipped() const { return skipped; }
+	[[nodiscard]] bool needRender() const { return !skipped && (thisSource == selectedSource); }
 
-	TclObject toTclList() const override
+	[[nodiscard]] TclObject toTclList() const override
 	{
 		return makeTclList("finishframe",
 		                   int(thisSource),
 		                   int(selectedSource),
 		                   skipped);
 	}
-	bool lessImpl(const Event& other) const override
+	[[nodiscard]] bool lessImpl(const Event& other) const override
 	{
-		auto& e = checked_cast<const FinishFrameEvent&>(other);
-		auto t1 = std::make_tuple(
-			getSource(), getSelectedSource(), isSkipped());
-		auto t2 = std::make_tuple(
-			e.getSource(), e.getSelectedSource(), e.isSkipped());
-		return t1 < t2;
+		const auto& e = checked_cast<const FinishFrameEvent&>(other);
+		return std::tuple(  getSource(),   getSelectedSource(),   isSkipped()) <
+		       std::tuple(e.getSource(), e.getSelectedSource(), e.isSkipped());
 	}
 
 private:

@@ -10,15 +10,15 @@
 
 namespace openmsx {
 
-template <typename Pixel>
+template<typename Pixel>
 class SuperImposedFrameImpl final : public SuperImposedFrame
 {
 public:
-	explicit SuperImposedFrameImpl(const SDL_PixelFormat& format);
+	explicit SuperImposedFrameImpl(const PixelFormat& format);
 
 private:
-	unsigned getLineWidth(unsigned line) const override;
-	const void* getLineInfo(
+	[[nodiscard]] unsigned getLineWidth(unsigned line) const override;
+	[[nodiscard]] const void* getLineInfo(
 		unsigned line, unsigned& width,
 		void* buf, unsigned bufWidth) const override;
 
@@ -29,22 +29,22 @@ private:
 // class SuperImposedFrame
 
 std::unique_ptr<SuperImposedFrame> SuperImposedFrame::create(
-	const SDL_PixelFormat& format)
+	const PixelFormat& format)
 {
 #if HAVE_16BPP
-	if (format.BitsPerPixel == 15 || format.BitsPerPixel == 16) {
+	if (format.getBytesPerPixel() == 2) {
 		return std::make_unique<SuperImposedFrameImpl<uint16_t>>(format);
 	}
 #endif
 #if HAVE_32BPP
-	if (format.BitsPerPixel == 32) {
+	if (format.getBytesPerPixel() == 4) {
 		return std::make_unique<SuperImposedFrameImpl<uint32_t>>(format);
 	}
 #endif
 	UNREACHABLE; return nullptr; // avoid warning
 }
 
-SuperImposedFrame::SuperImposedFrame(const SDL_PixelFormat& format)
+SuperImposedFrame::SuperImposedFrame(const PixelFormat& format)
 	: FrameSource(format)
 {
 }
@@ -60,15 +60,15 @@ void SuperImposedFrame::init(
 
 // class SuperImposedFrameImpl
 
-template <typename Pixel>
+template<typename Pixel>
 SuperImposedFrameImpl<Pixel>::SuperImposedFrameImpl(
-		const SDL_PixelFormat& format)
+		const PixelFormat& format)
 	: SuperImposedFrame(format)
 	, pixelOps(format)
 {
 }
 
-template <typename Pixel>
+template<typename Pixel>
 unsigned SuperImposedFrameImpl<Pixel>::getLineWidth(unsigned line) const
 {
 	unsigned tNum = (getHeight() == top   ->getHeight()) ? line : line / 2;
@@ -78,7 +78,7 @@ unsigned SuperImposedFrameImpl<Pixel>::getLineWidth(unsigned line) const
 	return std::max(tWidth, bWidth);
 }
 
-template <typename Pixel>
+template<typename Pixel>
 const void* SuperImposedFrameImpl<Pixel>::getLineInfo(
 	unsigned line, unsigned& width, void* buf, unsigned bufWidth) const
 {

@@ -26,7 +26,7 @@ class MusicModulePeriphery final : public Y8950Periphery
 public:
 	explicit MusicModulePeriphery(MSXAudio& audio);
 	void write(nibble outputs, nibble values, EmuTime::param time) override;
-	nibble read(EmuTime::param time) override;
+	[[nodiscard]] nibble read(EmuTime::param time) override;
 
 	template<typename Archive>
 	void serialize(Archive& /*ar*/, unsigned /*version*/) {
@@ -45,16 +45,18 @@ public:
 		MSXAudio& audio, const DeviceConfig& config,
 		const string& soundDeviceName);
 	~PanasonicAudioPeriphery() override;
+	PanasonicAudioPeriphery(const PanasonicAudioPeriphery&) = delete;
+	PanasonicAudioPeriphery& operator=(const PanasonicAudioPeriphery&) = delete;
 
 	void reset() override;
 
 	void write(nibble outputs, nibble values, EmuTime::param time) override;
-	nibble read(EmuTime::param time) override;
+	[[nodiscard]] nibble read(EmuTime::param time) override;
 
-	byte peekMem(word address, EmuTime::param time) const override;
+	[[nodiscard]] byte peekMem(word address, EmuTime::param time) const override;
 	void writeMem(word address, byte value, EmuTime::param time) override;
-	const byte* getReadCacheLine(word address) const override;
-	byte* getWriteCacheLine(word address) const override;
+	[[nodiscard]] const byte* getReadCacheLine(word address) const override;
+	[[nodiscard]] byte* getWriteCacheLine(word address) const override;
 
 	template<typename Archive>
 	void serialize(Archive& ar, unsigned version);
@@ -64,6 +66,7 @@ private:
 	void setIOPorts(byte value);
 	void setIOPortsHelper(unsigned base, bool enable);
 
+private:
 	MSXAudio& audio;
 	BooleanSetting swSwitch;
 	Ram ram;
@@ -78,7 +81,7 @@ class ToshibaAudioPeriphery final : public Y8950Periphery
 public:
 	explicit ToshibaAudioPeriphery(MSXAudio& audio);
 	void write(nibble outputs, nibble values, EmuTime::param time) override;
-	nibble read(EmuTime::param time) override;
+	[[nodiscard]] nibble read(EmuTime::param time) override;
 	void setSPOFF(bool value, EmuTime::param time) override;
 
 	template<typename Archive>
@@ -158,7 +161,7 @@ PanasonicAudioPeriphery::PanasonicAudioPeriphery(
 		MSXAudio& audio_, const DeviceConfig& config,
 		const string& soundDeviceName)
 	: audio(audio_)
-	, swSwitch(audio.getCommandController(), soundDeviceName + "_firmware",
+	, swSwitch(audio.getCommandController(), tmpStrCat(soundDeviceName, "_firmware"),
 	           "This setting controls the switch on the Panasonic "
 	           "MSX-AUDIO module. The switch controls whether the internal "
 	           "software of this module must be started or not.",
@@ -246,7 +249,7 @@ byte* PanasonicAudioPeriphery::getWriteCacheLine(word address) const
 void PanasonicAudioPeriphery::setBank(byte value)
 {
 	bankSelect = value & 3;
-	audio.getCPU().invalidateMemCache(0x0000, 0x10000);
+	audio.getCPU().invalidateAllSlotsRWCache(0x0000, 0x10000);
 }
 
 void PanasonicAudioPeriphery::setIOPorts(byte value)
@@ -297,7 +300,7 @@ ToshibaAudioPeriphery::ToshibaAudioPeriphery(MSXAudio& audio_)
 }
 
 void ToshibaAudioPeriphery::write(nibble /*outputs*/, nibble /*values*/,
-                                    EmuTime::param /*time*/)
+                                  EmuTime::param /*time*/)
 {
 	// TODO IO1-IO0 are programmed as output by HX-MU900 software rom
 	//      and it writes periodically the values 1/1/2/2/0/0 to
@@ -323,17 +326,17 @@ std::unique_ptr<Y8950Periphery> Y8950PeripheryFactory::create(
 	MSXAudio& audio, const DeviceConfig& config,
 	const std::string& soundDeviceName)
 {
-	string type(StringOp::toLower(config.getChildData("type", "philips")));
-	if (type == "philips") {
+	auto type = config.getChildData("type", "philips");
+	StringOp::casecmp cmp;
+	if (cmp(type, "philips")) {
 		return std::make_unique<MusicModulePeriphery>(audio);
-	} else if (type == "panasonic") {
+	} else if (cmp(type, "panasonic")) {
 		return std::make_unique<PanasonicAudioPeriphery>(
 			audio, config, soundDeviceName);
-	} else if (type == "toshiba") {
+	} else if (cmp(type, "toshiba")) {
 		return std::make_unique<ToshibaAudioPeriphery>(audio);
-	} else {
-		throw MSXException("Unknown MSX-AUDIO type: ", type);
 	}
+	throw MSXException("Unknown MSX-AUDIO type: ", type);
 }
 
 } // namespace openmsx

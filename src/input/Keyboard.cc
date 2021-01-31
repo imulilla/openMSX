@@ -12,16 +12,19 @@
 #include "InputEvents.hh"
 #include "StateChange.hh"
 #include "TclArgParser.hh"
-#include "utf8_checked.hh"
 #include "checked_cast.hh"
-#include "unreachable.hh"
+#include "enumerate.hh"
+#include "openmsx.hh"
+#include "one_of.hh"
+#include "outer.hh"
 #include "serialize.hh"
 #include "serialize_stl.hh"
 #include "serialize_meta.hh"
-#include "openmsx.hh"
-#include "outer.hh"
 #include "stl.hh"
+#include "unreachable.hh"
+#include "utf8_checked.hh"
 #include "view.hh"
+#include "xrange.hh"
 #include <SDL.h>
 #include <cstdio>
 #include <cstring>
@@ -35,7 +38,25 @@ using std::make_shared;
 
 namespace openmsx {
 
-static const int TRY_AGAIN = 0x80; // see pressAscii()
+// How does the CAPSLOCK key behave?
+#ifdef __APPLE__
+// See the comments in this issue:
+//    https://github.com/openMSX/openMSX/issues/1261
+// Basically it means on apple:
+//   when the host capslock key is pressed,       SDL sends capslock-pressed
+//   when the host capslock key is released,      SDL sends nothing
+//   when the host capslock key is pressed again, SDL sends capslock-released
+//   when the host capslock key is released,      SDL sends nothing
+static constexpr bool SANE_CAPSLOCK_BEHAVIOR = false;
+#else
+// We get sane capslock events from SDL:
+//  when the host capslock key is pressed,  SDL sends capslock-pressed
+//  when the host capslock key is released, SDL sends capslock-released
+static constexpr bool SANE_CAPSLOCK_BEHAVIOR = true;
+#endif
+
+
+static constexpr int TRY_AGAIN = 0x80; // see pressAscii()
 
 using KeyInfo = UnicodeKeymap::KeyInfo;
 
@@ -54,9 +75,9 @@ public:
 		// and or-operations)
 		assert((press & release) == 0);
 	}
-	byte getRow()     const { return row; }
-	byte getPress()   const { return press; }
-	byte getRelease() const { return release; }
+	[[nodiscard]] byte getRow()     const { return row; }
+	[[nodiscard]] byte getPress()   const { return press; }
+	[[nodiscard]] byte getRelease() const { return release; }
 
 	template<typename Archive> void serialize(Archive& ar, unsigned /*version*/)
 	{
@@ -71,13 +92,13 @@ private:
 REGISTER_POLYMORPHIC_CLASS(StateChange, KeyMatrixState, "KeyMatrixState");
 
 
-static const char* defaultKeymapForMatrix[] = {
+constexpr const char* const defaultKeymapForMatrix[] = {
 	"int", // MATRIX_MSX
 	"svi", // MATRIX_SVI
 	"cvjoy", // MATRIX_CVJOY
 };
 
-static const std::array<KeyMatrixPosition, UnicodeKeymap::KeyInfo::NUM_MODIFIERS>
+constexpr std::array<KeyMatrixPosition, UnicodeKeymap::KeyInfo::NUM_MODIFIERS>
 		modifierPosForMatrix[] = {
 	{ // MATRIX_MSX
 		KeyMatrixPosition(6, 0), // SHIFT
@@ -105,7 +126,8 @@ Keyboard::Keyboard(MSXMotherBoard& motherBoard,
                    StateChangeDistributor& stateChangeDistributor_,
                    MatrixType matrix,
                    const DeviceConfig& config)
-	: commandController(commandController_)
+	: Schedulable(scheduler_)
+	, commandController(commandController_)
 	, msxEventDistributor(msxEventDistributor_)
 	, stateChangeDistributor(stateChangeDistributor_)
 	, keyTab(keyTabs[matrix])
@@ -131,7 +153,7 @@ Keyboard::Keyboard(MSXMotherBoard& motherBoard,
 	, locksOn(0)
 {
 	keysChanged = false;
-	msxmodifiers = 0xff;
+	msxModifiers = 0xff;
 	ranges::fill(keyMatrix,     255);
 	ranges::fill(cmdKeyMatrix,  255);
 	ranges::fill(typeKeyMatrix, 255);
@@ -154,7 +176,7 @@ Keyboard::~Keyboard()
 }
 
 template<unsigned NUM_ROWS>
-static void doKeyGhosting(byte (&matrix)[NUM_ROWS], bool protectRow6)
+static constexpr void doKeyGhosting(byte (&matrix)[NUM_ROWS], bool protectRow6)
 {
 	// This routine enables keyghosting as seen on a real MSX
 	//
@@ -175,9 +197,9 @@ static void doKeyGhosting(byte (&matrix)[NUM_ROWS], bool protectRow6)
 	bool changedSomething;
 	do {
 		changedSomething = false;
-		for (unsigned i = 0; i < NUM_ROWS - 1; i++) {
+		for (auto i : xrange(NUM_ROWS - 1)) {
 			auto row1 = matrix[i];
-			for (unsigned j = i + 1; j < NUM_ROWS; j++) {
+			for (auto j : xrange(i + 1, NUM_ROWS)) {
 				auto row2 = matrix[j];
 				if ((row1 != row2) && ((row1 | row2) != 0xff)) {
 					auto rowIold = matrix[i];
@@ -215,7 +237,7 @@ const byte* Keyboard::getKeys() const
 	if (keysChanged) {
 		keysChanged = false;
 		const auto* matrix = keyTypeCmd.isActive() ? typeKeyMatrix : userKeyMatrix;
-		for (unsigned row = 0; row < KeyMatrixPosition::NUM_ROWS; ++row) {
+		for (auto row : xrange(KeyMatrixPosition::NUM_ROWS)) {
 			keyMatrix[row] = cmdKeyMatrix[row] & matrix[row];
 		}
 		if (keyGhosting) {
@@ -238,11 +260,11 @@ void Keyboard::transferHostKeyMatrix(const Keyboard& source)
 	// msx keyboard with the host keyboard. In the past we assumed the host
 	// keyboard had no keys pressed. But this is wrong in the above
 	// scenario. Now we remember the state of the host keyboard and
-	// transfer that to the new keyboard(s) that get created for reverese.
+	// transfer that to the new keyboard(s) that get created for reverse.
 	// When replay is stopped we restore this host keyboard state, see
 	// stopReplay().
 
-	for (unsigned row = 0; row < KeyMatrixPosition::NUM_ROWS; ++row) {
+	for (auto row : xrange(KeyMatrixPosition::NUM_ROWS)) {
 		hostKeyMatrix[row] = source.hostKeyMatrix[row];
 	}
 }
@@ -255,9 +277,7 @@ void Keyboard::transferHostKeyMatrix(const Keyboard& source)
 void Keyboard::signalMSXEvent(const shared_ptr<const Event>& event,
                               EmuTime::param time)
 {
-	EventType type = event->getType();
-	if ((type == OPENMSX_KEY_DOWN_EVENT) ||
-	    (type == OPENMSX_KEY_UP_EVENT)) {
+	if (event->getType() == one_of(OPENMSX_KEY_DOWN_EVENT, OPENMSX_KEY_UP_EVENT)) {
 		// Ignore possible console on/off events:
 		// we do not rescan the keyboard since this may lead to
 		// an unwanted pressing of <return> in MSX after typing
@@ -268,7 +288,7 @@ void Keyboard::signalMSXEvent(const shared_ptr<const Event>& event,
 
 void Keyboard::signalStateChange(const shared_ptr<StateChange>& event)
 {
-	auto kms = dynamic_cast<KeyMatrixState*>(event.get());
+	const auto* kms = dynamic_cast<const KeyMatrixState*>(event.get());
 	if (!kms) return;
 
 	userKeyMatrix[kms->getRow()] &= ~kms->getPress();
@@ -278,10 +298,10 @@ void Keyboard::signalStateChange(const shared_ptr<StateChange>& event)
 
 void Keyboard::stopReplay(EmuTime::param time)
 {
-	for (unsigned row = 0; row < KeyMatrixPosition::NUM_ROWS; ++row) {
-		changeKeyMatrixEvent(time, row, hostKeyMatrix[row]);
+	for (auto [row, hkm] : enumerate(hostKeyMatrix)) {
+		changeKeyMatrixEvent(time, byte(row), hkm);
 	}
-	msxmodifiers = 0xff;
+	msxModifiers = 0xff;
 	msxKeyEventQueue.clear();
 	memset(dynKeymap, 0, sizeof(dynKeymap));
 }
@@ -347,10 +367,14 @@ void Keyboard::changeKeyMatrixEvent(EmuTime::param time, byte row, byte newValue
  */
 bool Keyboard::processQueuedEvent(const Event& event, EmuTime::param time)
 {
-	auto& keyEvent = checked_cast<const KeyEvent&>(event);
+	auto mode = keyboardSettings.getMappingMode();
+
+	const auto& keyEvent = checked_cast<const KeyEvent&>(event);
 	bool down = event.getType() == OPENMSX_KEY_DOWN_EVENT;
-	auto key = static_cast<Keys::KeyCode>(
-		int(keyEvent.getKeyCode()) & int(Keys::K_MASK));
+	auto code = (mode == KeyboardSettings::POSITIONAL_MAPPING)
+	          ? keyEvent.getScanCode() : keyEvent.getKeyCode();
+	auto key = static_cast<Keys::KeyCode>(int(code) & int(Keys::K_MASK));
+
 	if (down) {
 		// TODO: refactor debug(...) method to expect a std::string and then adapt
 		// all invocations of it to provide a properly formatted string, using the C++
@@ -376,8 +400,8 @@ bool Keyboard::processQueuedEvent(const Event& event, EmuTime::param time)
 	}
 
 	// Process deadkeys.
-	if (keyboardSettings.getMappingMode() == KeyboardSettings::CHARACTER_MAPPING) {
-		for (unsigned n = 0; n < 3; n++) {
+	if (mode == KeyboardSettings::CHARACTER_MAPPING) {
+		for (auto n : xrange(3)) {
 			if (key == keyboardSettings.getDeadkeyHostKey(n)) {
 				UnicodeKeymap::KeyInfo deadkey = unicodeKeymap.getDeadkey(n);
 				if (deadkey.isValid()) {
@@ -438,11 +462,24 @@ void Keyboard::processGraphChange(EmuTime::param time, bool down)
  */
 void Keyboard::processCapslockEvent(EmuTime::param time, bool down)
 {
-	debug("Changing CAPS lock state according to SDL request\n");
-	if (down) {
+	if (SANE_CAPSLOCK_BEHAVIOR) {
+		debug("Changing CAPS lock state according to SDL request\n");
+		if (down) {
+			locksOn ^= KeyInfo::CAPS_MASK;
+		}
+		updateKeyMatrix(time, down, modifierPos[KeyInfo::CAPS]);
+	} else {
+		debug("Pressing CAPS lock and scheduling a release\n");
 		locksOn ^= KeyInfo::CAPS_MASK;
+		updateKeyMatrix(time, true, modifierPos[KeyInfo::CAPS]);
+		setSyncPoint(time + EmuDuration::hz(10)); // 0.1s (in MSX time)
 	}
-	updateKeyMatrix(time, down, modifierPos[KeyInfo::CAPS]);
+}
+
+void Keyboard::executeUntil(EmuTime::param time)
+{
+	debug("Releasing CAPS lock\n");
+	updateKeyMatrix(time, false, modifierPos[KeyInfo::CAPS]);
 }
 
 void Keyboard::processKeypadEnterKey(EmuTime::param time, bool down)
@@ -492,16 +529,16 @@ void Keyboard::updateKeyMatrix(EmuTime::param time, bool down, KeyMatrixPosition
 		// The MSX modifiers sometimes get overruled by the unicode character
 		// processing, in which case the unicode processing must be able to
 		// restore them to the real key-combinations pressed by the user.
-		for (unsigned i = 0; i < KeyInfo::NUM_MODIFIERS; i++) {
-			if (pos == modifierPos[i]) {
-				msxmodifiers &= ~(1 << i);
+		for (auto [i, mp] : enumerate(modifierPos)) {
+			if (pos == mp) {
+				msxModifiers &= ~(1 << i);
 			}
 		}
 	} else {
 		releaseKeyMatrixEvent(time, pos);
-		for (unsigned i = 0; i < KeyInfo::NUM_MODIFIERS; i++) {
-			if (pos == modifierPos[i]) {
-				msxmodifiers |= 1 << i;
+		for (auto [i, mp] : enumerate(modifierPos)) {
+			if (pos == mp) {
+				msxModifiers |= 1 << i;
 			}
 		}
 	}
@@ -518,18 +555,17 @@ void Keyboard::updateKeyMatrix(EmuTime::param time, bool down, KeyMatrixPosition
  */
 bool Keyboard::processKeyEvent(EmuTime::param time, bool down, const KeyEvent& keyEvent)
 {
-	Keys::KeyCode keyCode = keyEvent.getKeyCode();
-	auto key = static_cast<Keys::KeyCode>(
-		int(keyCode) & int(Keys::K_MASK));
-	unsigned unicode;
+	auto mode = keyboardSettings.getMappingMode();
 
-	bool isOnKeypad = (
+	auto keyCode  = keyEvent.getKeyCode();
+	auto scanCode = keyEvent.getScanCode();
+	auto code = (mode == KeyboardSettings::POSITIONAL_MAPPING) ? scanCode : keyCode;
+	auto key = static_cast<Keys::KeyCode>(int(code) & int(Keys::K_MASK));
+
+	bool isOnKeypad =
 		(key >= Keys::K_KP0 && key <= Keys::K_KP9) ||
-		(key == Keys::K_KP_PERIOD) ||
-		(key == Keys::K_KP_DIVIDE) ||
-		(key == Keys::K_KP_MULTIPLY) ||
-		(key == Keys::K_KP_MINUS) ||
-		(key == Keys::K_KP_PLUS));
+		(key == one_of(Keys::K_KP_PERIOD, Keys::K_KP_DIVIDE, Keys::K_KP_MULTIPLY,
+		               Keys::K_KP_MINUS,  Keys::K_KP_PLUS));
 
 	if (isOnKeypad && !hasKeypad &&
 	    !keyboardSettings.getAlwaysEnableKeypad()) {
@@ -540,10 +576,12 @@ bool Keyboard::processKeyEvent(EmuTime::param time, bool down, const KeyEvent& k
 
 	if (down) {
 		UnicodeKeymap::KeyInfo keyInfo;
+		unsigned unicode;
 		if (isOnKeypad ||
-		    keyboardSettings.getMappingMode() == KeyboardSettings::KEY_MAPPING) {
-			// User entered a key on numeric keypad or the driver is in KEY
-			// mapping mode.
+		    mode == one_of(KeyboardSettings::KEY_MAPPING,
+		                   KeyboardSettings::POSITIONAL_MAPPING)) {
+			// User entered a key on numeric keypad or the driver is in
+			// KEY/POSITIONAL mapping mode.
 			// First option (keypad) maps to same unicode as some other key
 			// combinations (e.g. digit on main keyboard or TAB/DEL).
 			// Use unicode to handle the more common combination and use direct
@@ -615,11 +653,9 @@ bool Keyboard::processKeyEvent(EmuTime::param time, bool down, const KeyEvent& k
 			keyCode = key = Keys::K_INSERT;
 		}
 #endif
-		if (key < MAX_KEYSYM) {
-			unicode = dynKeymap[key]; // Get the unicode that was derived from this key
-		} else {
-			unicode = 0;
-		}
+		unsigned unicode = (key < MAX_KEYSYM)
+			? dynKeymap[key] // Get the unicode that was derived from this key
+			: 0;
 		if (unicode == 0) {
 			// It was a special key, perform matrix to matrix mapping
 			// But only when it is not a first keystroke of a
@@ -712,7 +748,7 @@ bool Keyboard::pressUnicodeByUser(
 			// Ignore the GRAPH key in case that Graph locks
 			// Always ignore CAPSLOCK mask (assume that user will
 			// use real CAPS lock to switch/ between hiragana and
-			// katanana on japanese model)
+			// katakana on japanese model)
 			pressKeyMatrixEvent(time, keyInfo.pos);
 
 			byte modmask = keyInfo.modmask & ~modifierIsLock;
@@ -730,9 +766,9 @@ bool Keyboard::pressUnicodeByUser(
 			}
 			// Press required modifiers for our character.
 			// Note that these modifiers are only pressed, never released.
-			for (unsigned i = 0; i < KeyInfo::NUM_MODIFIERS; i++) {
+			for (auto [i, mp] : enumerate(modifierPos)) {
 				if ((modmask >> i) & 1) {
-					pressKeyMatrixEvent(time, modifierPos[i]);
+					pressKeyMatrixEvent(time, mp);
 				}
 			}
 		}
@@ -740,14 +776,14 @@ bool Keyboard::pressUnicodeByUser(
 		releaseKeyMatrixEvent(time, keyInfo.pos);
 
 		// Restore non-lock modifier keys.
-		for (unsigned i = 0; i < KeyInfo::NUM_MODIFIERS; i++) {
+		for (auto [i, mp] : enumerate(modifierPos)) {
 			if (!((modifierIsLock >> i) & 1)) {
 				// Do not simply unpress graph, ctrl, code and shift but
 				// restore them to the values currently pressed by the user.
-				if ((msxmodifiers >> i) & 1) {
-					releaseKeyMatrixEvent(time, modifierPos[i]);
+				if ((msxModifiers >> i) & 1) {
+					releaseKeyMatrixEvent(time, mp);
 				} else {
-					pressKeyMatrixEvent(time, modifierPos[i]);
+					pressKeyMatrixEvent(time, mp);
 				}
 			}
 		}
@@ -779,13 +815,12 @@ int Keyboard::pressAscii(unsigned unicode, bool down)
 	if (down) {
 		// check for modifier toggles
 		byte toggleLocks = needsLockToggle(keyInfo);
-		for (unsigned i = 0; i < KeyInfo::NUM_MODIFIERS; i++) {
+		for (auto [i, mp] : enumerate(modifierPos)) {
 			if ((toggleLocks >> i) & 1) {
 				debug("Toggling lock %d\n", i);
 				locksOn ^= 1 << i;
 				releaseMask |= 1 << i;
-				auto lockPos = modifierPos[i];
-				typeKeyMatrix[lockPos.getRow()] &= ~lockPos.getMask();
+				typeKeyMatrix[mp.getRow()] &= ~mp.getMask();
 			}
 		}
 		if (releaseMask == 0) {
@@ -829,10 +864,9 @@ int Keyboard::pressAscii(unsigned unicode, bool down)
 				}
 			}
 			// press modifiers
-			for (unsigned i = 0; i < KeyInfo::NUM_MODIFIERS; i++) {
+			for (auto [i, mp] : enumerate(modifierPos)) {
 				if ((modmask >> i) & 1) {
-					auto modPos = modifierPos[i];
-					typeKeyMatrix[modPos.getRow()] &= ~modPos.getMask();
+					typeKeyMatrix[mp.getRow()] &= ~mp.getMask();
 				}
 			}
 			if (releaseMask == 0) {
@@ -842,10 +876,9 @@ int Keyboard::pressAscii(unsigned unicode, bool down)
 		}
 	} else {
 		typeKeyMatrix[keyInfo.pos.getRow()] |= keyInfo.pos.getMask();
-		for (unsigned i = 0; i < KeyInfo::NUM_MODIFIERS; i++) {
+		for (auto [i, mp] : enumerate(modifierPos)) {
 			if ((modmask >> i) & 1) {
-				auto modPos = modifierPos[i];
-				typeKeyMatrix[modPos.getRow()] |= modPos.getMask();
+				typeKeyMatrix[mp.getRow()] |= mp.getMask();
 			}
 		}
 	}
@@ -861,15 +894,14 @@ int Keyboard::pressAscii(unsigned unicode, bool down)
  */
 void Keyboard::pressLockKeys(byte lockKeysMask, bool down)
 {
-	for (unsigned i = 0; i < KeyInfo::NUM_MODIFIERS; i++) {
+	for (auto [i, mp] : enumerate(modifierPos)) {
 		if ((lockKeysMask >> i) & 1) {
-			auto lockPos = modifierPos[i];
 			if (down) {
 				// press lock key
-				typeKeyMatrix[lockPos.getRow()] &= ~lockPos.getMask();
+				typeKeyMatrix[mp.getRow()] &= ~mp.getMask();
 			} else {
 				// release lock key
-				typeKeyMatrix[lockPos.getRow()] |= lockPos.getMask();
+				typeKeyMatrix[mp.getRow()] |= mp.getMask();
 			}
 		}
 	}
@@ -941,7 +973,7 @@ Keyboard::KeyMatrixDownCmd::KeyMatrixDownCmd(CommandController& commandControlle
 }
 
 void Keyboard::KeyMatrixDownCmd::execute(span<const TclObject> tokens,
-                               TclObject& /*result*/, EmuTime::param /*time*/)
+                                         TclObject& /*result*/, EmuTime::param /*time*/)
 {
 	checkNumArgs(tokens, 3, Prefix{1}, "row mask");
 	auto& keyboard = OUTER(Keyboard, keyMatrixDownCmd);
@@ -1078,7 +1110,7 @@ void Keyboard::KeyInserter::tabCompletion(vector<string>& tokens) const
 	completeString(tokens, options);
 }
 
-void Keyboard::KeyInserter::type(string_view str)
+void Keyboard::KeyInserter::type(std::string_view str)
 {
 	if (str.empty()) {
 		return;
@@ -1181,6 +1213,11 @@ Keyboard::CapsLockAligner::~CapsLockAligner()
 
 int Keyboard::CapsLockAligner::signalEvent(const shared_ptr<const Event>& event)
 {
+	if (!SANE_CAPSLOCK_BEHAVIOR) {
+		// don't even try
+		return 0;
+	}
+
 	if (state == IDLE) {
 		EmuTime::param time = getCurrentTime();
 		EventType type = event->getType();
@@ -1234,9 +1271,9 @@ void Keyboard::CapsLockAligner::alignCapsLock(EmuTime::param time)
 		// processCapslockEvent() because we want this to be recorded
 		auto event = make_shared<KeyDownEvent>(Keys::K_CAPSLOCK);
 		keyboard.msxEventDistributor.distributeEvent(event, time);
-        keyboard.debug("Sending fake CAPS release\n");
-        state = MUST_DISTRIBUTE_KEY_RELEASE;
-        setSyncPoint(time + EmuDuration::hz(10)); // 0.1s (MSX time)
+		keyboard.debug("Sending fake CAPS release\n");
+		state = MUST_DISTRIBUTE_KEY_RELEASE;
+		setSyncPoint(time + EmuDuration::hz(10)); // 0.1s (MSX time)
 	} else {
 		state = IDLE;
 	}
@@ -1288,7 +1325,7 @@ void Keyboard::KeyInserter::serialize(Archive& ar, unsigned /*version*/)
 	}
 }
 
-// version 1: Initial version: {userKeyMatrix, dynKeymap, msxmodifiers,
+// version 1: Initial version: {userKeyMatrix, dynKeymap, msxModifiers,
 //            msxKeyEventQueue} was intentionally not serialized. The reason
 //            was that after a loadstate, you want the MSX keyboard to reflect
 //            the state of the host keyboard. So any pressed MSX keys from the
@@ -1330,7 +1367,7 @@ void Keyboard::serialize(Archive& ar, unsigned version)
 	if (ar.versionAtLeast(version, 2)) {
 		ar.serialize("userKeyMatrix",    userKeyMatrix,
 		             "dynKeymap",        dynKeymap,
-		             "msxmodifiers",     msxmodifiers,
+		             "msxmodifiers",     msxModifiers,
 		             "msxKeyEventQueue", msxKeyEventQueue);
 	}
 	// don't serialize hostKeyMatrix
@@ -1349,7 +1386,7 @@ void Keyboard::MsxKeyEventQueue::serialize(Archive& ar, unsigned /*version*/)
 
 	// serialization of deque<shared_ptr<const Event>> is not directly
 	// supported by the serialization framework (main problem is the
-	// constness, collections of shared_ptr to polymorhpic objects are
+	// constness, collections of shared_ptr to polymorphic objects are
 	// not a problem). Worked around this by serializing the events in
 	// ascii format. (In all practical cases this queue will anyway be
 	// empty or contain very few elements).
@@ -1374,7 +1411,7 @@ INSTANTIATE_SERIALIZE_METHODS(Keyboard::MsxKeyEventQueue);
 /** Keyboard bindings ****************************************/
 
 // Mapping from SDL keys to emulated keys, ordered by MatrixType
-static const KeyMatrixPosition x = KeyMatrixPosition();
+constexpr KeyMatrixPosition x = KeyMatrixPosition();
 const KeyMatrixPosition Keyboard::keyTabs[][MAX_KEYSYM] = {
   {
 // MSX Key-Matrix table

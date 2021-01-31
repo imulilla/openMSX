@@ -1,9 +1,11 @@
 #ifndef SHA1_HH
 #define SHA1_HH
 
-#include "string_view.hh"
+#include "span.hh"
+#include "xrange.hh"
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <cstdint>
 
 namespace openmsx {
@@ -25,36 +27,36 @@ public:
 	// note: default copy and assign are ok
 	Sha1Sum();
 	/** Construct from string, throws when string is malformed. */
-	explicit Sha1Sum(string_view hex);
+	explicit Sha1Sum(std::string_view hex);
 
 	/** Parse from a 40-character long buffer.
-	 * @pre: 'str' points to a buffer of at least 40 characters
-	 * @throws: MSXException if chars are not 0-9, a-f, A-F
+	 * @pre 'str' points to a buffer of at least 40 characters
+	 * @throws MSXException if chars are not 0-9, a-f, A-F
 	 */
 	void parse40(const char* str);
-	std::string toString() const;
+	[[nodiscard]] std::string toString() const;
 
 	// Test or set 'null' value.
-	bool empty() const;
+	[[nodiscard]] bool empty() const;
 	void clear();
 
-	bool operator==(const Sha1Sum& other) const {
-		for (int i = 0; i < 5; ++i) {
+	[[nodiscard]] bool operator==(const Sha1Sum& other) const {
+		for (int i : xrange(5)) {
 			if (a[i] != other.a[i]) return false;
 		}
 		return true;
 	}
-	bool operator!=(const Sha1Sum& other) const { return !(*this == other); }
-	bool operator< (const Sha1Sum& other) const {
-		for (int i = 0; i < 5-1; ++i) {
+	[[nodiscard]] bool operator!=(const Sha1Sum& other) const { return !(*this == other); }
+	[[nodiscard]] bool operator< (const Sha1Sum& other) const {
+		for (int i : xrange(5 - 1)) {
 			if (a[i] != other.a[i]) return a[i] < other.a[i];
 		}
-		return a[5-1] < other.a[5-1];
+		return a[5 - 1] < other.a[5 - 1];
 	}
 
-	bool operator<=(const Sha1Sum& other) const { return !(other <  *this); }
-	bool operator> (const Sha1Sum& other) const { return  (other <  *this); }
-	bool operator>=(const Sha1Sum& other) const { return !(*this <  other); }
+	[[nodiscard]] bool operator<=(const Sha1Sum& other) const { return !(other <  *this); }
+	[[nodiscard]] bool operator> (const Sha1Sum& other) const { return  (other <  *this); }
+	[[nodiscard]] bool operator>=(const Sha1Sum& other) const { return !(*this <  other); }
 
 	friend std::ostream& operator<<(std::ostream& os, const Sha1Sum& sum) {
 		os << sum.toString();
@@ -81,20 +83,21 @@ public:
 	SHA1();
 
 	/** Incrementally calculate the hash value. */
-	void update(const uint8_t* data, size_t len);
+	void update(span<const uint8_t> data);
 
 	/** Get the final hash. After this method is called, calls to update()
 	  * are invalid. */
-	Sha1Sum digest();
+	[[nodiscard]] Sha1Sum digest();
 
 	/** Easier to use interface, if you can pass all data in one go. */
-	static Sha1Sum calc(const uint8_t* data, size_t len);
+	[[nodiscard]] static Sha1Sum calc(span<const uint8_t> data);
 
 private:
 	void transform(const uint8_t buffer[64]);
 	void finalize();
 
-	uint64_t m_count;
+private:
+	uint64_t m_count; // in bytes (sha1 reference implementation counts in bits)
 	Sha1Sum m_state;
 	uint8_t m_buffer[64];
 	bool m_finalized;

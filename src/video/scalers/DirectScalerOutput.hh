@@ -2,25 +2,25 @@
 #define DIRECTSCALEROUTPUT_HH
 
 #include "ScalerOutput.hh"
+#include "SDLOutputSurface.hh"
 
 namespace openmsx {
-
-class OutputSurface;
 
 template<typename Pixel>
 class DirectScalerOutput final : public ScalerOutput<Pixel>
 {
 public:
-	explicit DirectScalerOutput(OutputSurface& output);
+	explicit DirectScalerOutput(SDLOutputSurface& output);
 
-	unsigned getWidth()  const override;
-	unsigned getHeight() const override;
-	Pixel* acquireLine(unsigned y) override;
-	void   releaseLine(unsigned y, Pixel* buf) override;
-	void   fillLine   (unsigned y, Pixel color) override;
+	[[nodiscard]] unsigned getWidth()  const override;
+	[[nodiscard]] unsigned getHeight() const override;
+	[[nodiscard]] Pixel* acquireLine(unsigned y) override;
+	void releaseLine(unsigned y, Pixel* buf) override;
+	void fillLine   (unsigned y, Pixel color) override;
 
 private:
-	OutputSurface& output;
+	SDLOutputSurface& output;
+	SDLDirectPixelAccess pixelAccess;
 };
 
 } // namespace openmsx

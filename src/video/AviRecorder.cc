@@ -17,6 +17,7 @@
 #include "outer.hh"
 #include "view.hh"
 #include "vla.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <memory>
 
@@ -29,8 +30,8 @@ AviRecorder::AviRecorder(Reactor& reactor_)
 	: reactor(reactor_)
 	, recordCommand(reactor.getCommandController())
 	, mixer(nullptr)
-	, duration(EmuDuration::infinity)
-	, prevTime(EmuTime::infinity)
+	, duration(EmuDuration::infinity())
+	, prevTime(EmuTime::infinity())
 	, frameHeight(0)
 {
 }
@@ -80,8 +81,8 @@ void AviRecorder::start(bool recordAudio, bool recordVideo, bool recordMono,
 		// any source is fine because they all have the same bpp
 		unsigned bpp = postProcessors.front()->getBpp();
 		warnedFps = false;
-		duration = EmuDuration::infinity;
-		prevTime = EmuTime::infinity;
+		duration = EmuDuration::infinity();
+		prevTime = EmuTime::infinity();
 
 		try {
 			aviWriter = std::make_unique<AviWriter>(
@@ -123,7 +124,7 @@ static int16_t float2int16(float f)
 	return Math::clipIntToShort(lrintf(32768.0f * f));
 }
 
-void AviRecorder::addWave(unsigned num, float* fdata)
+void AviRecorder::addWave(unsigned num, float* fData)
 {
 	if (!warnedSampleRate && (mixer->getSampleRate() != sampleRate)) {
 		warnedSampleRate = true;
@@ -134,8 +135,8 @@ void AviRecorder::addWave(unsigned num, float* fdata)
 	}
 	if (stereo) {
 		VLA(int16_t, buf, 2 * num);
-		for (unsigned i = 0; i < 2 * num; ++i) {
-			buf[i] = float2int16(fdata[i]);
+		for (auto i : xrange(2 * num)) {
+			buf[i] = float2int16(fData[i]);
 		}
 		if (wavWriter) {
 			wavWriter->write(buf, 2, num);
@@ -147,19 +148,19 @@ void AviRecorder::addWave(unsigned num, float* fdata)
 		VLA(int16_t, buf, num);
 		unsigned i = 0;
 		for (/**/; !warnedStereo && i < num; ++i) {
-			if (fdata[2 * i + 0] != fdata[2 * i + 1]) {
+			if (fData[2 * i + 0] != fData[2 * i + 1]) {
 				reactor.getCliComm().printWarning(
 				    "Detected stereo sound during mono recording. "
 				    "Channels will be mixed down to mono. To "
-				    "avoid this warning you can explicity pass the "
+				    "avoid this warning you can explicitly pass the "
 				    "-mono or -stereo flag to the record command.");
 				warnedStereo = true;
 				break;
 			}
-			buf[i] = float2int16(fdata[2 * i]);
+			buf[i] = float2int16(fData[2 * i]);
 		}
 		for (/**/; i < num; ++i) {
-			buf[i] = float2int16((fdata[2 * i + 0] + fdata[2 * i + 1]) * 0.5f);
+			buf[i] = float2int16((fData[2 * i + 0] + fData[2 * i + 1]) * 0.5f);
 		}
 
 		if (wavWriter) {
@@ -174,7 +175,7 @@ void AviRecorder::addWave(unsigned num, float* fdata)
 void AviRecorder::addImage(FrameSource* frame, EmuTime::param time)
 {
 	assert(!wavWriter);
-	if (duration != EmuDuration::infinity) {
+	if (duration != EmuDuration::infinity()) {
 		if (!warnedFps && ((time - prevTime) != duration)) {
 			warnedFps = true;
 			reactor.getCliComm().printWarning(
@@ -182,7 +183,7 @@ void AviRecorder::addImage(FrameSource* frame, EmuTime::param time)
 				"during avi recording. Audio/video might get out of "
 				"sync because of this.");
 		}
-	} else if (prevTime != EmuTime::infinity) {
+	} else if (prevTime != EmuTime::infinity()) {
 		duration = time - prevTime;
 		aviWriter->setFps(1.0 / duration.toDouble());
 	}
@@ -203,7 +204,7 @@ unsigned AviRecorder::getFrameHeight() const {
 
 void AviRecorder::processStart(Interpreter& interp, span<const TclObject> tokens, TclObject& result)
 {
-	string_view prefix = "openmsx";
+	std::string_view prefix = "openmsx";
 	bool audioOnly    = false;
 	bool videoOnly    = false;
 	bool recordMono   = false;
@@ -233,7 +234,7 @@ void AviRecorder::processStart(Interpreter& interp, span<const TclObject> tokens
 	if (videoOnly && (recordStereo || recordMono)) {
 		throw CommandException("Can't have both -videoonly and -stereo or -mono.");
 	}
-	string_view filenameArg;
+	std::string_view filenameArg;
 	switch (arguments.size()) {
 	case 0:
 		// nothing
@@ -256,8 +257,8 @@ void AviRecorder::processStart(Interpreter& interp, span<const TclObject> tokens
 	}
 	bool recordAudio = !videoOnly;
 	bool recordVideo = !audioOnly;
-	string directory = recordVideo ? "videos" : "soundlogs";
-	string extension = recordVideo ? ".avi"   : ".wav";
+	std::string_view directory = recordVideo ? "videos" : "soundlogs";
+	std::string_view extension = recordVideo ? ".avi"   : ".wav";
 	string filename = FileOperations::parseCommandFileArgument(
 		filenameArg, directory, prefix, extension);
 
@@ -266,7 +267,7 @@ void AviRecorder::processStart(Interpreter& interp, span<const TclObject> tokens
 	} else {
 		start(recordAudio, recordVideo, recordMono, recordStereo,
 				Filename(filename));
-		result = "Recording to " + filename;
+		result = tmpStrCat("Recording to ", filename);
 	}
 }
 
@@ -333,12 +334,12 @@ string AviRecorder::Cmd::help(const vector<string>& /*tokens*/) const
 void AviRecorder::Cmd::tabCompletion(vector<string>& tokens) const
 {
 	if (tokens.size() == 2) {
-		static const char* const cmds[] = {
+		static constexpr const char* const cmds[] = {
 			"start", "stop", "toggle", "status",
 		};
 		completeString(tokens, cmds);
 	} else if ((tokens.size() >= 3) && (tokens[1] == "start")) {
-		static const char* const options[] = {
+		static constexpr const char* const options[] = {
 			"-prefix", "-videoonly", "-audioonly", "-doublesize", "-triplesize",
 			"-mono", "-stereo",
 		};

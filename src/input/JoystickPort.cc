@@ -11,19 +11,19 @@ using std::string;
 namespace openmsx {
 
 JoystickPort::JoystickPort(PluggingController& pluggingController_,
-                           std::string name_, std::string description_)
+                           std::string name_, static_string_view description_)
 	: Connector(pluggingController_, std::move(name_), std::make_unique<DummyJoystick>())
 	, lastValue(255) // != 0
-	, description(std::move(description_))
+	, description(description_)
 {
 }
 
-string_view JoystickPort::getDescription() const
+std::string_view JoystickPort::getDescription() const
 {
 	return description;
 }
 
-string_view JoystickPort::getClass() const
+std::string_view JoystickPort::getClass() const
 {
 	return "Joystick Port";
 }

@@ -3,7 +3,7 @@
 
 namespace openmsx {
 
-static EnumSetting<Keys::KeyCode>::Map getAllowedKeysMap()
+[[nodiscard]] static EnumSetting<Keys::KeyCode>::Map getAllowedKeysMap()
 {
 	return {
 		{"RALT",        Keys::K_RALT},
@@ -38,8 +38,9 @@ KeyboardSettings::KeyboardSettings(CommandController& commandController)
 		"kbd_mapping_mode",
 		"Keyboard mapping mode",
 		CHARACTER_MAPPING, EnumSetting<MappingMode>::Map{
-			{"KEY",       KEY_MAPPING},
-			{"CHARACTER", CHARACTER_MAPPING}})
+			{"KEY",        KEY_MAPPING},
+			{"CHARACTER",  CHARACTER_MAPPING},
+			{"POSITIONAL", POSITIONAL_MAPPING}})
 	, alwaysEnableKeypad(commandController,
 		"kbd_numkeypad_always_enabled",
 		"Numeric keypad is always enabled, even on an MSX that does not have one",

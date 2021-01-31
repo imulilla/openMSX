@@ -28,6 +28,8 @@ enum EventType
 	OPENMSX_JOY_BUTTON_GROUP_EVENT,
 	OPENMSX_FOCUS_EVENT,
 	OPENMSX_RESIZE_EVENT,
+	OPENMSX_FILEDROP_EVENT,
+	OPENMSX_FILEDROP_GROUP_EVENT,
 	OPENMSX_QUIT_EVENT,
 	OPENMSX_OSD_CONTROL_RELEASE_EVENT,
 	OPENMSX_OSD_CONTROL_PRESS_EVENT,
@@ -66,9 +68,6 @@ enum EventType
 	  * should be repainted. */
 	OPENMSX_EXPOSE_EVENT,
 
-	/** Delete old MSXMotherboards */
-	OPENMSX_DELETE_BOARDS,
-
 	OPENMSX_MIDI_IN_READER_EVENT,
 	OPENMSX_MIDI_IN_WINDOWS_EVENT,
 	OPENMSX_MIDI_IN_COREMIDI_EVENT,
@@ -84,32 +83,32 @@ public:
 	Event(const Event&) = delete;
 	Event& operator=(const Event&) = delete;
 
-	EventType getType() const { return type; }
+	[[nodiscard]] EventType getType() const { return type; }
 
 	/** Get a string representation of this event. */
-	std::string toString() const;
+	[[nodiscard]] std::string toString() const;
 
 	/** Similar to toString(), but retains the structure of the event. */
-	virtual TclObject toTclList() const = 0;
+	[[nodiscard]] virtual TclObject toTclList() const = 0;
 
-	bool operator< (const Event& other) const;
-	bool operator> (const Event& other) const;
-	bool operator<=(const Event& other) const;
-	bool operator>=(const Event& other) const;
-	bool operator==(const Event& other) const;
-	bool operator!=(const Event& other) const;
+	[[nodiscard]] bool operator< (const Event& other) const;
+	[[nodiscard]] bool operator> (const Event& other) const;
+	[[nodiscard]] bool operator<=(const Event& other) const;
+	[[nodiscard]] bool operator>=(const Event& other) const;
+	[[nodiscard]] bool operator==(const Event& other) const;
+	[[nodiscard]] bool operator!=(const Event& other) const;
 
 	/** Should 'bind -repeat' be stopped by 'other' event.
 	 * Normally all events should stop auto-repeat of the previous
 	 * event. But see OsdControlEvent for some exceptions. */
-	virtual bool isRepeatStopper(const Event& /*other*/) const {
+	[[nodiscard]] virtual bool isRepeatStopper(const Event& /*other*/) const {
 		return true;
 	}
 
 	/** Does this event 'match' the given event. Normally an event
 	 * only matches itself (as defined by operator==). But e.g.
 	 * MouseMotionGroupEvent matches any MouseMotionEvent. */
-	virtual bool matches(const Event& other) const {
+	[[nodiscard]] virtual bool matches(const Event& other) const {
 		return *this == other;
 	}
 
@@ -118,7 +117,7 @@ protected:
 	~Event() = default;
 
 private:
-	virtual bool lessImpl(const Event& other) const = 0;
+	[[nodiscard]] virtual bool lessImpl(const Event& other) const = 0;
 
 	const EventType type;
 };
@@ -128,8 +127,8 @@ class SimpleEvent final : public Event
 {
 public:
 	explicit SimpleEvent(EventType type_) : Event(type_) {}
-	TclObject toTclList() const override;
-	bool lessImpl(const Event& other) const override;
+	[[nodiscard]] TclObject toTclList() const override;
+	[[nodiscard]] bool lessImpl(const Event& other) const override;
 };
 
 } // namespace openmsx

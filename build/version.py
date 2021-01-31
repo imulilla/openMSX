@@ -12,13 +12,13 @@ import re
 packageName = 'openmsx'
 
 # Version number.
-packageVersionNumber = '0.15.0'
+packageVersionNumber = '16.0'
 
 # Version code for Android must be an incremental number
 # Increase this number for each release build. For a dev build, the
 # version number is based on the git commit count but for a release
 # build, it must be hardcoded
-androidReleaseVersionCode=10
+androidReleaseVersionCode=12
 
 # Note: suffix should be empty or with dash, like "-rc1" or "-test1"
 packageVersionSuffix = ''
@@ -75,18 +75,23 @@ def extractRevision():
 	return revision
 
 def extractRevisionNumber():
-	return int(extractNumberFromGitRevision(extractRevision()) or 1)
+	return int(extractNumberFromGitRevision(extractRevision()) or 0)
 
 def extractRevisionString():
 	return extractRevision() or 'unknown'
 
-def getVersionedPackageName():
+def getVersionTripleString():
+	"""Version in "x.y.z" format."""
+	return '%s.%d' % (packageVersionNumber, extractRevisionNumber())
+
+def getDetailedVersion():
 	if releaseFlag:
-		return '%s-%s' % (packageName, packageVersion)
+		return packageVersion
 	else:
-		return '%s-%s-%s' % (
-			packageName, packageVersion, extractRevisionString()
-			)
+		return '%s-%s' % (packageVersion, extractRevisionString())
+
+def getVersionedPackageName():
+	return '%s-%s' % (packageName, getDetailedVersion())
 
 def countGitCommits():
 	if not isdir('derived'):
@@ -103,5 +108,25 @@ def getAndroidVersionCode():
 	else:
 		return '%s' % ( countGitCommits() )
 
+formatMap = dict(
+	main=lambda: packageVersionNumber,
+	plain=lambda: packageVersion,
+	triple=getVersionTripleString,
+	detailed=getDetailedVersion,
+	)
+
 if __name__ == '__main__':
-	print(packageVersionNumber)
+	import sys
+	badFormat = False
+	for fmt in sys.argv[1:] or ['detailed']:
+		try:
+			formatter = formatMap[fmt]
+		except KeyError:
+			print('Unknown version format "%s"' % fmt, file=sys.stderr)
+			badFormat = True
+		else:
+			print(formatter())
+	if badFormat:
+		print('Supported version formats:', ', '.join(sorted(formatMap.keys())),
+			file=sys.stderr)
+		sys.exit(2)

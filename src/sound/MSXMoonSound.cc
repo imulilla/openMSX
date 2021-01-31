@@ -18,32 +18,32 @@ namespace openmsx {
 using MasterClock = Clock<33868800>;
 
 // Required delay between register select and register read/write.
-static const EmuDuration FM_REG_SELECT_DELAY = MasterClock::duration(56);
+constexpr auto FM_REG_SELECT_DELAY = MasterClock::duration(56);
 // Required delay after register write.
-static const EmuDuration FM_REG_WRITE_DELAY  = MasterClock::duration(56);
+constexpr auto FM_REG_WRITE_DELAY  = MasterClock::duration(56);
 // Datasheet doesn't mention any delay for reads from the FM registers. In fact
 // it says reads from FM registers are not possible while tests on a real
 // YMF278 show they do work (value of the NEW2 bit doesn't matter).
 
 // Required delay between register select and register read/write.
-static const EmuDuration WAVE_REG_SELECT_DELAY = MasterClock::duration(88);
+constexpr auto WAVE_REG_SELECT_DELAY = MasterClock::duration(88);
 // Required delay after register write.
-static const EmuDuration WAVE_REG_WRITE_DELAY  = MasterClock::duration(88);
+constexpr auto WAVE_REG_WRITE_DELAY  = MasterClock::duration(88);
 // Datasheet doesn't mention any delay for register reads (except for reads
 // from register 6, see below). I also couldn't measure any delay on a real
 // YMF278.
 
 // Required delay after memory read.
-static const EmuDuration MEM_READ_DELAY  = MasterClock::duration(38);
+constexpr auto MEM_READ_DELAY  = MasterClock::duration(38);
 // Required delay after memory write (instead of register write delay).
-static const EmuDuration MEM_WRITE_DELAY = MasterClock::duration(28);
+constexpr auto MEM_WRITE_DELAY = MasterClock::duration(28);
 
 // Required delay after instrument load.
 // We pick 10000 cycles, this is approximately 300us (the number given in the
 // datasheet). The exact number of cycles is unknown. But I did some (very
 // rough) tests on real HW, and this number is not too bad (slightly too high
 // but within 2%-4% of real value, needs more detailed tests).
-static const EmuDuration LOAD_DELAY = MasterClock::duration(10000);
+constexpr auto LOAD_DELAY = MasterClock::duration(10000);
 
 
 MSXMoonSound::MSXMoonSound(const DeviceConfig& config)
@@ -78,13 +78,11 @@ void MSXMoonSound::reset(EmuTime::param time)
 
 byte MSXMoonSound::readIO(word port, EmuTime::param time)
 {
-	byte result;
 	if ((port & 0xFF) < 0xC0) {
 		// WAVE part  0x7E-0x7F
 		switch (port & 0x01) {
 		case 0: // read latch, not supported
-			result = 255;
-			break;
+			return 255;
 		case 1: // read wave register
 			// Verified on real YMF278:
 			// Even if NEW2=0 reads happen normally. Also reads
@@ -101,60 +99,50 @@ byte MSXMoonSound::readIO(word port, EmuTime::param time)
 				// doesn't have any measurable effect on MSX.
 				ymf278BusyTime = time + MEM_READ_DELAY;
 			}
-			result = ymf278.readReg(opl4latch);
-			break;
+			return ymf278.readReg(opl4latch);
 		default: // unreachable, avoid warning
-			UNREACHABLE; result = 255;
+			UNREACHABLE; return 255;
 		}
 	} else {
 		// FM part  0xC4-0xC7
 		switch (port & 0x03) {
 		case 0: // read status
 		case 2:
-			result = ymf262.readStatus() | readYMF278Status(time);
-			break;
+			return ymf262.readStatus() | readYMF278Status(time);
 		case 1:
 		case 3: // read fm register
-			result = ymf262.readReg(opl3latch);
-			break;
+			return ymf262.readReg(opl3latch);
 		default: // unreachable, avoid warning
-			UNREACHABLE; result = 255;
+			UNREACHABLE; return 255;
 		}
 	}
-	return result;
 }
 
 byte MSXMoonSound::peekIO(word port, EmuTime::param time) const
 {
-	byte result;
 	if ((port & 0xFF) < 0xC0) {
 		// WAVE part  0x7E-0x7F
 		switch (port & 0x01) {
 		case 0: // read latch, not supported
-			result = 255;
-			break;
+			return 255;
 		case 1: // read wave register
-			result = ymf278.peekReg(opl4latch);
-			break;
+			return ymf278.peekReg(opl4latch);
 		default: // unreachable, avoid warning
-			UNREACHABLE; result = 255;
+			UNREACHABLE; return 255;
 		}
 	} else {
 		// FM part  0xC4-0xC7
 		switch (port & 0x03) {
 		case 0: // read status
 		case 2:
-			result = ymf262.peekStatus() | readYMF278Status(time);
-			break;
+			return ymf262.peekStatus() | readYMF278Status(time);
 		case 1:
 		case 3: // read fm register
-			result = ymf262.peekReg(opl3latch);
-			break;
+			return ymf262.peekReg(opl3latch);
 		default: // unreachable, avoid warning
-			UNREACHABLE; result = 255;
+			UNREACHABLE; return 255;
 		}
 	}
-	return result;
 }
 
 void MSXMoonSound::writeIO(word port, byte value, EmuTime::param time)

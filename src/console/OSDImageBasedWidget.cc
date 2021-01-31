@@ -32,10 +32,10 @@ OSDImageBasedWidget::OSDImageBasedWidget(Display& display_, const TclObject& nam
 
 OSDImageBasedWidget::~OSDImageBasedWidget() = default;
 
-vector<string_view> OSDImageBasedWidget::getProperties() const
+vector<std::string_view> OSDImageBasedWidget::getProperties() const
 {
 	auto result = OSDWidget::getProperties();
-	static const char* const vals[] = {
+	static constexpr const char* const vals[] = {
 		"-rgba", "-rgb", "-alpha", "-fadePeriod", "-fadeTarget",
 		"-fadeCurrent",
 	};
@@ -60,7 +60,7 @@ static void get4(Interpreter& interp, const TclObject& value, uint32_t* result)
 	}
 }
 void OSDImageBasedWidget::setProperty(
-	Interpreter& interp, string_view propName, const TclObject& value)
+	Interpreter& interp, std::string_view propName, const TclObject& value)
 {
 	if (propName == "-rgba") {
 		uint32_t newRGBA[4];
@@ -123,7 +123,7 @@ static void set4(const uint32_t rgba[4], uint32_t mask, unsigned shift, TclObjec
 		}));
 	}
 }
-void OSDImageBasedWidget::getProperty(string_view propName, TclObject& result) const
+void OSDImageBasedWidget::getProperty(std::string_view propName, TclObject& result) const
 {
 	if (propName == "-rgba") {
 		set4(rgba, 0xffffffff, 0, result);
@@ -142,7 +142,7 @@ void OSDImageBasedWidget::getProperty(string_view propName, TclObject& result) c
 	}
 }
 
-static bool constantAlpha(const uint32_t rgba[4])
+static constexpr bool constantAlpha(const uint32_t rgba[4])
 {
 	return ((rgba[0] & 0xff) == (rgba[1] & 0xff)) &&
 	       ((rgba[0] & 0xff) == (rgba[2] & 0xff)) &&
@@ -158,9 +158,20 @@ float OSDImageBasedWidget::getRecursiveFadeValue() const
 	return getParent()->getRecursiveFadeValue() * getCurrentFadeValue();
 }
 
+bool OSDImageBasedWidget::isVisible() const
+{
+	return (getFadedAlpha() != 0) || isRecursiveFading();
+}
+
 bool OSDImageBasedWidget::isFading() const
 {
 	return (startFadeValue != fadeTarget) && (fadePeriod != 0.0f);
+}
+
+bool OSDImageBasedWidget::isRecursiveFading() const
+{
+	if (isFading()) return true;
+	return getParent()->isRecursiveFading();
 }
 
 float OSDImageBasedWidget::getCurrentFadeValue() const
@@ -270,7 +281,7 @@ void OSDImageBasedWidget::paint(OutputSurface& output, bool openGL)
 		ivec2 drawPos = round(getTransformedPos(output));
 		image->draw(output, drawPos, fadedAlpha);
 	}
-	if (isFading()) {
+	if (isRecursiveFading()) {
 		getDisplay().getOSDGUI().refresh();
 	}
 }

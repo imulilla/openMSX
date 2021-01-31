@@ -38,7 +38,7 @@ void SpriteChecker::reset(EmuTime::param time)
 	updateSpritesMethod = &SpriteChecker::updateSprites1;
 }
 
-static inline SpriteChecker::SpritePattern doublePattern(SpriteChecker::SpritePattern a)
+static constexpr SpriteChecker::SpritePattern doublePattern(SpriteChecker::SpritePattern a)
 {
 	// bit-pattern "abcd...." gets expanded to "aabbccdd"
 	// upper 16 bits (of a 32 bit number) contain the pattern
@@ -65,9 +65,7 @@ inline SpriteChecker::SpritePattern SpriteChecker::calculatePatternNP(
 inline SpriteChecker::SpritePattern SpriteChecker::calculatePatternPlanar(
 	unsigned patternNr, unsigned y)
 {
-	const byte* ptr0;
-	const byte* ptr1;
-	vram.spritePatternTable.getReadAreaPlanar(0, 256 * 8, ptr0, ptr1);
+	auto [ptr0, ptr1] = vram.spritePatternTable.getReadAreaPlanar(0, 256 * 8);
 	unsigned index = patternNr * 8 + y;
 	const byte* patternPtr = (index & 1) ? ptr1 : ptr0;
 	index /= 2;
@@ -133,7 +131,7 @@ inline void SpriteChecker::checkSprites1(int minLine, int maxLine)
 		int y = attributePtr[4 * sprite + 0];
 		if (y == 208) break;
 
-		for (int line = minLine; line < maxLine; ++line) {
+		for (int line = minLine; line < maxLine; ++line) { // 'line' changes in loop
 			// Calculate line number within the sprite.
 			int displayLine = line + displayDelta;
 			int spriteLine = (displayLine - y) & 0xFF;
@@ -193,7 +191,8 @@ inline void SpriteChecker::checkSprites1(int minLine, int maxLine)
 	Model for sprite collision: (or "coincidence" in TMS9918 data sheet)
 	- Reset when status reg is read.
 	- Set when sprite patterns overlap.
-	- Color doesn't matter: sprites of color 0 can collide.
+	- ??? Color doesn't matter: sprites of color 0 can collide.
+	  ??? This conflicts with: https://github.com/openMSX/openMSX/issues/1198
 	- Sprites that are partially off-screen position can collide, but only
 	  on the in-screen pixels. In other words: sprites cannot collide in
 	  the left or right border, only in the visible screen area. Though
@@ -205,12 +204,17 @@ inline void SpriteChecker::checkSprites1(int minLine, int maxLine)
 	but there are max 4 sprites and therefore max 6 pairs.
 	If any collision is found, method returns at once.
 	*/
-	for (int line = minLine; line < maxLine; ++line) {
+	bool can0collide = vdp.canSpriteColor0Collide();
+	for (auto line : xrange(minLine, maxLine)) {
 		int minXCollision = 999;
 		for (int i = std::min<int>(4, spriteCount[line]); --i >= 1; /**/) {
+			auto color1 = spriteBuffer[line][i].colorAttrib & 0xf;
+			if (!can0collide && (color1 == 0)) continue;
 			int x_i = spriteBuffer[line][i].x;
 			SpritePattern pattern_i = spriteBuffer[line][i].pattern;
-			for (int j = i; --j >= 0; ) {
+			for (int j = i; --j >= 0; /**/) {
+				auto color2 = spriteBuffer[line][j].colorAttrib & 0xf;
+				if (!can0collide && (color2 == 0)) continue;
 				// Do sprite i and sprite j collide?
 				int x_j = spriteBuffer[line][j].x;
 				int dist = x_j - x_i;
@@ -287,16 +291,14 @@ inline void SpriteChecker::checkSprites2(int minLine, int maxLine)
 	// code for planar and non-planar modes.
 	int sprite = 0;
 	if (planar) {
-		const byte* attributePtr0;
-		const byte* attributePtr1;
-		vram.spriteAttribTable.getReadAreaPlanar(
-			512, 32 * 4, attributePtr0, attributePtr1);
+		auto [attributePtr0, attributePtr1] =
+			vram.spriteAttribTable.getReadAreaPlanar(512, 32 * 4);
 		// TODO: Verify CC implementation.
 		for (/**/; sprite < 32; ++sprite) {
 			int y = attributePtr0[2 * sprite + 0];
 			if (y == 216) break;
 
-			for (int line = minLine; line < maxLine; ++line) {
+			for (int line = minLine; line < maxLine; ++line) { // 'line' changes in loop
 				// Calculate line number within the sprite.
 				int displayLine = line + displayDelta;
 				int spriteLine = (displayLine - y) & 0xFF;
@@ -341,7 +343,7 @@ inline void SpriteChecker::checkSprites2(int minLine, int maxLine)
 			int y = attributePtr0[4 * sprite + 0];
 			if (y == 216) break;
 
-			for (int line = minLine; line < maxLine; ++line) {
+			for (int line = minLine; line < maxLine; ++line) { // 'line' changes in loop
 				// Calculate line number within the sprite.
 				int displayLine = line + displayDelta;
 				int spriteLine = (displayLine - y) & 0xFF;
@@ -420,8 +422,9 @@ inline void SpriteChecker::checkSprites2(int minLine, int maxLine)
 	Model for sprite collision: (or "coincidence" in TMS9918 data sheet)
 	- Reset when status reg is read.
 	- Set when sprite patterns overlap.
-	- Color doesn't matter: sprites of color 0 can collide.
-	    TODO: V9938 data book denies this (page 98).
+	- ??? Color doesn't matter: sprites of color 0 can collide.
+	  ???  TODO: V9938 data book denies this (page 98).
+	  ??? This conflicts with: https://github.com/openMSX/openMSX/issues/1198
 	- Sprites that are partially off-screen position can collide, but only
 	  on the in-screen pixels. In other words: sprites cannot collide in
 	  the left or right border, only in the visible screen area. Though
@@ -434,18 +437,23 @@ inline void SpriteChecker::checkSprites2(int minLine, int maxLine)
 	  TODO: Maybe this is slow... Think of something faster.
 	        Probably new approach is needed anyway for OR-ing.
 	*/
-	for (int line = minLine; line < maxLine; ++line) {
+	bool can0collide = vdp.canSpriteColor0Collide();
+	for (auto line : xrange(minLine, maxLine)) {
 		int minXCollision = 999; // no collision
 		SpriteInfo* visibleSprites = spriteBuffer[line];
 		for (int i = std::min<int>(8, spriteCount[line]); --i >= 1; /**/) {
+			auto colorAttrib1 = visibleSprites[i].colorAttrib;
+			if (!can0collide && ((colorAttrib1 & 0xf) == 0)) continue;
 			// If CC or IC is set, this sprite cannot collide.
-			if (visibleSprites[i].colorAttrib & 0x60) continue;
+			if (colorAttrib1 & 0x60) continue;
 
 			int x_i = visibleSprites[i].x;
 			SpritePattern pattern_i = visibleSprites[i].pattern;
-			for (int j = i; --j >= 0; ) {
+			for (int j = i; --j >= 0; /**/) {
+				auto colorAttrib2 = visibleSprites[j].colorAttrib;
+				if (!can0collide && ((colorAttrib2 & 0xf) == 0)) continue;
 				// If CC or IC is set, this sprite cannot collide.
-				if (visibleSprites[j].colorAttrib & 0x60) continue;
+				if (colorAttrib2 & 0x60) continue;
 
 				// Do sprite i and sprite j collide?
 				int x_j = visibleSprites[j].x;

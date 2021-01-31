@@ -2,6 +2,7 @@
 
 #include "SspiUtils.hh"
 #include "MSXException.hh"
+#include "xrange.hh"
 #include <sddl.h>
 #include <cassert>
 #include <iostream>
@@ -10,8 +11,7 @@
 // NOTE: This file MUST be kept in sync between the openmsx and openmsx-debugger projects
 //
 
-namespace openmsx {
-namespace sspiutils {
+namespace openmsx::sspiutils {
 
 SspiPackageBase::SspiPackageBase(StreamWrapper& userStream, const SEC_WCHAR* securityPackage)
 	: stream(userStream)
@@ -44,7 +44,7 @@ void InitTokenContextBuffer(PSecBufferDesc pSecBufferDesc, PSecBuffer pSecBuffer
 
 void ClearContextBuffers(PSecBufferDesc pSecBufferDesc)
 {
-	for (ULONG i = 0; i < pSecBufferDesc->cBuffers; i ++) {
+	for (auto i : xrange(pSecBufferDesc->cBuffers)) {
 		FreeContextBuffer(pSecBufferDesc->pBuffers[i].pvBuffer);
 		pSecBufferDesc->pBuffers[i].cbBuffer = 0;
 		pSecBufferDesc->pBuffers[i].pvBuffer = nullptr;
@@ -274,7 +274,6 @@ bool RecvChunk(StreamWrapper& stream, std::vector<char>& buffer, uint32_t cbMaxS
 	return true;
 }
 
-} // namespace sspiutils
-} // namespace openmsx
+} // namespace openmsx::sspiutils
 
 #endif

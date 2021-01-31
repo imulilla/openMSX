@@ -12,14 +12,17 @@
 #include "CommandException.hh"
 #include "AviRecorder.hh"
 #include "Filename.hh"
+#include "FileOperations.hh"
 #include "CliComm.hh"
 #include "stl.hh"
 #include "aligned.hh"
+#include "one_of.hh"
 #include "outer.hh"
 #include "ranges.hh"
 #include "unreachable.hh"
 #include "view.hh"
 #include "vla.hh"
+#include "xrange.hh"
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -42,7 +45,7 @@ MSXMixer::MSXMixer(Mixer& mixer_, MSXMotherBoard& motherBoard_,
 	, motherBoard(motherBoard_)
 	, commandController(motherBoard.getMSXCommandController())
 	, masterVolume(mixer.getMasterVolume())
-	, speedSetting(globalSettings.getSpeedSetting())
+	, speedManager(globalSettings.getSpeedManager())
 	, throttleManager(globalSettings.getThrottleManager())
 	, prevTime(getCurrentTime(), 44100)
 	, soundDeviceInfo(commandController.getMachineInfoCommand())
@@ -58,7 +61,7 @@ MSXMixer::MSXMixer(Mixer& mixer_, MSXMotherBoard& motherBoard_,
 	reschedule2();
 
 	masterVolume.attach(*this);
-	speedSetting.attach(*this);
+	speedManager.attach(*this);
 	throttleManager.attach(*this);
 }
 
@@ -70,7 +73,7 @@ MSXMixer::~MSXMixer()
 	assert(infos.empty());
 
 	throttleManager.detach(*this);
-	speedSetting.detach(*this);
+	speedManager.detach(*this);
 	masterVolume.detach(*this);
 
 	mute(); // calls Mixer::unregisterMixer()
@@ -85,27 +88,27 @@ void MSXMixer::registerSound(SoundDevice& device, float volume,
 	info.device = &device;
 	info.defaultVolume = volume;
 	info.volumeSetting = std::make_unique<IntegerSetting>(
-		commandController, name + "_volume",
+		commandController, tmpStrCat(name, "_volume"),
 		"the volume of this sound chip", 75, 0, 100);
 	info.balanceSetting = std::make_unique<IntegerSetting>(
-		commandController, name + "_balance",
+		commandController, tmpStrCat(name, "_balance"),
 		"the balance of this sound chip", balance, -100, 100);
 
 	info.volumeSetting->attach(*this);
 	info.balanceSetting->attach(*this);
 
-	for (unsigned i = 0; i < numChannels; ++i) {
+	for (auto i : xrange(numChannels)) {
 		SoundDeviceInfo::ChannelSettings channelSettings;
-		string ch_name = strCat(name, "_ch", i + 1);
+		auto ch_name = tmpStrCat(name, "_ch", i + 1);
 
 		channelSettings.recordSetting = std::make_unique<StringSetting>(
-			commandController, ch_name + "_record",
+			commandController, tmpStrCat(ch_name, "_record"),
 			"filename to record this channel to",
-			string_view{}, Setting::DONT_SAVE);
+			std::string_view{}, Setting::DONT_SAVE);
 		channelSettings.recordSetting->attach(*this);
 
 		channelSettings.muteSetting = std::make_unique<BooleanSetting>(
-			commandController, ch_name + "_mute",
+			commandController, tmpStrCat(ch_name, "_mute"),
 			"sets mute-status of individual sound channels",
 			false, Setting::DONT_SAVE);
 		channelSettings.muteSetting->attach(*this);
@@ -114,8 +117,8 @@ void MSXMixer::registerSound(SoundDevice& device, float volume,
 	}
 
 	device.setOutputRate(getSampleRate());
-	infos.push_back(std::move(info));
-	updateVolumeParams(infos.back());
+	auto& i = infos.emplace_back(std::move(info));
+	updateVolumeParams(i);
 
 	commandController.getCliComm().update(CliComm::SOUNDDEVICE, device.getName(), "add");
 }
@@ -153,9 +156,7 @@ void MSXMixer::setSynchronousMode(bool synchronous)
 
 double MSXMixer::getEffectiveSpeed() const
 {
-	return synchronousCounter
-	     ? 1.0
-	     : speedSetting.getInt() / 100.0;
+	return synchronousCounter ? 1.0 : speedManager.getSpeed();
 }
 
 void MSXMixer::updateStream(EmuTime::param time)
@@ -293,9 +294,9 @@ static inline void mulMix2Acc(
 //  with:
 //     R = 1 - (2*pi * cut-off-frequency / samplerate)
 //  we take R = 511/512
-//   44100Hz --> cutt-off freq = 14Hz
+//   44100Hz --> cutoff freq = 14Hz
 //   22050Hz                     7Hz
-static constexpr auto R = 511.0f / 512.0f;
+constexpr auto R = 511.0f / 512.0f;
 
 // No new input, previous output was (non-zero) mono.
 static inline float filterMonoNull(float t0, float* __restrict out, int n)
@@ -326,7 +327,7 @@ static inline std::tuple<float, float> filterStereoNull(
 		tl0 = tl1;
 		tr0 = tr1;
 	} while (++i < n);
-	return std::make_tuple(tl0, tr0);
+	return std::tuple(tl0, tr0);
 }
 
 // New input is mono, previous output was also mono.
@@ -361,7 +362,7 @@ filterStereoMono(float tl0, float tr0, const float* __restrict in,
 		tl0 = tl1;
 		tr0 = tr1;
 	} while (++i < n);
-	return std::make_tuple(tl0, tr0);
+	return std::tuple(tl0, tr0);
 }
 
 // New input is stereo, (previous output either mono/stereo)
@@ -379,7 +380,7 @@ filterStereoStereo(float tl0, float tr0, const float* __restrict in,
 		tl0 = tl1;
 		tr0 = tr1;
 	} while (++i < n);
-	return std::make_tuple(tl0, tr0);
+	return std::tuple(tl0, tr0);
 }
 
 // We have both mono and stereo input (and produce stereo output)
@@ -398,12 +399,12 @@ filterBothStereo(float tl0, float tr0, const float* __restrict inM,
 		tl0 = tl1;
 		tr0 = tr1;
 	} while (++i < n);
-	return std::make_tuple(tl0, tr0);
+	return std::tuple(tl0, tr0);
 }
 
 static bool approxEqual(float x, float y)
 {
-	static const float threshold = 1.0f / 32768;
+	constexpr float threshold = 1.0f / 32768;
 	return std::abs(x - y) < threshold;
 }
 
@@ -419,9 +420,10 @@ void MSXMixer::generate(float* output, EmuTime::param time, unsigned samples)
 	// When samples==0, call updateBuffer() but skip all further processing
 	// (handling this as a special case allows to simplify the code below).
 	if (samples == 0) {
-		SSE_ALIGNED(float dummyBuf[4]);
+		ALIGNAS_SSE float dummyBuf[4];
 		for (auto& info : infos) {
-			info.device->updateBuffer(0, dummyBuf, time);
+			bool ignore = info.device->updateBuffer(0, dummyBuf, time);
+			(void)ignore;
 		}
 		return;
 	}
@@ -432,8 +434,8 @@ void MSXMixer::generate(float* output, EmuTime::param time, unsigned samples)
 	VLA_SSE_ALIGNED(float, stereoBuf, 2 * samples + 3);
 	VLA_SSE_ALIGNED(float, tmpBuf,    2 * samples + 3);
 
-	static const unsigned HAS_MONO_FLAG = 1;
-	static const unsigned HAS_STEREO_FLAG = 2;
+	constexpr unsigned HAS_MONO_FLAG = 1;
+	constexpr unsigned HAS_STEREO_FLAG = 2;
 	unsigned usedBuffers = 0;
 
 	// FIXME: The Infos should be ordered such that all the mono
@@ -604,22 +606,11 @@ void MSXMixer::update(const Setting& setting)
 {
 	if (&setting == &masterVolume) {
 		updateMasterVolume();
-	} else if (&setting == &speedSetting) {
-		if (synchronousCounter == 0) {
-			setMixerParams(fragmentSize, hostSampleRate);
-		} else {
-			// Avoid calling reInit() while recording because
-			// each call causes a small hiccup in the sound (and
-			// while recording this call anyway has no effect).
-			// This was noticable while sliding the speed slider
-			// in catapult (becuase this causes many changes in
-			// the speed setting).
-		}
 	} else if (dynamic_cast<const IntegerSetting*>(&setting)) {
 		auto it = find_if_unguarded(infos,
 			[&](const SoundDeviceInfo& i) {
-				return (i.volumeSetting .get() == &setting) ||
-				       (i.balanceSetting.get() == &setting); });
+				return &setting == one_of(i.volumeSetting .get(),
+				                          i.balanceSetting.get()); });
 		updateVolumeParams(*it);
 	} else if (dynamic_cast<const StringSetting*>(&setting)) {
 		changeRecordSetting(setting);
@@ -638,7 +629,8 @@ void MSXMixer::changeRecordSetting(const Setting& setting)
 			if (s.recordSetting.get() == &setting) {
 				info.device->recordChannel(
 					channel,
-					Filename(s.recordSetting->getString().str()));
+					Filename(FileOperations::expandTilde(string(
+						s.recordSetting->getString()))));
 				return;
 			}
 			++channel;
@@ -663,6 +655,20 @@ void MSXMixer::changeMuteSetting(const Setting& setting)
 	UNREACHABLE;
 }
 
+void MSXMixer::update(const SpeedManager& /*speedManager*/)
+{
+	if (synchronousCounter == 0) {
+		setMixerParams(fragmentSize, hostSampleRate);
+	} else {
+		// Avoid calling reInit() while recording because
+		// each call causes a small hiccup in the sound (and
+		// while recording this call anyway has no effect).
+		// This was noticeable while sliding the speed slider
+		// in catapult (because this causes many changes in
+		// the speed setting).
+	}
+}
+
 void MSXMixer::update(const ThrottleManager& /*throttleManager*/)
 {
 	//reInit();
@@ -675,31 +681,38 @@ void MSXMixer::updateVolumeParams(SoundDeviceInfo& info)
 	int dVolume = info.volumeSetting->getInt();
 	float volume = info.defaultVolume * mVolume * dVolume / (100.0f * 100.0f);
 	int balance = info.balanceSetting->getInt();
-	float l1, r1, l2, r2;
-	if (info.device->isStereo()) {
-		if (balance < 0) {
-			float b = (balance + 100.0f) / 100.0f;
-			l1 = volume;
-			r1 = 0.0f;
-			l2 = volume * sqrtf(std::max(0.0f, 1.0f - b));
-			r2 = volume * sqrtf(std::max(0.0f,        b));
+	auto [l1, r1, l2, r2] = [&] {
+		if (info.device->isStereo()) {
+			if (balance < 0) {
+				float b = (balance + 100.0f) / 100.0f;
+				return std::tuple{
+					/*l1 =*/ volume,
+					/*r1 =*/ 0.0f,
+					/*l2 =*/ volume * sqrtf(std::max(0.0f, 1.0f - b)),
+					/*r2 =*/ volume * sqrtf(std::max(0.0f,        b))
+				};
+			} else {
+				float b = balance / 100.0f;
+				return std::tuple{
+					/*l1 =*/ volume * sqrtf(std::max(0.0f, 1.0f - b)),
+					/*r1 =*/ volume * sqrtf(std::max(0.0f,        b)),
+					/*l2 =*/ 0.0f,
+					/*r2 =*/ volume
+				};
+			}
 		} else {
-			float b = balance / 100.0f;
-			l1 = volume * sqrtf(std::max(0.0f, 1.0f - b));
-			r1 = volume * sqrtf(std::max(0.0f,        b));
-			l2 = 0.0f;
-			r2 = volume;
+			// make sure that in case of rounding errors
+			// we don't take sqrt() of negative numbers
+			float b = (balance + 100.0f) / 200.0f;
+			return std::tuple{
+				/*l1 =*/ volume * sqrtf(std::max(0.0f, 1.0f - b)),
+				/*r1 =*/ volume * sqrtf(std::max(0.0f,        b)),
+				/*l2 =*/ 0.0f, // dummy
+				/*r2 =*/ 0.0f  // dummy
+			};
 		}
-	} else {
-		// make sure that in case of rounding errors
-		// we don't take sqrt() of negative numbers
-		float b = (balance + 100.0f) / 200.0f;
-		l1 = volume * sqrtf(std::max(0.0f, 1.0f - b));
-		r1 = volume * sqrtf(std::max(0.0f,        b));
-		l2 = r2 = 0.0f; // dummy
-	}
-	float ampL, ampR;
-	std::tie(ampL, ampR) = info.device->getAmplificationFactor();
+	}();
+	auto [ampL, ampR] = info.device->getAmplificationFactor();
 	info.left1  = l1 * ampL;
 	info.right1 = r1 * ampR;
 	info.left2  = l2 * ampL;
@@ -738,7 +751,7 @@ void MSXMixer::executeUntil(EmuTime::param time)
 
 // Sound device info
 
-SoundDevice* MSXMixer::findDevice(string_view name) const
+SoundDevice* MSXMixer::findDevice(std::string_view name) const
 {
 	auto it = ranges::find_if(infos, [&](auto& i) {
 		return i.device->getName() == name;

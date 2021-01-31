@@ -35,30 +35,30 @@ public:
 
 	void createCommand();
 
-	const std::string& getDriveName() const { return driveName; }
-	const DiskName& getDiskName() const;
-	bool peekDiskChanged() const { return diskChangedFlag; }
+	[[nodiscard]] const std::string& getDriveName() const { return driveName; }
+	[[nodiscard]] const DiskName& getDiskName() const;
+	[[nodiscard]] bool peekDiskChanged() const { return diskChangedFlag; }
 	void forceDiskChange() { diskChangedFlag = true; }
-	Disk& getDisk() { return *disk; }
+	[[nodiscard]] Disk& getDisk() { return *disk; }
 
 	// DiskContainer
-	SectorAccessibleDisk* getSectorAccessibleDisk() override;
-	const std::string& getContainerName() const override;
+	[[nodiscard]] SectorAccessibleDisk* getSectorAccessibleDisk() override;
+	[[nodiscard]] const std::string& getContainerName() const override;
 	bool diskChanged() override;
-	int insertDisk(string_view filename) override;
+	int insertDisk(const std::string& filename) override;
 
 	// for NowindCommand
 	void changeDisk(std::unique_ptr<Disk> newDisk);
 
 	// for DirAsDSK
-	Scheduler* getScheduler() const { return scheduler; }
-	bool isDoubleSidedDrive() const { return doubleSidedDrive; }
+	[[nodiscard]] Scheduler* getScheduler() const { return scheduler; }
+	[[nodiscard]] bool isDoubleSidedDrive() const { return doubleSidedDrive; }
 
 	template<typename Archive>
 	void serialize(Archive& ar, unsigned version);
 
 private:
-	void init(const std::string& prefix, bool createCmd);
+	void init(std::string_view prefix, bool createCmd);
 	void insertDisk(span<const TclObject> args);
 	void ejectDisk();
 	void sendChangeDiskEvent(span<std::string> args);
@@ -67,6 +67,7 @@ private:
 	void signalStateChange(const std::shared_ptr<StateChange>& event) override;
 	void stopReplay(EmuTime::param time) override;
 
+private:
 	Reactor& reactor;
 	CommandController& controller;
 	StateChangeDistributor* stateChangeDistributor;

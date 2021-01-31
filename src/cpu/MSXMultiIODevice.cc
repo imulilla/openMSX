@@ -35,7 +35,7 @@ std::string MSXMultiIODevice::getName() const
 {
 	TclObject list;
 	getNameList(list);
-	return list.getString().str();
+	return std::string(list.getString());
 }
 void MSXMultiIODevice::getNameList(TclObject& result) const
 {
@@ -63,7 +63,7 @@ byte MSXMultiIODevice::peekIO(word port, EmuTime::param time) const
 {
 	// conflict: Handle this in the same way as readIO.
 	byte result = 0xFF;
-	for (auto& dev : devices) {
+	for (const auto& dev : devices) {
 		result &= dev->peekIO(port, time);
 	}
 	return result;

@@ -3,26 +3,26 @@
 #ifndef ZMBVENCODER_HH
 #define ZMBVENCODER_HH
 
+#include "PixelFormat.hh"
 #include "MemBuffer.hh"
+#include "aligned.hh"
+#include "span.hh"
 #include <cstdint>
 #include <zlib.h>
-
-struct SDL_PixelFormat;
 
 namespace openmsx {
 
 class FrameSource;
-template<class P> class PixelOperations;
+template<typename P> class PixelOperations;
 
 class ZMBVEncoder
 {
 public:
-	static const char* CODEC_4CC;
+	static constexpr const char CODEC_4CC[5] = "ZMBV"; // 4 + zero-terminator
 
 	ZMBVEncoder(unsigned width, unsigned height, unsigned bpp);
 
-	void compressFrame(bool keyFrame, FrameSource* frame,
-	                   void*& buffer, unsigned& written);
+	[[nodiscard]] span<const uint8_t> compressFrame(bool keyFrame, FrameSource* frame);
 
 private:
 	enum Format {
@@ -31,19 +31,20 @@ private:
 	};
 
 	void setupBuffers(unsigned bpp);
-	unsigned neededSize();
-	template<class P> void addFullFrame(const SDL_PixelFormat& pixelFormat, unsigned& workUsed);
-	template<class P> void addXorFrame (const SDL_PixelFormat& pixelFormat, unsigned& workUsed);
-	template<class P> unsigned possibleBlock(int vx, int vy, unsigned offset);
-	template<class P> unsigned compareBlock(int vx, int vy, unsigned offset);
-	template<class P> void addXorBlock(
+	[[nodiscard]] unsigned neededSize() const;
+	template<typename P> void addFullFrame(const PixelFormat& pixelFormat, unsigned& workUsed);
+	template<typename P> void addXorFrame (const PixelFormat& pixelFormat, unsigned& workUsed);
+	template<typename P> [[nodiscard]] unsigned possibleBlock(int vx, int vy, unsigned offset);
+	template<typename P> [[nodiscard]] unsigned compareBlock(int vx, int vy, unsigned offset);
+	template<typename P> void addXorBlock(
 		const PixelOperations<P>& pixelOps, int vx, int vy,
 		unsigned offset, unsigned& workUsed);
-	const void* getScaledLine(FrameSource* frame, unsigned y, void* workBuf);
+	[[nodiscard]] const void* getScaledLine(FrameSource* frame, unsigned y, void* workBuf) const;
 
-	MemBuffer<uint8_t, SSE2_ALIGNMENT> oldframe;
-	MemBuffer<uint8_t, SSE2_ALIGNMENT> newframe;
-	MemBuffer<uint8_t, SSE2_ALIGNMENT> work;
+private:
+	MemBuffer<uint8_t, SSE_ALIGNMENT> oldframe;
+	MemBuffer<uint8_t, SSE_ALIGNMENT> newframe;
+	MemBuffer<uint8_t, SSE_ALIGNMENT> work;
 	MemBuffer<uint8_t> output;
 	MemBuffer<unsigned> blockOffsets;
 	unsigned outputSize;

@@ -16,7 +16,7 @@ public:
 	PaddleState() = default; // for serialize
 	PaddleState(EmuTime::param time_, int delta_)
 		: StateChange(time_), delta(delta_) {}
-	int getDelta() const { return delta; }
+	[[nodiscard]] int getDelta() const { return delta; }
 
 	template<typename Archive> void serialize(Archive& ar, unsigned /*version*/)
 	{
@@ -33,7 +33,7 @@ Paddle::Paddle(MSXEventDistributor& eventDistributor_,
                StateChangeDistributor& stateChangeDistributor_)
 	: eventDistributor(eventDistributor_)
 	, stateChangeDistributor(stateChangeDistributor_)
-	, lastPulse(EmuTime::zero)
+	, lastPulse(EmuTime::zero())
 	, analogValue(128)
 	, lastInput(0)
 {
@@ -54,7 +54,7 @@ const std::string& Paddle::getName() const
 	return name;
 }
 
-string_view Paddle::getDescription() const
+std::string_view Paddle::getDescription() const
 {
 	return "MSX Paddle";
 }
@@ -76,7 +76,7 @@ byte Paddle::read(EmuTime::param time)
 {
 	// The loop in the BIOS routine that reads the paddle status takes
 	// 41 Z80 cycles per iteration.
-	static const EmuDuration TICK = EmuDuration::hz(3579545) * 41;
+	static constexpr auto TICK = EmuDuration::hz(3579545) * 41;
 
 	assert(time >= lastPulse);
 	bool before = (time - lastPulse) < (TICK * analogValue);
@@ -99,8 +99,8 @@ void Paddle::signalMSXEvent(const std::shared_ptr<const Event>& event,
 {
 	if (event->getType() != OPENMSX_MOUSE_MOTION_EVENT) return;
 
-	auto& mev = checked_cast<const MouseMotionEvent&>(*event);
-	static const int SCALE = 2;
+	const auto& mev = checked_cast<const MouseMotionEvent&>(*event);
+	constexpr int SCALE = 2;
 	int delta = mev.getX() / SCALE;
 	if (delta == 0) return;
 
@@ -111,7 +111,7 @@ void Paddle::signalMSXEvent(const std::shared_ptr<const Event>& event,
 // StateChangeListener
 void Paddle::signalStateChange(const std::shared_ptr<StateChange>& event)
 {
-	auto ps = dynamic_cast<PaddleState*>(event.get());
+	const auto* ps = dynamic_cast<const PaddleState*>(event.get());
 	if (!ps) return;
 	int newAnalog = analogValue + ps->getDelta();
 	analogValue = std::min(std::max(newAnalog, 0), 255);

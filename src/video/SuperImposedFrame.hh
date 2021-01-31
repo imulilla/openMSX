@@ -14,14 +14,15 @@ namespace openmsx {
 class SuperImposedFrame : public FrameSource
 {
 public:
-	static std::unique_ptr<SuperImposedFrame> create(
-		const SDL_PixelFormat& format);
+	[[nodiscard]] static std::unique_ptr<SuperImposedFrame> create(
+		const PixelFormat& format);
 	void init(const FrameSource* top, const FrameSource* bottom);
 	virtual ~SuperImposedFrame() = default;
 
 protected:
-	explicit SuperImposedFrame(const SDL_PixelFormat& format);
+	explicit SuperImposedFrame(const PixelFormat& format);
 
+protected:
 	const FrameSource* top;
 	const FrameSource* bottom;
 };

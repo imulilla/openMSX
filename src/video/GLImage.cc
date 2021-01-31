@@ -4,6 +4,7 @@
 #include "MSXException.hh"
 #include "Math.hh"
 #include "PNG.hh"
+#include "xrange.hh"
 #include "build-info.hh"
 #include <cstdlib>
 #include <SDL.h>
@@ -34,7 +35,7 @@ static gl::Texture loadTexture(
 	SDL_BlitSurface(surface.get(), &area, image2.get(), &area);
 
 	gl::Texture texture(true); // enable interpolation
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size[0], size[1], 0,
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size[0], size[1], 0,
 	             GL_RGBA, GL_UNSIGNED_BYTE, image2->pixels);
 	return texture;
 }
@@ -78,23 +79,24 @@ GLImage::GLImage(OutputSurface& /*output*/, ivec2 size_, unsigned rgba)
 	size = size_;
 	borderSize = 0;
 	borderR = borderG = borderB = borderA = 0; // not used, but avoid (harmless) UMR
-	for (int i = 0; i < 4; ++i) {
+	for (auto i : xrange(4)) {
 		bgR[i] = (rgba >> 24) & 0xff;
 		bgG[i] = (rgba >> 16) & 0xff;
 		bgB[i] = (rgba >>  8) & 0xff;
 		unsigned alpha = (rgba >> 0) & 0xff;
 		bgA[i] = (alpha == 255) ? 256 : alpha;
 	}
+	initBuffers();
 }
 
-GLImage::GLImage(OutputSurface& /*output*/, ivec2 size_, const unsigned* rgba,
+GLImage::GLImage(OutputSurface& /*output*/, ivec2 size_, span<const unsigned, 4> rgba,
                  int borderSize_, unsigned borderRGBA)
 	: texture(gl::Null())
 {
 	checkSize(size_);
 	size = size_;
 	borderSize = borderSize_;
-	for (int i = 0; i < 4; ++i) {
+	for (auto i : xrange(4)) {
 		bgR[i] = (rgba[i] >> 24) & 0xff;
 		bgG[i] = (rgba[i] >> 16) & 0xff;
 		bgB[i] = (rgba[i] >>  8) & 0xff;
@@ -107,11 +109,22 @@ GLImage::GLImage(OutputSurface& /*output*/, ivec2 size_, const unsigned* rgba,
 	borderB = (borderRGBA >>  8) & 0xff;
 	unsigned alpha = (borderRGBA >> 0) & 0xff;
 	borderA = (alpha == 255) ? 256 : alpha;
+
+	initBuffers();
 }
 
 GLImage::GLImage(OutputSurface& /*output*/, SDLSurfacePtr image)
 	: texture(loadTexture(std::move(image), size))
 {
+}
+
+void GLImage::initBuffers()
+{
+	// border
+	uint8_t indices[10] = {4, 0, 5, 1, 6, 2, 7, 3, 4, 0};
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementsBuffer.get());
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 void GLImage::draw(OutputSurface& /*output*/, ivec2 pos, uint8_t r, uint8_t g, uint8_t b, uint8_t alpha)
@@ -139,7 +152,9 @@ void GLImage::draw(OutputSurface& /*output*/, ivec2 pos, uint8_t r, uint8_t g, u
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnableVertexAttribArray(0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[0].get());
+	glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STREAM_DRAW);
 
 	if (texture.get()) {
 		vec2 tex[4] = {
@@ -154,12 +169,17 @@ void GLImage::draw(OutputSurface& /*output*/, ivec2 pos, uint8_t r, uint8_t g, u
 		            r / 255.0f, g / 255.0f, b / 255.0f, alpha / 255.0f);
 		glUniformMatrix4fv(gl::context->unifTexMvp, 1, GL_FALSE,
 		                   &gl::context->pixelMvp[0][0]);
-		glVertexAttribPointer(0, 2, GL_INT,   GL_FALSE, 0, positions + 4);
-		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, tex);
+		const ivec2* offset = nullptr;
+		glVertexAttribPointer(0, 2, GL_INT, GL_FALSE, 0, offset + 4);
+		glEnableVertexAttribArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo[1].get());
+		glBufferData(GL_ARRAY_BUFFER, sizeof(tex), tex, GL_STREAM_DRAW);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
 		glEnableVertexAttribArray(1);
 		texture.bind();
 		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 		glDisableVertexAttribArray(1);
+		glDisableVertexAttribArray(0);
 	} else {
 		assert(r == 255);
 		assert(g == 255);
@@ -167,21 +187,21 @@ void GLImage::draw(OutputSurface& /*output*/, ivec2 pos, uint8_t r, uint8_t g, u
 		gl::context->progFill.activate();
 		glUniformMatrix4fv(gl::context->unifFillMvp, 1, GL_FALSE,
 		                   &gl::context->pixelMvp[0][0]);
-		glVertexAttribPointer(0, 2, GL_INT, GL_FALSE, 0, positions);
+		glVertexAttribPointer(0, 2, GL_INT, GL_FALSE, 0, nullptr);
+		glEnableVertexAttribArray(0);
 		glVertexAttrib4f(1, borderR / 255.0f, borderG / 255.0f, borderB / 255.0f,
 		                (borderA * alpha) / (255.0f * 255.0f));
 
 		if ((2 * borderSize >= abs(size[0])) ||
 		    (2 * borderSize >= abs(size[1]))) {
 			// only border
-			glDisableVertexAttribArray(1);
 			glDrawArrays(GL_TRIANGLE_FAN, 4, 4);
 		} else {
 			// border
 			if (borderSize > 0) {
-				uint8_t indices[10] = { 4,0,5,1,6,2,7,3,4,0 };
-				glDisableVertexAttribArray(1);
-				glDrawElements(GL_TRIANGLE_STRIP, 10, GL_UNSIGNED_BYTE, indices);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementsBuffer.get());
+				glDrawElements(GL_TRIANGLE_STRIP, 10, GL_UNSIGNED_BYTE, nullptr);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 			}
 
 			// interior
@@ -191,13 +211,17 @@ void GLImage::draw(OutputSurface& /*output*/, ivec2 pos, uint8_t r, uint8_t g, u
 				{ bgR[3], bgG[3], bgB[3], uint8_t((bgA[3] * alpha) / 256) },
 				{ bgR[1], bgG[1], bgB[1], uint8_t((bgA[1] * alpha) / 256) },
 			};
-			glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, col);
+			glBindBuffer(GL_ARRAY_BUFFER, vbo[2].get());
+			glBufferData(GL_ARRAY_BUFFER, sizeof(col), col, GL_STREAM_DRAW);
+			glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, nullptr);
 			glEnableVertexAttribArray(1);
 			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 			glDisableVertexAttribArray(1);
 		}
+		glDisableVertexAttribArray(0);
 	}
 	glDisableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glDisable(GL_BLEND);
 }
 

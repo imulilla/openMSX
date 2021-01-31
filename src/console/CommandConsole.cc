@@ -11,11 +11,14 @@
 #include "InputEvents.hh"
 #include "Display.hh"
 #include "EventDistributor.hh"
+#include "SDL.h"
 #include "Version.hh"
 #include "checked_cast.hh"
 #include "utf8_unchecked.hh"
 #include "StringOp.hh"
 #include "ScopedAssign.hh"
+#include "scope_exit.hh"
+#include "view.hh"
 #include "xrange.hh"
 #include <algorithm>
 #include <fstream>
@@ -24,6 +27,7 @@
 using std::min;
 using std::max;
 using std::string;
+using std::string_view;
 
 namespace openmsx {
 
@@ -62,43 +66,11 @@ string_view ConsoleLine::chunkText(size_t i) const
 	return string_view(line).substr(pos, len);
 }
 
-ConsoleLine ConsoleLine::substr(size_t pos, size_t len) const
-{
-	ConsoleLine result;
-	if (chunks.empty()) {
-		assert(line.empty());
-		assert(pos == 0);
-		return result;
-	}
-
-	auto b = begin(line);
-	utf8::unchecked::advance(b, pos);
-	auto e = b;
-	while (len-- && (e != end(line))) {
-		utf8::unchecked::next(e);
-	}
-	result.line.assign(b, e);
-
-	unsigned bpos = b - begin(line);
-	unsigned bend = e - begin(line);
-	unsigned i = 1;
-	while ((i < chunks.size()) && (chunks[i].second <= bpos)) {
-		++i;
-	}
-	result.chunks.emplace_back(chunks[i - 1].first, 0);
-	while ((i < chunks.size()) && (chunks[i].second < bend)) {
-		result.chunks.emplace_back(chunks[i].first,
-		                           chunks[i].second - bpos);
-		++i;
-	}
-	return result;
-}
-
 // class CommandConsole
 
-static const char* const PROMPT_NEW  = "> ";
-static const char* const PROMPT_CONT = "| ";
-static const char* const PROMPT_BUSY = "*busy*";
+constexpr const char* const PROMPT_NEW  = "> ";
+constexpr const char* const PROMPT_CONT = "| ";
+constexpr const char* const PROMPT_BUSY = "*busy*";
 
 CommandConsole::CommandConsole(
 		GlobalCommandController& commandController_,
@@ -189,31 +161,18 @@ void CommandConsole::loadHistory()
 	}
 }
 
-void CommandConsole::getCursorPosition(unsigned& xPosition, unsigned& yPosition) const
+gl::ivec2 CommandConsole::getCursorPosition() const
 {
-	xPosition = cursorPosition % getColumns();
+	int xPosition = cursorPosition % getColumns();
 	auto num = lines[0].numChars() / getColumns();
-	yPosition = unsigned(num - (cursorPosition / getColumns()));
-}
-
-ConsoleLine CommandConsole::getLine(unsigned line) const
-{
-	size_t count = 0;
-	for (auto buf : xrange(lines.size())) {
-		count += (lines[buf].numChars() / getColumns()) + 1;
-		if (count > line) {
-			return lines[buf].substr(
-				(count - line - 1) * getColumns(),
-				getColumns());
-		}
-	}
-	return ConsoleLine();
+	int yPosition = unsigned(num - (cursorPosition / getColumns()));
+	return {xPosition, yPosition};
 }
 
 int CommandConsole::signalEvent(const std::shared_ptr<const Event>& event)
 {
 	if (!consoleSetting.getBoolean()) return 0;
-	auto& keyEvent = checked_cast<const KeyEvent&>(*event);
+	const auto& keyEvent = checked_cast<const KeyEvent&>(*event);
 
 	// If the console is open then don't pass the event to the MSX
 	// (whetever the (keyboard) event is). If the event has a meaning for
@@ -261,6 +220,14 @@ bool CommandConsole::handleEvent(const KeyEvent& keyEvent)
 		case Keys::K_C:
 			clearCommand();
 			return true;
+		case Keys::K_L:
+			clearHistory();
+			return true;
+#ifndef __APPLE__
+		case Keys::K_V:
+			paste();
+			return true;
+#endif
 		}
 		break;
 	case Keys::KM_SHIFT:
@@ -270,6 +237,46 @@ bool CommandConsole::handleEvent(const KeyEvent& keyEvent)
 			return true;
 		case Keys::K_PAGEDOWN:
 			scroll(-max<int>(getRows() - 1, 1));
+			return true;
+		}
+		break;
+	case Keys::KM_META:
+#ifdef __APPLE__
+		switch (key) {
+		case Keys::K_V:
+			paste();
+			return true;
+		case Keys::K_K:
+			clearHistory();
+			return true;
+		case Keys::K_LEFT:
+			cursorPosition = unsigned(prompt.size());
+			return true;
+		case Keys::K_RIGHT:
+			cursorPosition = unsigned(lines[0].numChars());
+			return true;
+		}
+#endif
+		break;
+	case Keys::KM_ALT:
+		switch (key) {
+		case Keys::K_BACKSPACE:
+			deleteToStartOfWord();
+			return true;
+#ifdef __APPLE__
+		case Keys::K_DELETE:
+			deleteToEndOfWord();
+			return true;
+#else
+		case Keys::K_D:
+			deleteToEndOfWord();
+			return true;
+#endif
+		case Keys::K_LEFT:
+			gotoStartOfWord();
+			return true;
+		case Keys::K_RIGHT:
+			gotoEndOfWord();
 			return true;
 		}
 		break;
@@ -312,10 +319,18 @@ bool CommandConsole::handleEvent(const KeyEvent& keyEvent)
 			}
 			return true;
 		case Keys::K_HOME:
+#ifdef __APPLE__
+			scroll(lines.size());
+#else
 			cursorPosition = unsigned(prompt.size());
+#endif
 			return true;
 		case Keys::K_END:
+#ifdef __APPLE__
+			scroll(-lines.size());
+#else
 			cursorPosition = unsigned(lines[0].numChars());
+#endif
 			return true;
 		}
 		break;
@@ -371,7 +386,7 @@ void CommandConsole::print(string_view text, unsigned rgb)
 {
 	while (true) {
 		auto pos = text.find('\n');
-		newLineConsole(ConsoleLine(text.substr(0, pos).str(), rgb));
+		newLineConsole(ConsoleLine(string(text.substr(0, pos)), rgb));
 		if (pos == string_view::npos) return;
 		text = text.substr(pos + 1); // skip newline
 		if (text.empty()) return;
@@ -416,13 +431,13 @@ void CommandConsole::commandExecute()
 	if (commandController.isComplete(commandBuffer)) {
 		// Normally the busy prompt is NOT shown (not even very briefly
 		// because the screen is not redrawn), though for some commands
-		// that potentially take a long time to execute, we explictly
+		// that potentially take a long time to execute, we explicitly
 		// send events, see also comment in signalEvent().
 		prompt = PROMPT_BUSY;
 		putPrompt();
 
 		try {
-			ScopedAssign<bool> sa(executingCommand, true);
+			ScopedAssign sa(executingCommand, true);
 			auto resultObj = commandController.executeCommand(
 				commandBuffer);
 			auto result = resultObj.getString();
@@ -457,16 +472,17 @@ ConsoleLine CommandConsole::highLight(string_view line)
 			++pos;
 		}
 		// TODO make these color configurable?
-		unsigned rgb;
-		switch (col) {
-		case 'E': rgb = 0xff0000; break; // error
-		case 'c': rgb = 0x5c5cff; break; // comment
-		case 'v': rgb = 0x00ffff; break; // variable
-		case 'l': rgb = 0xff00ff; break; // literal
-		case 'p': rgb = 0xcdcd00; break; // proc
-		case 'o': rgb = 0x00cdcd; break; // operator
-		default:  rgb = 0xffffff; break; // other
-		}
+		unsigned rgb = [&] {
+			switch (col) {
+			case 'E': return 0xff0000; // error
+			case 'c': return 0x5c5cff; // comment
+			case 'v': return 0x00ffff; // variable
+			case 'l': return 0xff00ff; // literal
+			case 'p': return 0xcdcd00; // proc
+			case 'o': return 0x00cdcd; // operator
+			default:  return 0xffffff; // other
+			}
+		}();
 		result.addChunk(line.substr(pos2, pos - pos2), rgb);
 	}
 	return result;
@@ -484,8 +500,8 @@ void CommandConsole::tabCompletion()
 {
 	resetScrollBack();
 	auto pl = unsigned(prompt.size());
-	string front = utf8::unchecked::substr(lines[0].str(), pl, cursorPosition - pl).str();
-	string back  = utf8::unchecked::substr(lines[0].str(), cursorPosition).str();
+	string front(utf8::unchecked::substr(lines[0].str(), pl, cursorPosition - pl));
+	string back (utf8::unchecked::substr(lines[0].str(), cursorPosition));
 	string newFront = commandController.tabCompletion(front);
 	cursorPosition = pl + unsigned(utf8::unchecked::size(newFront));
 	currentLine = newFront + back;
@@ -494,8 +510,109 @@ void CommandConsole::tabCompletion()
 
 void CommandConsole::scroll(int delta)
 {
-	consoleScrollBack = min(max(consoleScrollBack + delta, 0),
-	                        int(lines.size()));
+	consoleScrollBack = max(min(consoleScrollBack + delta, int(lines.size()) - int(rows)), 0);
+}
+
+// Returns the position of the start of the word relative to the current cursor position.
+// If the cursor is already located at the start of a word then return the start of the previous word.
+// If there is no previous word, then return the start of the line (position of the prompt).
+//
+// One complication is that the line is utf8 encoded and the positions are
+// given in character-counts instead of byte-counts. To solve this this
+// function returns a tuple:
+//  * an iterator to the start of the word (likely the new cursor position).
+//  * an iterator to the current cursor position.
+//  * the distance (in characters, not bytes) between these two iterators.
+// The first item in this tuple is the actual result. The other two are only
+// returned for efficiency (this function calculates them anyway, and it's
+// likely the caller will need them as well).
+static std::tuple<std::string::const_iterator, std::string::const_iterator, unsigned>
+	getStartOfWord(const std::string& line, unsigned cursorPos, size_t promptSize)
+{
+	auto begin  = std::begin(line);
+	auto prompt = begin + promptSize; // assumes prompt only contains single-byte utf8 chars
+	auto cursor = begin; utf8::unchecked::advance(cursor, cursorPos);
+	auto pos    = cursor;
+
+	// search (backwards) for first non-white-space
+	unsigned distance = 0;
+	while (pos > prompt) {
+		auto pos2 = pos;
+		utf8::unchecked::prior(pos2);
+		if (*pos2 != one_of(' ', '\t')) break;
+		pos = pos2;
+		++distance;
+	}
+	// search (backwards) for first white-space
+	while (pos > prompt) {
+		auto pos2 = pos;
+		utf8::unchecked::prior(pos2);
+		if (*pos2 == one_of(' ', '\t')) break;
+		pos = pos2;
+		++distance;
+	}
+	return {pos, cursor, distance};
+}
+
+// Similar to getStartOfWord() but locates the end of the word instead.
+// The end of the word is the 2nd (instead of the 1st) element in the tuple.
+// This is done so that both getStartOfWord() and getEndOfWord() have the invariant:
+//  result = [begin, end, distance]
+//   -> begin <= end
+//   -> end - begin == distance
+static std::tuple<std::string::const_iterator, std::string::const_iterator, unsigned>
+	getEndOfWord(const std::string& line, unsigned cursorPos)
+{
+	auto begin  = std::begin(line);
+	auto end    = std::end  (line);
+	auto cursor = begin; utf8::unchecked::advance(cursor, cursorPos);
+	auto pos    = cursor;
+
+	// search (forwards) for first non-white-space
+	unsigned distance = 0;
+	while ((pos < end) && (*pos == one_of(' ', '\t'))) {
+		++pos; // single-byte utf8 character
+		++distance;
+	}
+	// search (forwards) for first white-space
+	while ((pos < end) && (*pos != one_of(' ', '\t'))) {
+		utf8::unchecked::next(pos);
+		++distance;
+	}
+	return {cursor, pos, distance};
+}
+
+void CommandConsole::gotoStartOfWord()
+{
+	auto [begin, end, distance] = getStartOfWord(lines[0].str(), cursorPosition, prompt.size());
+	cursorPosition -= distance;
+}
+
+void CommandConsole::deleteToStartOfWord()
+{
+	resetScrollBack();
+	currentLine = lines[0].str();
+	auto [begin, end, distance] = getStartOfWord(currentLine, cursorPosition, prompt.size());
+	currentLine.erase(begin, end);
+	currentLine.erase(0, prompt.size());
+	lines[0] = highLight(currentLine);
+	cursorPosition -= distance;
+}
+
+void CommandConsole::gotoEndOfWord()
+{
+	auto [begin, end, distance] = getEndOfWord(lines[0].str(), cursorPosition);
+	cursorPosition += distance;
+}
+
+void CommandConsole::deleteToEndOfWord()
+{
+	resetScrollBack();
+	currentLine = lines[0].str();
+	auto [begin, end, distance] = getEndOfWord(currentLine, cursorPosition);
+	currentLine.erase(begin, end);
+	currentLine.erase(0, prompt.size());
+	lines[0] = highLight(currentLine);
 }
 
 void CommandConsole::prevCommand()
@@ -549,6 +666,14 @@ void CommandConsole::clearCommand()
 	cursorPosition = unsigned(prompt.size());
 }
 
+void CommandConsole::clearHistory()
+{
+	resetScrollBack();
+	while (lines.size() > 1) {
+		lines.removeBack();
+	}
+}
+
 void CommandConsole::backspace()
 {
 	resetScrollBack();
@@ -596,6 +721,58 @@ void CommandConsole::normalKey(uint32_t chr)
 void CommandConsole::resetScrollBack()
 {
 	consoleScrollBack = 0;
+}
+
+static std::vector<std::string_view> splitLines(std::string_view str)
+{
+	// This differs from StringOp::split() in two ways:
+	// - If the input is an empty string, then the resulting vector
+	//   contains 1 element which is the empty string (StringOp::split()
+	//   would return an empty vector).
+	// - If the input ends on a newline character, then the final item in
+	//   the result vector is an empty string (StringOp::split() would not
+	//   include that last empty string).
+	// TODO can we come up with a good name for this function and move it
+	//      to StringOp?
+	std::vector<std::string_view> result;
+	while (true) {
+		auto pos = str.find_first_of('\n');
+		if (pos == std::string_view::npos) break;
+		result.push_back(str.substr(0, pos));
+		str = str.substr(pos + 1);
+	}
+	result.push_back(str);
+	return result;
+}
+
+void CommandConsole::paste()
+{
+	char* text = SDL_GetClipboardText();
+	if (!text) return;
+	scope_exit e([&]{ SDL_free(text); });
+
+	auto pastedLines = splitLines(text);
+	assert(!pastedLines.empty());
+
+	// helper function 'append()' to append to the existing text
+	std::string_view prefix = lines[0].str();
+	prefix.remove_prefix(prompt.size());
+	auto append = [&](std::string_view suffix) {
+		if (prefix.empty()) {
+			lines[0] = highLight(suffix);
+		} else {
+			lines[0] = highLight(tmpStrCat(prefix, suffix));
+			prefix = "";
+		}
+	};
+	// execute all but the last line
+	for (const auto& line : view::drop_back(pastedLines, 1)) {
+		append(line);
+		commandExecute();
+	}
+	// only enter (not execute) the last line
+	append(pastedLines.back());
+	cursorPosition = unsigned(lines[0].numChars());
 }
 
 } // namespace openmsx

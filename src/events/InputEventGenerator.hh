@@ -1,7 +1,6 @@
 #ifndef INPUTEVENTGENERATOR_HH
 #define INPUTEVENTGENERATOR_HH
 
-#include "Observer.hh"
 #include "BooleanSetting.hh"
 #include "EventListener.hh"
 #include "Command.hh"
@@ -15,8 +14,7 @@ class CommandController;
 class EventDistributor;
 class GlobalSettings;
 
-class InputEventGenerator final : private Observer<Setting>
-                                , private EventListener
+class InputEventGenerator final : private EventListener
 {
 public:
 	InputEventGenerator(const InputEventGenerator&) = delete;
@@ -32,20 +30,17 @@ public:
 	  */
 	void wait();
 
-	/**
-	 * Enable or disable keyboard event repeats
-	 */
-	void setKeyRepeat(bool enable);
-
 	/** Input Grab on or off */
 	BooleanSetting& getGrabInput() { return grabInput; }
+	/** Must be called when 'grabinput' or 'fullscreen' setting changes. */
+	void updateGrab(bool grab);
 
 	/** Normally the following two functions simply delegate to
 	 * SDL_JoystickNumButtons() and SDL_JoystickGetButton(). Except on
 	 * Android, see comments in .cc for more details.
 	 */
-	static int joystickNumButtons(SDL_Joystick* joystick);
-	static bool joystickGetButton(SDL_Joystick* joystick, int button);
+	[[nodiscard]] static int joystickNumButtons(SDL_Joystick* joystick);
+	[[nodiscard]] static bool joystickGetButton(SDL_Joystick* joystick, int button);
 
 	void poll();
 
@@ -57,9 +52,6 @@ private:
 	void handleText(const char* utf8);
 	void setGrabInput(bool grab);
 
-	// Observer<Setting>
-	void update(const Setting& setting) override;
-
 	// EventListener
 	int signalEvent(const std::shared_ptr<const Event>& event) override;
 
@@ -70,7 +62,7 @@ private:
 	struct EscapeGrabCmd final : Command {
 		explicit EscapeGrabCmd(CommandController& commandController);
 		void execute(span<const TclObject> tokens, TclObject& result) override;
-		std::string help(const std::vector<std::string>& tokens) const override;
+		[[nodiscard]] std::string help(const std::vector<std::string>& tokens) const override;
 	} escapeGrabCmd;
 
 	enum EscapeGrabState {
@@ -91,15 +83,14 @@ private:
 	void triggerOsdControlEventsFromJoystickButtonEvent(
 		unsigned button, bool up, const EventPtr& origEvent);
 	void triggerOsdControlEventsFromKeyEvent(
-		Keys::KeyCode keyCode, bool up, const EventPtr& origEvent);
+		Keys::KeyCode keyCode, bool up, bool repeat, const EventPtr& origEvent);
 
 
-	bool keyRepeat;
 	unsigned osdControlButtonsState; // 0 is pressed, 1 is released
 
 	// only for Android
-	static bool androidButtonA;
-	static bool androidButtonB;
+	static inline bool androidButtonA = false;
+	static inline bool androidButtonB = false;
 };
 
 } // namespace openmsx

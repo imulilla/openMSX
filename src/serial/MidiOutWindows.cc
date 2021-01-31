@@ -5,6 +5,7 @@
 #include "PluggingController.hh"
 #include "PlugException.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <memory>
 
 using std::string;
@@ -14,8 +15,7 @@ namespace openmsx {
 void MidiOutWindows::registerAll(PluggingController& controller)
 {
 	w32_midiOutInit();
-	unsigned devnum = w32_midiOutGetVFNsNum();
-	for (unsigned i = 0; i < devnum; ++i) {
+	for (auto i : xrange(w32_midiOutGetVFNsNum())) {
 		controller.registerPluggable(std::make_unique<MidiOutWindows>(i));
 	}
 }
@@ -54,15 +54,15 @@ const string& MidiOutWindows::getName() const
 	return name;
 }
 
-string_view MidiOutWindows::getDescription() const
+std::string_view MidiOutWindows::getDescription() const
 {
 	return desc;
 }
 
-void MidiOutWindows::recvByte(byte value, EmuTime::param /*time*/)
+void MidiOutWindows::recvMessage(const std::vector<uint8_t>& message, EmuTime::param /*time*/)
 {
 	if (devidx != unsigned(-1)) {
-		w32_midiOutPut(value, devidx);
+		w32_midiOutMsg(message.size(), message.data(), devidx);
 	}
 }
 

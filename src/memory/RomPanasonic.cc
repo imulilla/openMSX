@@ -4,7 +4,10 @@
 #include "DeviceConfig.hh"
 #include "SRAM.hh"
 #include "CacheLine.hh"
+#include "one_of.hh"
+#include "ranges.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <memory>
 
 namespace openmsx {
@@ -42,34 +45,34 @@ RomPanasonic::RomPanasonic(const DeviceConfig& config, Rom&& rom_)
 void RomPanasonic::reset(EmuTime::param /*time*/)
 {
 	control = 0;
-	for (int region = 0; region < 8; ++region) {
-		bankSelect[region] = 0;
+	ranges::fill(bankSelect, 0);
+	for (auto region : xrange(8)) {
 		setRom(region, 0);
 	}
+	invalidateDeviceRCache(0x7FF0 & CacheLine::HIGH, CacheLine::SIZE);
 }
 
 byte RomPanasonic::peekMem(word address, EmuTime::param time) const
 {
-	byte result;
 	if ((control & 0x04) && (0x7FF0 <= address) && (address < 0x7FF8)) {
 		// read mapper state (lower 8 bit)
-		result = bankSelect[address & 7] & 0xFF;
+		return bankSelect[address & 7] & 0xFF;
 	} else if ((control & 0x10) && (address == 0x7FF8)) {
 		// read mapper state (9th bit)
-		result = 0;
+		byte result = 0;
 		for (int i = 7; i >= 0; i--) {
 			result <<= 1;
 			if (bankSelect[i] & 0x100) {
 				result++;
 			}
 		}
+		return result;
 	} else if ((control & 0x08) && (address == 0x7FF9)) {
 		// read control byte
-		result = control;
+		return control;
 	} else {
-		result = Rom8kBBlocks::peekMem(address, time);
+		return Rom8kBBlocks::peekMem(address, time);
 	}
-	return result;
 }
 
 byte RomPanasonic::readMem(word address, EmuTime::param time)
@@ -92,13 +95,13 @@ void RomPanasonic::writeMem(word address, byte value, EmuTime::param /*time*/)
 	if ((0x6000 <= address) && (address < 0x7FF0)) {
 		// set mapper state (lower 8 bits)
 		int region = (address & 0x1C00) >> 10;
-		if ((region == 5) || (region == 6)) region ^= 3;
+		if (region == one_of(5, 6)) region ^= 3;
 		int selectedBank = bankSelect[region];
 		int newBank = (selectedBank & ~0xFF) | value;
 		changeBank(region, newBank);
 	} else if (address == 0x7FF8) {
 		// set mapper state (9th bit)
-		for (int region = 0; region < 8; region++) {
+		for (auto region : xrange(8)) {
 			if (value & 1) {
 				changeBank(region, bankSelect[region] |  0x100);
 			} else {
@@ -171,6 +174,11 @@ void RomPanasonic::changeBank(byte region, int bank)
 	} else {
 		// ROM
 		setRom(region, bank);
+	}
+	invalidateDeviceWCache(0x2000 * region, 0x2000); // 'R' is already handled
+	if (region == 3) {
+		// don't pre-fill [0x7ff0, 0x7fff]
+		invalidateDeviceRCache(0x7FF0 & CacheLine::HIGH, CacheLine::SIZE);
 	}
 }
 

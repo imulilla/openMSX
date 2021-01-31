@@ -14,11 +14,11 @@ public:
 	MidiOutConnector(PluggingController& pluggingController,
 	                 std::string name);
 
-	MidiOutDevice& getPluggedMidiOutDev() const;
+	[[nodiscard]] MidiOutDevice& getPluggedMidiOutDev() const;
 
 	// Connector
-	string_view getDescription() const final override;
-	string_view getClass() const final override;
+	[[nodiscard]] std::string_view getDescription() const final;
+	[[nodiscard]] std::string_view getClass() const final;
 
 	// SerialDataInterface
 	void setDataBits(DataBits bits) override;

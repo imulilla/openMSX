@@ -11,7 +11,7 @@ TODO:
   But maybe it makes more sense to have all RAM managed by the VDP?
 - Currently all VRAM access is done at the start time of a series of
   updates: currentTime is not increased until the very end of the sync
-  method. It should ofcourse be updated after every read and write.
+  method. It should of course be updated after every read and write.
   An acceptable approximation would be an update after every pixel/byte
   operation.
 */
@@ -29,7 +29,7 @@ TODO:
   - in 512 lines modes (e.g. screen 7) NY is NOT limited to 512, so when
     NY > 512, part of the screen is overdrawn twice
   - in 256 columns modes (e.g. screen 5) when "SX/DX >= 256", only 1 element
-    (pixel or byte) is processed per horizontal line. The real x-ccordinate
+    (pixel or byte) is processed per horizontal line. The real x-coordinate
     is "SX/DX & 255".
 */
 
@@ -50,17 +50,17 @@ namespace openmsx {
 using namespace VDPAccessSlots;
 
 // Constants:
-const byte MXD = 0x20;
-const byte MXS = 0x10;
-const byte DIY = 0x08;
-const byte DIX = 0x04;
-const byte EQ  = 0x02;
-const byte MAJ = 0x01;
+static constexpr byte MXD = 0x20;
+static constexpr byte MXS = 0x10;
+static constexpr byte DIY = 0x08;
+static constexpr byte DIX = 0x04;
+static constexpr byte EQ  = 0x02;
+static constexpr byte MAJ = 0x01;
 
 // Inline methods first, to make sure they are actually inlined:
 
 template<typename Mode>
-static inline unsigned clipNX_1_pixel(unsigned DX, unsigned NX, byte ARG)
+static constexpr unsigned clipNX_1_pixel(unsigned DX, unsigned NX, byte ARG)
 {
 	if (unlikely(DX >= Mode::PIXELS_PER_LINE)) {
 		return 1;
@@ -72,9 +72,9 @@ static inline unsigned clipNX_1_pixel(unsigned DX, unsigned NX, byte ARG)
 }
 
 template<typename Mode>
-static inline unsigned clipNX_1_byte(unsigned DX, unsigned NX, byte ARG)
+static constexpr unsigned clipNX_1_byte(unsigned DX, unsigned NX, byte ARG)
 {
-	static const unsigned BYTES_PER_LINE =
+	constexpr unsigned BYTES_PER_LINE =
 		Mode::PIXELS_PER_LINE >> Mode::PIXELS_PER_BYTE_SHIFT;
 
 	DX >>= Mode::PIXELS_PER_BYTE_SHIFT;
@@ -89,7 +89,7 @@ static inline unsigned clipNX_1_byte(unsigned DX, unsigned NX, byte ARG)
 }
 
 template<typename Mode>
-static inline unsigned clipNX_2_pixel(unsigned SX, unsigned DX, unsigned NX, byte ARG)
+static constexpr unsigned clipNX_2_pixel(unsigned SX, unsigned DX, unsigned NX, byte ARG)
 {
 	if (unlikely(SX >= Mode::PIXELS_PER_LINE) ||
 	    unlikely(DX >= Mode::PIXELS_PER_LINE)) {
@@ -102,9 +102,9 @@ static inline unsigned clipNX_2_pixel(unsigned SX, unsigned DX, unsigned NX, byt
 }
 
 template<typename Mode>
-static inline unsigned clipNX_2_byte(unsigned SX, unsigned DX, unsigned NX, byte ARG)
+static constexpr unsigned clipNX_2_byte(unsigned SX, unsigned DX, unsigned NX, byte ARG)
 {
-	static const unsigned BYTES_PER_LINE =
+	constexpr unsigned BYTES_PER_LINE =
 		Mode::PIXELS_PER_LINE >> Mode::PIXELS_PER_BYTE_SHIFT;
 
 	SX >>= Mode::PIXELS_PER_BYTE_SHIFT;
@@ -120,13 +120,13 @@ static inline unsigned clipNX_2_byte(unsigned SX, unsigned DX, unsigned NX, byte
 		: min(NX, BYTES_PER_LINE - max(SX, DX));
 }
 
-static inline unsigned clipNY_1(unsigned DY, unsigned NY, byte ARG)
+static constexpr unsigned clipNY_1(unsigned DY, unsigned NY, byte ARG)
 {
 	NY = NY ? NY : 1024;
 	return (ARG & DIY) ? min(NY, DY + 1) : NY;
 }
 
-static inline unsigned clipNY_2(unsigned SY, unsigned DY, unsigned NY, byte ARG)
+static constexpr unsigned clipNY_2(unsigned SY, unsigned DY, unsigned NY, byte ARG)
 {
 	NY = NY ? NY : 1024;
 	return (ARG & DIY) ? min(NY, min(SY, DY) + 1) : NY;
@@ -167,13 +167,13 @@ struct Graphic4Mode
 	//using IncrPixelAddr = IncrPixelAddr4;
 	//using IncrMask      = IncrMask4;
 	//using IncrShift     = IncrShift4;
-	static const byte COLOR_MASK = 0x0F;
-	static const byte PIXELS_PER_BYTE = 2;
-	static const byte PIXELS_PER_BYTE_SHIFT = 1;
-	static const unsigned PIXELS_PER_LINE = 256;
+	static constexpr byte COLOR_MASK = 0x0F;
+	static constexpr byte PIXELS_PER_BYTE = 2;
+	static constexpr byte PIXELS_PER_BYTE_SHIFT = 1;
+	static constexpr unsigned PIXELS_PER_LINE = 256;
 	static inline unsigned addressOf(unsigned x, unsigned y, bool extVRAM);
 	static inline byte point(VDPVRAM& vram, unsigned x, unsigned y, bool extVRAM);
-	template <typename LogOp>
+	template<typename LogOp>
 	static inline void pset(EmuTime::param time, VDPVRAM& vram,
 		unsigned x, unsigned addr, byte src, byte color, LogOp op);
 	static inline byte duplicate(byte color);
@@ -190,8 +190,8 @@ inline unsigned Graphic4Mode::addressOf(
 inline byte Graphic4Mode::point(
 	VDPVRAM& vram, unsigned x, unsigned y, bool extVRAM)
 {
-	return ( vram.cmdReadWindow.readNP(addressOf(x, y, extVRAM))
-		>> (((~x) & 1) << 2) ) & 15;
+	return (vram.cmdReadWindow.readNP(addressOf(x, y, extVRAM))
+		>> (((~x) & 1) << 2)) & 15;
 }
 
 template<typename LogOp>
@@ -217,13 +217,13 @@ struct Graphic5Mode
 	//using IncrPixelAddr = IncrPixelAddr5;
 	//using IncrMask      = IncrMask5;
 	//using IncrShift     = IncrShift5;
-	static const byte COLOR_MASK = 0x03;
-	static const byte PIXELS_PER_BYTE = 4;
-	static const byte PIXELS_PER_BYTE_SHIFT = 2;
-	static const unsigned PIXELS_PER_LINE = 512;
+	static constexpr byte COLOR_MASK = 0x03;
+	static constexpr byte PIXELS_PER_BYTE = 4;
+	static constexpr byte PIXELS_PER_BYTE_SHIFT = 2;
+	static constexpr unsigned PIXELS_PER_LINE = 512;
 	static inline unsigned addressOf(unsigned x, unsigned y, bool extVRAM);
 	static inline byte point(VDPVRAM& vram, unsigned x, unsigned y, bool extVRAM);
-	template <typename LogOp>
+	template<typename LogOp>
 	static inline void pset(EmuTime::param time, VDPVRAM& vram,
 		unsigned x, unsigned addr, byte src, byte color, LogOp op);
 	static inline byte duplicate(byte color);
@@ -240,8 +240,8 @@ inline unsigned Graphic5Mode::addressOf(
 inline byte Graphic5Mode::point(
 	VDPVRAM& vram, unsigned x, unsigned y, bool extVRAM)
 {
-	return ( vram.cmdReadWindow.readNP(addressOf(x, y, extVRAM))
-		>> (((~x) & 3) << 1) ) & 3;
+	return (vram.cmdReadWindow.readNP(addressOf(x, y, extVRAM))
+		>> (((~x) & 3) << 1)) & 3;
 }
 
 template<typename LogOp>
@@ -269,13 +269,13 @@ struct Graphic6Mode
 	//using IncrPixelAddr = IncrPixelAddr6;
 	//using IncrMask      = IncrMask6;
 	//using IncrShift     = IncrShift6;
-	static const byte COLOR_MASK = 0x0F;
-	static const byte PIXELS_PER_BYTE = 2;
-	static const byte PIXELS_PER_BYTE_SHIFT = 1;
-	static const unsigned PIXELS_PER_LINE = 512;
+	static constexpr byte COLOR_MASK = 0x0F;
+	static constexpr byte PIXELS_PER_BYTE = 2;
+	static constexpr byte PIXELS_PER_BYTE_SHIFT = 1;
+	static constexpr unsigned PIXELS_PER_LINE = 512;
 	static inline unsigned addressOf(unsigned x, unsigned y, bool extVRAM);
 	static inline byte point(VDPVRAM& vram, unsigned x, unsigned y, bool extVRAM);
-	template <typename LogOp>
+	template<typename LogOp>
 	static inline void pset(EmuTime::param time, VDPVRAM& vram,
 		unsigned x, unsigned addr, byte src, byte color, LogOp op);
 	static inline byte duplicate(byte color);
@@ -292,8 +292,8 @@ inline unsigned Graphic6Mode::addressOf(
 inline byte Graphic6Mode::point(
 	VDPVRAM& vram, unsigned x, unsigned y, bool extVRAM)
 {
-	return ( vram.cmdReadWindow.readNP(addressOf(x, y, extVRAM))
-		>> (((~x) & 1) << 2) ) & 15;
+	return (vram.cmdReadWindow.readNP(addressOf(x, y, extVRAM))
+		>> (((~x) & 1) << 2)) & 15;
 }
 
 template<typename LogOp>
@@ -319,10 +319,10 @@ struct Graphic7Mode
 	//using IncrPixelAddr = IncrPixelAddr7;
 	//using IncrMask      = IncrMask7;
 	//using IncrShift     = IncrShift7;
-	static const byte COLOR_MASK = 0xFF;
-	static const byte PIXELS_PER_BYTE = 1;
-	static const byte PIXELS_PER_BYTE_SHIFT = 0;
-	static const unsigned PIXELS_PER_LINE = 256;
+	static constexpr byte COLOR_MASK = 0xFF;
+	static constexpr byte PIXELS_PER_BYTE = 1;
+	static constexpr byte PIXELS_PER_BYTE_SHIFT = 0;
+	static constexpr unsigned PIXELS_PER_LINE = 256;
 	static inline unsigned addressOf(unsigned x, unsigned y, bool extVRAM);
 	static inline byte point(VDPVRAM& vram, unsigned x, unsigned y, bool extVRAM);
 	template<typename LogOp>
@@ -367,10 +367,10 @@ struct NonBitmapMode
 	//using IncrPixelAddr = IncrPixelAddrNonBitMap;
 	//using IncrMask      = IncrMaskNonBitMap;
 	//using IncrShift     = IncrShiftNonBitMap;
-	static const byte COLOR_MASK = 0xFF;
-	static const byte PIXELS_PER_BYTE = 1;
-	static const byte PIXELS_PER_BYTE_SHIFT = 0;
-	static const unsigned PIXELS_PER_LINE = 256;
+	static constexpr byte COLOR_MASK = 0xFF;
+	static constexpr byte PIXELS_PER_BYTE = 1;
+	static constexpr byte PIXELS_PER_BYTE_SHIFT = 0;
+	static constexpr unsigned PIXELS_PER_LINE = 256;
 	static inline unsigned addressOf(unsigned x, unsigned y, bool extVRAM);
 	static inline byte point(VDPVRAM& vram, unsigned x, unsigned y, bool extVRAM);
 	template<typename LogOp>
@@ -414,7 +414,7 @@ struct IncrByteAddr4
 	{
 		addr = Graphic4Mode::addressOf(x, y, false);
 	}
-	unsigned getAddr() const
+	[[nodiscard]] unsigned getAddr() const
 	{
 		return addr;
 	}
@@ -433,7 +433,7 @@ struct IncrByteAddr5
 	{
 		addr = Graphic5Mode::addressOf(x, y, false);
 	}
-	unsigned getAddr() const
+	[[nodiscard]] unsigned getAddr() const
 	{
 		return addr;
 	}
@@ -456,7 +456,7 @@ struct IncrByteAddr7
 		delta = (tx > 0) ? 0x10000 : (0x10000 - 1);
 		if (x & 1) delta ^= delta2;
 	}
-	unsigned getAddr() const
+	[[nodiscard]] unsigned getAddr() const
 	{
 		return addr;
 	}
@@ -489,7 +489,7 @@ struct IncrPixelAddr4
 		addr = Graphic4Mode::addressOf(x, y, false);
 		delta = (tx == 1) ? (x & 1) : ((x & 1) - 1);
 	}
-	unsigned getAddr() const { return addr; }
+	[[nodiscard]] unsigned getAddr() const { return addr; }
 	void step(int tx)
 	{
 		addr += delta;
@@ -514,7 +514,7 @@ struct IncrPixelAddr5
 			c2 -= 1;       //   | -1 | -1 |  0 |  0
 		}
 	}
-	unsigned getAddr() const { return addr; }
+	[[nodiscard]] unsigned getAddr() const { return addr; }
 	void step(int tx)
 	{
 		addr += (c1 & c2);
@@ -542,7 +542,7 @@ struct IncrPixelAddr6
 			c2 = (x & 2) ? -0x10000 : (0x10000 - 1);
 		}
 	}
-	unsigned getAddr() const { return addr; }
+	[[nodiscard]] unsigned getAddr() const { return addr; }
 	void step(int /*tx*/)
 	{
 		addr += (c1 & c2);
@@ -566,7 +566,7 @@ struct IncrMask4
 	{
 		mask = 0x0F << ((x & 1) << 2);
 	}
-	byte getMask() const
+	[[nodiscard]] byte getMask() const
 	{
 		return mask;
 	}
@@ -585,7 +585,7 @@ struct IncrMask5
 	{
 		mask = ~(0xC0 >> ((x & 3) << 1));
 	}
-	byte getMask() const
+	[[nodiscard]] byte getMask() const
 	{
 		return mask;
 	}
@@ -601,7 +601,7 @@ private:
 struct IncrMask7
 {
 	IncrMask7(unsigned /*x*/, int /*tx*/) {}
-	byte getMask() const
+	[[nodiscard]] byte getMask() const
 	{
 		return 0;
 	}
@@ -617,7 +617,7 @@ struct IncrShift4
 		: shift(((dx - sx) & 1) * 4)
 	{
 	}
-	byte doShift(byte color) const
+	[[nodiscard]] byte doShift(byte color) const
 	{
 		return (color >> shift) | (color << shift);
 	}
@@ -631,7 +631,7 @@ struct IncrShift5
 		: shift(((dx - sx) & 3) * 2)
 	{
 	}
-	byte doShift(byte color) const
+	[[nodiscard]] byte doShift(byte color) const
 	{
 		return (color >> shift) | (color << (8 - shift));
 	}
@@ -642,7 +642,7 @@ private:
 struct IncrShift7
 {
 	IncrShift7(unsigned /*sx*/, unsigned /*dx*/) {}
-	byte doShift(byte color) const
+	[[nodiscard]] byte doShift(byte color) const
 	{
 		return color;
 	}
@@ -706,7 +706,7 @@ struct TransparentOp : Op {
 	{
 		// TODO does this skip the write or re-write the original value
 		//      might make a difference in case the CPU has written
-		//      the same address inbetween the command read and write
+		//      the same address between the command read and write
 		if (color) Op::operator()(time, vram, addr, src, color, mask);
 	}
 };
@@ -722,7 +722,7 @@ using TNotOp = TransparentOp<NotOp>;
 void VDPCmdEngine::setStatusChangeTime(EmuTime::param t)
 {
 	statusChangeTime = t;
-	if ((t != EmuTime::infinity) && executingProbe.anyObservers()) {
+	if ((t != EmuTime::infinity()) && executingProbe.anyObservers()) {
 		vdp.scheduleCmdSync(t);
 	}
 }
@@ -731,7 +731,7 @@ void VDPCmdEngine::calcFinishTime(unsigned nx, unsigned ny, unsigned ticksPerPix
 {
 	if (!CMD) return;
 	if (vdp.getBrokenCmdTiming()) {
-		setStatusChangeTime(EmuTime::zero); // will finish soon
+		setStatusChangeTime(EmuTime::zero()); // will finish soon
 		return;
 	}
 
@@ -757,7 +757,7 @@ void VDPCmdEngine::startPoint(EmuTime::param time)
 	vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
 	vram.cmdWriteWindow.disable(time);
 	nextAccessSlot(time);
-	setStatusChangeTime(EmuTime::zero); // will finish soon
+	setStatusChangeTime(EmuTime::zero()); // will finish soon
 }
 
 template<typename Mode>
@@ -778,7 +778,7 @@ void VDPCmdEngine::startPset(EmuTime::param time)
 	vram.cmdReadWindow.disable(time);
 	vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	nextAccessSlot(time);
-	setStatusChangeTime(EmuTime::zero); // will finish soon
+	setStatusChangeTime(EmuTime::zero()); // will finish soon
 	phase = 0;
 }
 
@@ -796,7 +796,7 @@ void VDPCmdEngine::executePset(EmuTime::param limit)
 			tmpDst = vram.cmdWriteWindow.readNP(addr);
 		}
 		nextAccessSlot(DELTA_24); // TODO
-		// fall-through
+		[[fallthrough]];
 	case 1:
 		if (unlikely(engineTime >= limit)) { phase = 1; break; }
 		if (likely(doPset)) {
@@ -818,7 +818,7 @@ void VDPCmdEngine::startSrch(EmuTime::param time)
 	vram.cmdWriteWindow.disable(time);
 	ASX = SX;
 	nextAccessSlot(time);
-	setStatusChangeTime(EmuTime::zero); // we can find it any moment
+	setStatusChangeTime(EmuTime::zero()); // we can find it any moment
 }
 
 template<typename Mode>
@@ -864,7 +864,7 @@ void VDPCmdEngine::startLine(EmuTime::param time)
 	ADX = DX;
 	ANX = 0;
 	nextAccessSlot(time);
-	setStatusChangeTime(EmuTime::zero); // TODO can still be optimized
+	setStatusChangeTime(EmuTime::zero()); // TODO can still be optimized
 	phase = 0;
 }
 
@@ -887,7 +887,7 @@ loop:		if (unlikely(calculator.limitReached())) { phase = 0; break; }
 			tmpDst = vram.cmdWriteWindow.readNP(addr);
 		}
 		calculator.next(DELTA_24);
-		// fall-through
+		[[fallthrough]];
 	case 1: {
 		if (unlikely(calculator.limitReached())) { phase = 1; break; }
 		if (likely(doPset)) {
@@ -980,7 +980,7 @@ loop:		if (unlikely(calculator.limitReached())) { phase = 0; break; }
 			tmpDst = vram.cmdWriteWindow.readNP(addr);
 		}
 		calculator.next(DELTA_24);
-		// fall-through
+		[[fallthrough]];
 	case 1: {
 		if (unlikely(calculator.limitReached())) { phase = 1; break; }
 		if (likely(doPset)) {
@@ -1034,10 +1034,10 @@ loop:		if (unlikely(calculator.limitReached())) { phase = 0; break; }
 			typename Mode::IncrPixelAddr dstAddr(ADX, DY, TX);
 			typename Mode::IncrMask      dstMask(ADX, TX);
 			EmuDuration dur = limit - engineTime;
-			unsigned num = (delta != EmuDuration::zero)
+			unsigned num = (delta != EmuDuration::zero())
 			             ? std::min(dur.divUp(delta), ANX)
 			             : ANX;
-			for (unsigned i = 0; i < num; ++i) {
+			for (auto i : xrange(num)) {
 				byte mask = dstMask.getMask();
 				psetFast(engineTime, vram, dstAddr.getAddr(),
 					 CL & ~mask, mask, LogOp());
@@ -1106,14 +1106,14 @@ loop:		if (unlikely(calculator.limitReached())) { phase = 0; break; }
 		       ? Mode::point(vram, ASX, SY, srcExt)
 		       : 0xFF;
 		calculator.next(DELTA_32);
-		// fall-through
+		[[fallthrough]];
 	case 1:
 		if (unlikely(calculator.limitReached())) { phase = 1; break; }
 		if (likely(doPset)) {
 			tmpDst = vram.cmdWriteWindow.readNP(dstAddr);
 		}
 		calculator.next(DELTA_24);
-		// fall-through
+		[[fallthrough]];
 	case 2: {
 		if (unlikely(calculator.limitReached())) { phase = 2; break; }
 		if (likely(doPset)) {
@@ -1171,10 +1171,10 @@ loop:		if (unlikely(calculator.limitReached())) { phase = 0; break; }
 			typename Mode::IncrMask      dstMask(ADX, TX);
 			typename Mode::IncrShift     shift  (ASX, ADX);
 			EmuDuration dur = limit - engineTime;
-			unsigned num = (delta != EmuDuration::zero)
+			unsigned num = (delta != EmuDuration::zero())
 			             ? std::min(dur.divUp(delta), ANX)
 			             : ANX;
-			for (unsigned i = 0; i < num; ++i) {
+			for (auto i : xrange(num)) {
 				byte p = vram.cmdReadWindow.readNP(srcAddr.getAddr());
 				p = shift.doShift(p);
 				byte mask = dstMask.getMask();
@@ -1222,7 +1222,7 @@ void VDPCmdEngine::startLmcm(EmuTime::param time)
 	transfer = true;
 	status |= 0x80;
 	nextAccessSlot(time);
-	setStatusChangeTime(EmuTime::zero);
+	setStatusChangeTime(EmuTime::zero());
 }
 
 template<typename Mode>
@@ -1269,7 +1269,7 @@ void VDPCmdEngine::startLmmc(EmuTime::param time)
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
 	ADX = DX;
 	ANX = tmpNX;
-	setStatusChangeTime(EmuTime::zero);
+	setStatusChangeTime(EmuTime::zero());
 	// do not set 'transfer = true', this fixes bug#1014
 	// Baltak Rampage: characters in greetings part are one pixel offset
 	status |= 0x80;
@@ -1345,7 +1345,7 @@ void VDPCmdEngine::executeHmmv(EmuTime::param limit)
 		? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_byte<Mode>(
-		ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG );
+		ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG);
 	bool dstExt = (ARG & MXD) != 0;
 	bool doPset = !dstExt || hasExtendedVRAM;
 	auto calculator = getSlotCalculator(limit);
@@ -1394,10 +1394,10 @@ void VDPCmdEngine::executeHmmv(EmuTime::param limit)
 		while (engineTime < limit) {
 			typename Mode::IncrByteAddr dstAddr(ADX, DY, TX);
 			EmuDuration dur = limit - engineTime;
-			unsigned num = (delta != EmuDuration::zero)
+			unsigned num = (delta != EmuDuration::zero())
 			             ? std::min(dur.divUp(delta), ANX)
 			             : ANX;
-			for (unsigned i = 0; i < num; ++i) {
+			for (auto i : xrange(num)) {
 				vram.cmdWrite(dstAddr.getAddr(), COL,
 					      engineTime);
 				engineTime += delta;
@@ -1466,7 +1466,7 @@ loop:		if (unlikely(calculator.limitReached())) { phase = 0; break; }
 			       Mode::addressOf(ASX, SY, srcExt))
 			: 0xFF;
 		calculator.next(DELTA_24);
-		// fall-through
+		[[fallthrough]];
 	case 1: {
 		if (unlikely(calculator.limitReached())) { phase = 1; break; }
 		if (likely(doPset)) {
@@ -1522,10 +1522,10 @@ loop:		if (unlikely(calculator.limitReached())) { phase = 0; break; }
 			typename Mode::IncrByteAddr srcAddr(ASX, SY, TX);
 			typename Mode::IncrByteAddr dstAddr(ADX, DY, TX);
 			EmuDuration dur = limit - engineTime;
-			unsigned num = (delta != EmuDuration::zero)
+			unsigned num = (delta != EmuDuration::zero())
 			             ? std::min(dur.divUp(delta), ANX)
 			             : ANX;
-			for (unsigned i = 0; i < num; ++i) {
+			for (auto i : xrange(num)) {
 				byte p = vram.cmdReadWindow.readNP(srcAddr.getAddr());
 				vram.cmdWrite(dstAddr.getAddr(), p, engineTime);
 				engineTime += delta;
@@ -1586,7 +1586,7 @@ void VDPCmdEngine::executeYmmm(EmuTime::param limit)
 	ANX = clipNX_1_byte<Mode>(ADX, 512, ARG);
 
 	// TODO does this use MXD for both read and write?
-	//  it says so in the datasheet, but it seems unlogical
+	//  it says so in the datasheet, but it seems illogical
 	//  OTOH YMMM also uses DX for both read and write
 	bool dstExt = (ARG & MXD) != 0;
 	bool doPset  = !dstExt || hasExtendedVRAM;
@@ -1600,7 +1600,7 @@ loop:		if (unlikely(calculator.limitReached())) { phase = 0; break; }
 			       Mode::addressOf(ADX, SY, dstExt));
 		}
 		calculator.next(DELTA_24);
-		// fall-through
+		[[fallthrough]];
 	case 1:
 		if (unlikely(calculator.limitReached())) { phase = 1; break; }
 		if (likely(doPset)) {
@@ -1652,10 +1652,10 @@ loop:		if (unlikely(calculator.limitReached())) { phase = 0; break; }
 			typename Mode::IncrByteAddr srcAddr(ADX, SY, TX);
 			typename Mode::IncrByteAddr dstAddr(ADX, DY, TX);
 			EmuDuration dur = limit - engineTime;
-			unsigned num = (delta != EmuDuration::zero)
+			unsigned num = (delta != EmuDuration::zero())
 			             ? std::min(dur.divUp(delta), ANX)
 			             : ANX;
-			for (unsigned i = 0; i < num; ++i) {
+			for (auto i : xrange(num)) {
 				byte p = vram.cmdReadWindow.readNP(srcAddr.getAddr());
 				vram.cmdWrite(dstAddr.getAddr(), p, engineTime);
 				engineTime += delta;
@@ -1694,7 +1694,7 @@ void VDPCmdEngine::startHmmc(EmuTime::param time)
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, NX, ARG);
 	ADX = DX;
 	ANX = tmpNX;
-	setStatusChangeTime(EmuTime::zero);
+	setStatusChangeTime(EmuTime::zero());
 	// do not set 'transfer = true', see startLmmc()
 	status |= 0x80;
 	nextAccessSlot(time);
@@ -1710,7 +1710,7 @@ void VDPCmdEngine::executeHmmc(EmuTime::param limit)
 		? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_byte<Mode>(
-		ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG );
+		ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG);
 	bool dstExt = (ARG & MXD) != 0;
 	bool doPset = !dstExt || hasExtendedVRAM;
 
@@ -1754,8 +1754,8 @@ VDPCmdEngine::VDPCmdEngine(VDP& vdp_, CommandController& commandController)
 		strCat(vdp.getName(), '.', "commandExecuting"),
 		"Is the V99x8 VDP is currently executing a command",
 		false)
-	, engineTime(EmuTime::zero)
-	, statusChangeTime(EmuTime::infinity)
+	, engineTime(EmuTime::zero())
+	, statusChangeTime(EmuTime::infinity())
 	, hasExtendedVRAM(vram.getSize() == (192 * 1024))
 {
 	status = 0;
@@ -1846,7 +1846,7 @@ void VDPCmdEngine::setCmdReg(byte index, byte value, EmuTime::param time)
 	}
 }
 
-byte VDPCmdEngine::peekCmdReg(byte index)
+byte VDPCmdEngine::peekCmdReg(byte index) const
 {
 	switch (index) {
 	case 0x00: return SX & 0xFF;
@@ -1873,29 +1873,25 @@ byte VDPCmdEngine::peekCmdReg(byte index)
 
 void VDPCmdEngine::updateDisplayMode(DisplayMode mode, bool cmdBit, EmuTime::param time)
 {
-	int newScrMode;
-	switch (mode.getBase()) {
-	case DisplayMode::GRAPHIC4:
-		newScrMode = 0;
-		break;
-	case DisplayMode::GRAPHIC5:
-		newScrMode = 1;
-		break;
-	case DisplayMode::GRAPHIC6:
-		newScrMode = 2;
-		break;
-	case DisplayMode::GRAPHIC7:
-		newScrMode = 3;
-		break;
-	default:
-		if (cmdBit) {
-			newScrMode = 4; // like GRAPHIC7, but non-planar
-			                // TODO timing might be different
-		} else {
-			newScrMode = -1; // no commands
+	int newScrMode = [&] {
+		switch (mode.getBase()) {
+		case DisplayMode::GRAPHIC4:
+			return 0;
+		case DisplayMode::GRAPHIC5:
+			return 1;
+		case DisplayMode::GRAPHIC6:
+			return 2;
+		case DisplayMode::GRAPHIC7:
+			return 3;
+		default:
+			if (cmdBit) {
+				return 4; // like GRAPHIC7, but non-planar
+				          // TODO timing might be different
+			} else {
+				return -1; // no commands
+			}
 		}
-		break;
-	}
+	}();
 
 	if (newScrMode != scrMode) {
 		sync(time);
@@ -2559,7 +2555,7 @@ void VDPCmdEngine::sync2(EmuTime::param time)
 	}
 }
 
-void VDPCmdEngine::reportVdpCommand()
+void VDPCmdEngine::reportVdpCommand() const
 {
 	const char* const COMMANDS[16] = {
 		" ABRT"," ????"," ????"," ????","POINT"," PSET"," SRCH"," LINE",
@@ -2583,7 +2579,7 @@ void VDPCmdEngine::commandDone(EmuTime::param time)
 	status &= 0xFE; // reset CE
 	executingProbe = false;
 	CMD = 0;
-	setStatusChangeTime(EmuTime::infinity);
+	setStatusChangeTime(EmuTime::infinity());
 	vram.cmdReadWindow.disable(time);
 	vram.cmdWriteWindow.disable(time);
 }

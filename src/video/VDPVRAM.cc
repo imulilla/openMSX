@@ -11,8 +11,6 @@ namespace openmsx {
 
 // class VRAMWindow
 
-DummyVRAMOBserver VRAMWindow::dummyObserver;
-
 VRAMWindow::VRAMWindow(Ram& vram)
 	: data(&vram[0])
 {
@@ -97,7 +95,7 @@ void VDPVRAM::PhysicalVRAMDebuggable::write(
 
 // class VDPVRAM
 
-static unsigned bufferSize(unsigned size)
+static constexpr unsigned bufferSize(unsigned size)
 {
 	// Always allocate at least a buffer of 128kB, this makes the VR0/VR1
 	// swapping a lot easier. Actually only in case there is also extended
@@ -113,7 +111,7 @@ VDPVRAM::VDPVRAM(VDP& vdp_, unsigned size, EmuTime::param time)
 	, logicalVRAMDebug (vdp)
 	, physicalVRAMDebug(vdp, size)
 	#ifdef DEBUG
-	, vramTime(EmuTime::zero)
+	, vramTime(EmuTime::zero())
 	#endif
 	, actualSize(size)
 	, cmdReadWindow(data)
@@ -131,10 +129,10 @@ VDPVRAM::VDPVRAM(VDP& vdp_, unsigned size, EmuTime::param time)
 	vrMode = vdp.getVRMode();
 	setSizeMask(time);
 
-	// Whole VRAM is cachable.
+	// Whole VRAM is cacheable.
 	// Because this window has no observer, any EmuTime can be passed.
 	// TODO: Move this to cache registration.
-	bitmapCacheWindow.setMask(0x1FFFF, ~0u << 17, EmuTime::zero);
+	bitmapCacheWindow.setMask(0x1FFFF, ~0u << 17, EmuTime::zero());
 }
 
 void VDPVRAM::clear()
@@ -194,7 +192,7 @@ void VDPVRAM::setSizeMask(EmuTime::param time)
 	spriteAttribTable.setSizeMask(sizeMask, time);
 	spritePatternTable.setSizeMask(sizeMask, time);
 }
-static inline unsigned swapAddr(unsigned x)
+static constexpr unsigned swapAddr(unsigned x)
 {
 	// translate VR0 address to corresponding VR1 address
 	//  note: output bit 0 is always 1
@@ -219,7 +217,7 @@ void VDPVRAM::updateVRMode(bool newVRmode, EmuTime::param time)
 		}
 	} else {
 		// switch from VR=1 to VR=0
-		for (int i = 0; i < 0x8000; ++i) {
+		for (auto i : xrange(0x8000)) {
 			std::swap(data[i], data[swapAddr(i)]);
 		}
 	}

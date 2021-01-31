@@ -19,14 +19,13 @@ register_lazy "_guess_title.tcl" {guess_title guess_rom_title guess_rom_device}
 register_lazy "_info_panel.tcl" toggle_info_panel
 register_lazy "_metal_gear_overlay.tcl" {toggle_metal_gear_overlay}
 register_lazy "_mog-overlay.tcl" {toggle_mog_overlay toggle_mog_editor}
-register_lazy "_monitor.tcl" monitor_type
 register_lazy "_multi_screenshot.tcl" multi_screenshot
 register_lazy "_music_keyboard.tcl" {toggle_music_keyboard}
 register_lazy "_osd.tcl" {show_osd display_message is_cursor_in}
 register_lazy "_osd_keyboard.tcl" toggle_osd_keyboard
 register_lazy "_osd_menu.tcl" {
 	main_menu_open main_menu_close main_menu_toggle
-	do_menu_open prepare_menu_list menu_close_all select_menu_item}
+	do_menu_open prepare_menu_list menu_close_all select_menu_item drop_handler}
 register_lazy "_osd_nemesis.tcl" toggle_nemesis_1_shield
 register_lazy "_osd_widgets.tcl" {
 	toggle_fps msx_init msx_update box text_box create_power_bar

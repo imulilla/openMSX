@@ -14,7 +14,7 @@ class Reactor;
 class CommandConsole;
 class Display;
 class RenderSettings;
-class VisibleSurface;
+class SDLVisibleSurfaceBase;
 class Layer;
 class Setting;
 
@@ -32,18 +32,20 @@ public:
 	~SDLVideoSystem() override;
 
 	// VideoSystem interface:
-	std::unique_ptr<Rasterizer> createRasterizer(VDP& vdp) override;
-	std::unique_ptr<V9990Rasterizer> createV9990Rasterizer(
+	[[nodiscard]] std::unique_ptr<Rasterizer> createRasterizer(VDP& vdp) override;
+	[[nodiscard]] std::unique_ptr<V9990Rasterizer> createV9990Rasterizer(
 		V9990& vdp) override;
 #if COMPONENT_LASERDISC
 	std::unique_ptr<LDRasterizer> createLDRasterizer(
 		LaserdiscPlayer& ld) override;
 #endif
-	bool checkSettings() override;
+	[[nodiscard]] bool checkSettings() override;
 	void flush() override;
 	void takeScreenShot(const std::string& filename, bool withOsd) override;
 	void updateWindowTitle() override;
-	OutputSurface* getOutputSurface() override;
+	[[nodiscard]] OutputSurface* getOutputSurface() override;
+	void showCursor(bool show) override;
+	void repaint() override;
 
 private:
 	// EventListener
@@ -51,13 +53,14 @@ private:
 	// Observer
 	void update(const Setting& subject) override;
 
-	gl::ivec2 getWindowSize();
+	[[nodiscard]] gl::ivec2 getWindowSize();
 	void resize();
 
+private:
 	Reactor& reactor;
 	Display& display;
 	RenderSettings& renderSettings;
-	std::unique_ptr<VisibleSurface> screen;
+	std::unique_ptr<SDLVisibleSurfaceBase> screen;
 	std::unique_ptr<Layer> consoleLayer;
 	std::unique_ptr<Layer> snowLayer;
 	std::unique_ptr<Layer> iconLayer;

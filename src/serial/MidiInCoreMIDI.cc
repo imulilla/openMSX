@@ -8,6 +8,7 @@
 #include "Scheduler.hh"
 #include "serialize.hh"
 #include "StringOp.hh"
+#include "xrange.hh"
 #include <mach/mach_time.h>
 #include <memory>
 
@@ -20,10 +21,8 @@ void MidiInCoreMIDI::registerAll(EventDistributor& eventDistributor,
                                  Scheduler& scheduler,
                                  PluggingController& controller)
 {
-	ItemCount numberOfEndpoints = MIDIGetNumberOfSources();
-	for (ItemCount i = 0; i < numberOfEndpoints; i++) {
-		MIDIEndpointRef endpoint = MIDIGetSource(i);
-		if (endpoint) {
+	for (auto i : xrange(MIDIGetNumberOfSources())) {
+		if (MIDIEndpointRef endpoint = MIDIGetSource(i)) {
 			controller.registerPluggable(std::make_unique<MidiInCoreMIDI>(
 					eventDistributor, scheduler, endpoint));
 		}
@@ -83,7 +82,7 @@ void MidiInCoreMIDI::unplugHelper(EmuTime::param /*time*/)
 {
 	// Dispose of the client; this automatically disposes of the port as well.
 	if (OSStatus status = MIDIClientDispose(client)) {
-		fprintf(stderr, "Failed to dispose of MIDI client (%d)\n", (int)status);
+		fprintf(stderr, "Failed to dispose of MIDI client (%d)\n", int(status));
 	}
 	port = 0;
 	client = 0;
@@ -94,7 +93,7 @@ const std::string& MidiInCoreMIDI::getName() const
 	return name;
 }
 
-string_view MidiInCoreMIDI::getDescription() const
+std::string_view MidiInCoreMIDI::getDescription() const
 {
 	return "Receives MIDI events from an existing CoreMIDI source.";
 }
@@ -102,7 +101,7 @@ string_view MidiInCoreMIDI::getDescription() const
 void MidiInCoreMIDI::sendPacketList(const MIDIPacketList *packetList,
                                     void *readProcRefCon, void *srcConnRefCon)
 {
-	((MidiInCoreMIDI*)readProcRefCon)
+	static_cast<MidiInCoreMIDI*>(readProcRefCon)
 			->sendPacketList(packetList, srcConnRefCon);
 }
 
@@ -110,13 +109,13 @@ void MidiInCoreMIDI::sendPacketList(const MIDIPacketList *packetList,
                                     void * /*srcConnRefCon*/) {
 	{
 		std::lock_guard<std::mutex> lock(mutex);
-		const MIDIPacket *packet = &packetList->packet[0];
-		for (UInt32 i = 0; i < packetList->numPackets; i++) {
-			for (UInt16 j = 0; j < packet->length; j++) {
+		const MIDIPacket* packet = &packetList->packet[0];
+		repeat(packetList->numPackets, [&] {
+			for (auto j : xrange(packet->length)) {
 				queue.push_back(packet->data[j]);
 			}
 			packet = MIDIPacketNext(packet);
-		}
+		});
 	}
 	eventDistributor.distributeEvent(
 		std::make_shared<SimpleEvent>(OPENMSX_MIDI_IN_COREMIDI_EVENT));
@@ -203,11 +202,11 @@ void MidiInCoreMIDIVirtual::plugHelper(Connector& /*connector*/,
 void MidiInCoreMIDIVirtual::unplugHelper(EmuTime::param /*time*/)
 {
 	if (OSStatus status = MIDIEndpointDispose(endpoint)) {
-		fprintf(stderr, "Failed to dispose of MIDI port (%d)\n", (int)status);
+		fprintf(stderr, "Failed to dispose of MIDI port (%d)\n", int(status));
 	}
 	endpoint = 0;
 	if (OSStatus status = MIDIClientDispose(client)) {
-		fprintf(stderr, "Failed to dispose of MIDI client (%d)\n", (int)status);
+		fprintf(stderr, "Failed to dispose of MIDI client (%d)\n", int(status));
 	}
 	client = 0;
 }
@@ -218,7 +217,7 @@ const std::string& MidiInCoreMIDIVirtual::getName() const
 	return name;
 }
 
-string_view MidiInCoreMIDIVirtual::getDescription() const
+std::string_view MidiInCoreMIDIVirtual::getDescription() const
 {
 	return "Sends MIDI events from a newly created CoreMIDI virtual source.";
 }
@@ -227,7 +226,7 @@ void MidiInCoreMIDIVirtual::sendPacketList(const MIDIPacketList *packetList,
                                            void *readProcRefCon,
                                            void *srcConnRefCon)
 {
-	((MidiInCoreMIDIVirtual*)readProcRefCon)
+	static_cast<MidiInCoreMIDIVirtual*>(readProcRefCon)
 			->sendPacketList(packetList, srcConnRefCon);
 }
 
@@ -236,13 +235,13 @@ void MidiInCoreMIDIVirtual::sendPacketList(const MIDIPacketList *packetList,
 {
 	{
 		std::lock_guard<std::mutex> lock(mutex);
-		const MIDIPacket *packet = &packetList->packet[0];
-		for (UInt32 i = 0; i < packetList->numPackets; i++) {
-			for (UInt16 j = 0; j < packet->length; j++) {
+		const MIDIPacket* packet = &packetList->packet[0];
+		repeat(packetList->numPackets, [&] {
+			for (auto j : xrange(packet->length)) {
 				queue.push_back(packet->data[j]);
 			}
 			packet = MIDIPacketNext(packet);
-		}
+		});
 	}
 	eventDistributor.distributeEvent(
 		std::make_shared<SimpleEvent>(OPENMSX_MIDI_IN_COREMIDI_VIRTUAL_EVENT));

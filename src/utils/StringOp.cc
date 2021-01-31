@@ -1,5 +1,6 @@
 #include "StringOp.hh"
 #include "MSXException.hh"
+#include "likely.hh"
 #include "ranges.hh"
 #include "stl.hh"
 #include "view.hh"
@@ -7,36 +8,10 @@
 #include <stdexcept>
 
 using std::string;
+using std::string_view;
 using std::vector;
 
 namespace StringOp {
-
-int stringToInt(const string& str)
-{
-	return strtol(str.c_str(), nullptr, 0);
-}
-bool stringToInt(const string& str, int& result)
-{
-	char* endptr;
-	result = strtol(str.c_str(), &endptr, 0);
-	return *endptr == '\0';
-}
-
-unsigned stringToUint(const string& str)
-{
-	return strtoul(str.c_str(), nullptr, 0);
-}
-bool stringToUint(const string& str, unsigned& result)
-{
-	char* endptr;
-	result = strtoul(str.c_str(), &endptr, 0);
-	return *endptr == '\0';
-}
-
-uint64_t stringToUint64(const string& str)
-{
-       return strtoull(str.c_str(), nullptr, 0);
-}
 
 bool stringToBool(string_view str)
 {
@@ -48,27 +23,17 @@ bool stringToBool(string_view str)
 	return false;
 }
 
-double stringToDouble(const string& str)
-{
-	return strtod(str.c_str(), nullptr);
-}
-bool stringToDouble(const string& str, double& result)
-{
-	char* endptr;
-	result = strtod(str.c_str(), &endptr);
-	return *endptr == '\0';
-}
-
-string toLower(string_view str)
-{
-	string result = str.str();
-	transform_in_place(result, ::tolower);
-	return result;
-}
+//string toLower(string_view str)
+//{
+//	string result(str);
+//	transform_in_place(result, ::tolower);
+//	return result;
+//}
 
 bool startsWith(string_view total, string_view part)
 {
-	return total.starts_with(part);
+	return (total.size() >= part.size()) &&
+	       (memcmp(total.data(), part.data(), part.size()) == 0);
 }
 bool startsWith(string_view total, char part)
 {
@@ -77,7 +42,8 @@ bool startsWith(string_view total, char part)
 
 bool endsWith(string_view total, string_view part)
 {
-	return total.ends_with(part);
+	return (total.size() >= part.size()) &&
+	       (memcmp(total.data() + total.size() - part.size(), part.data(), part.size()) == 0);
 }
 bool endsWith(string_view total, char part)
 {
@@ -86,8 +52,7 @@ bool endsWith(string_view total, char part)
 
 void trimRight(string& str, const char* chars)
 {
-	auto pos = str.find_last_not_of(chars);
-	if (pos != string::npos) {
+	if (auto pos = str.find_last_not_of(chars); pos != string::npos) {
 		str.erase(pos + 1);
 	} else {
 		str.clear();
@@ -95,8 +60,7 @@ void trimRight(string& str, const char* chars)
 }
 void trimRight(string& str, char chars)
 {
-	auto pos = str.find_last_not_of(chars);
-	if (pos != string::npos) {
+	if (auto pos = str.find_last_not_of(chars); pos != string::npos) {
 		str.erase(pos + 1);
 	} else {
 		str.clear();
@@ -105,13 +69,13 @@ void trimRight(string& str, char chars)
 void trimRight(string_view& str, string_view chars)
 {
 	while (!str.empty() && (chars.find(str.back()) != string_view::npos)) {
-		str.pop_back();
+		str.remove_suffix(1);
 	}
 }
 void trimRight(string_view& str, char chars)
 {
 	while (!str.empty() && (str.back() == chars)) {
-		str.pop_back();
+		str.remove_suffix(1);
 	}
 }
 
@@ -126,13 +90,13 @@ void trimLeft(string& str, char chars)
 void trimLeft(string_view& str, string_view chars)
 {
 	while (!str.empty() && (chars.find(str.front()) != string_view::npos)) {
-		str.pop_front();
+		str.remove_prefix(1);
 	}
 }
 void trimLeft(string_view& str, char chars)
 {
 	while (!str.empty() && (str.front() == chars)) {
-		str.pop_front();
+		str.remove_prefix(1);
 	}
 }
 
@@ -148,49 +112,37 @@ void trim(string_view& str, char chars)
 	trimLeft (str, chars);
 }
 
-void splitOnFirst(string_view str, string_view chars, string_view& first, string_view& last)
+std::pair<string_view, string_view> splitOnFirst(string_view str, string_view chars)
 {
-	auto pos = str.find_first_of(chars);
-	if (pos == string_view::npos) {
-		first = str;
-		last.clear();
+	if (auto pos = str.find_first_of(chars); pos == string_view::npos) {
+		return {str, string_view{}};
 	} else {
-		first = str.substr(0, pos);
-		last  = str.substr(pos + 1);
+		return {str.substr(0, pos), str.substr(pos + 1)};
 	}
 }
-void splitOnFirst(string_view str, char chars, string_view& first, string_view& last)
+std::pair<string_view, string_view> splitOnFirst(string_view str, char chars)
 {
-	auto pos = str.find_first_of(chars);
-	if (pos == string_view::npos) {
-		first = str;
-		last.clear();
+	if (auto pos = str.find_first_of(chars); pos == string_view::npos) {
+		return {str, string_view{}};
 	} else {
-		first = str.substr(0, pos);
-		last  = str.substr(pos + 1);
+		return {str.substr(0, pos), str.substr(pos + 1)};
 	}
 }
 
-void splitOnLast(string_view str, string_view chars, string_view& first, string_view& last)
+std::pair<string_view, string_view> splitOnLast(string_view str, string_view chars)
 {
-	auto pos = str.find_last_of(chars);
-	if (pos == string_view::npos) {
-		first.clear();
-		last = str;
+	if (auto pos = str.find_last_of(chars); pos == string_view::npos) {
+		return {string_view{}, str};
 	} else {
-		first = str.substr(0, pos);
-		last  = str.substr(pos + 1);
+		return {str.substr(0, pos), str.substr(pos + 1)};
 	}
 }
-void splitOnLast(string_view str, char chars, string_view& first, string_view& last)
+std::pair<string_view, string_view> splitOnLast(string_view str, char chars)
 {
-	auto pos = str.find_last_of(chars);
-	if (pos == string_view::npos) {
-		first.clear();
-		last = str;
+	if (auto pos = str.find_last_of(chars); pos == string_view::npos) {
+		return {string_view{}, str};
 	} else {
-		first = str.substr(0, pos);
-		last  = str.substr(pos + 1);
+		return {str.substr(0, pos), str.substr(pos + 1)};
 	}
 }
 
@@ -198,8 +150,7 @@ vector<string_view> split(string_view str, char chars)
 {
 	vector<string_view> result;
 	while (!str.empty()) {
-		string_view first, last;
-		splitOnFirst(str, chars, first, last);
+		auto [first, last] = splitOnFirst(str, chars);
 		result.push_back(first);
 		str = last;
 	}
@@ -209,14 +160,11 @@ vector<string_view> split(string_view str, char chars)
 static unsigned parseNumber(string_view str)
 {
 	trim(str, " \t");
-	if (!str.empty()) {
-		try {
-			return fast_stou(str);
-		} catch (std::invalid_argument&) {
-			// parse error
-		}
+	auto r = stringToBase<10, unsigned>(str);
+	if (!r) {
+		throw openmsx::MSXException("Invalid integer: ", str);
 	}
-	throw openmsx::MSXException("Invalid integer: ", str);
+	return *r;
 }
 
 static void insert(unsigned x, vector<unsigned>& result, unsigned min, unsigned max)
@@ -224,8 +172,8 @@ static void insert(unsigned x, vector<unsigned>& result, unsigned min, unsigned 
 	if ((x < min) || (x > max)) {
 		throw openmsx::MSXException("Out of range");
 	}
-	auto it = ranges::lower_bound(result, x);
-	if ((it == end(result)) || (*it != x)) {
+	if (auto it = ranges::lower_bound(result, x);
+	    (it == end(result)) || (*it != x)) {
 		result.insert(it, x);
 	}
 }
@@ -237,8 +185,7 @@ static void parseRange2(string_view str, vector<unsigned>& result,
 	trimRight(str, " \t");
 	if (str.empty()) return;
 
-	auto pos = str.find('-');
-	if (pos == string_view::npos) {
+	if (auto pos = str.find('-'); pos == string_view::npos) {
 		insert(parseNumber(str), result, min, max);
 	} else {
 		unsigned begin = parseNumber(str.substr(0, pos));

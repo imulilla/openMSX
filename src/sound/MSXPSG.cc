@@ -5,11 +5,29 @@
 #include "MSXMotherBoard.hh"
 #include "JoystickPort.hh"
 #include "RenShaTurbo.hh"
+#include "StringOp.hh"
 #include "serialize.hh"
 #include "checked_cast.hh"
 #include <memory>
 
 namespace openmsx {
+
+static byte getKeyboardLayout(const MSXPSG& psg)
+{
+	// As many (mostly European) configs do not specify the layout
+	// in the PSG config, assume 50on for these cases.
+	auto value = psg.getDeviceConfig().getChildData("keyboardlayout", "50on");
+	StringOp::casecmp cmp; // case-insensitive
+	if (cmp(value, "50on")) {
+		return 0x00;
+	} else if (cmp(value, "jis")) {
+		return 0x40;
+	}
+	throw MSXException(
+		"Illegal keyboard layout configuration in '", psg.getName(),
+	        "' device configuration: '", value,
+		"', expected 'jis' or '50on'.");
+}
 
 // MSXDevice
 MSXPSG::MSXPSG(const DeviceConfig& config)
@@ -18,7 +36,7 @@ MSXPSG::MSXPSG(const DeviceConfig& config)
 	, renShaTurbo(getMotherBoard().getRenShaTurbo())
 	, selectedPort(0)
 	, prev(255)
-	, keyLayout((config.getChildData("keyboardlayout", {}) == "JIS") ? 0x40 : 0x00)
+	, keyLayout(getKeyboardLayout(*this))
 	, addressMask(config.getChildDataAsBool("mirrored_registers", true) ? 0x0f : 0xff)
 {
 	ports[0] = &getMotherBoard().getJoystickPort(0);
@@ -104,7 +122,7 @@ void MSXPSG::serialize(Archive& ar, unsigned version)
 	ar.serialize("ay8910", *ay8910);
 	if (ar.versionBelow(version, 2)) {
 		assert(ar.isLoader());
-		// in older versions there were always 2 real joytsick ports
+		// in older versions there were always 2 real joystick ports
 		ar.serialize("joystickportA", *checked_cast<JoystickPort*>(ports[0]),
 		             "joystickportB", *checked_cast<JoystickPort*>(ports[1]));
 	}

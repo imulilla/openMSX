@@ -63,7 +63,7 @@ void DebugDevice::writeIO(word port, byte value, EmuTime::param time)
 			break;
 		case MULTIBYTE:
 			outputMultiByte(value);
-                        break;
+			break;
 		default:
 			break;
 		}
@@ -88,7 +88,7 @@ void DebugDevice::outputSingleByte(byte value, EmuTime::param time)
 		displayByte(tmp, ASC);
 		(*outputstrm) << "' ";
 	}
-	Clock<3579545> zero(EmuTime::zero);
+	Clock<3579545> zero(EmuTime::zero());
 	(*outputstrm) << "emutime: " << std::dec << zero.getTicksTill(time);
 	if ((modeParameter & 0x08) && ((value < ' ') || (value == 127))) {
 		displayByte(value, ASC); // do special effects
@@ -98,22 +98,15 @@ void DebugDevice::outputSingleByte(byte value, EmuTime::param time)
 
 void DebugDevice::outputMultiByte(byte value)
 {
-	DisplayType dispType;
-	switch (modeParameter) {
-	case 0:
-		dispType = HEX;
-		break;
-	case 1:
-		dispType = BIN;
-		break;
-	case 2:
-		dispType = DEC;
-		break;
-	case 3:
-	default:
-		dispType = ASC;
-		break;
-	}
+	DisplayType dispType = [&] {
+		switch (modeParameter) {
+			case 0:  return HEX;
+			case 1:  return BIN;
+			case 2:  return DEC;
+			case 3:
+			default: return ASC;
+		}
+	}();
 	displayByte(value, dispType);
 }
 
@@ -144,22 +137,22 @@ void DebugDevice::displayByte(byte value, DisplayType type)
 	}
 }
 
-void DebugDevice::openOutput(string_view name)
+void DebugDevice::openOutput(std::string_view name)
 {
-	fileNameString = name.str();
+	fileNameString = name;
 	debugOut.close();
 	if (name == "stdout") {
 		outputstrm = &std::cout;
 	} else if (name == "stderr") {
 		outputstrm = &std::cerr;
 	} else {
-		string realName = FileOperations::expandTilde(name);
+		string realName = FileOperations::expandTilde(fileNameString);
 		FileOperations::openofstream(debugOut, realName, std::ios::app);
 		outputstrm = &debugOut;
 	}
 }
 
-static std::initializer_list<enum_string<DebugDevice::DebugMode>> debugModeInfo = {
+static constexpr std::initializer_list<enum_string<DebugDevice::DebugMode>> debugModeInfo = {
 	{ "OFF",        DebugDevice::OFF },
 	{ "SINGLEBYTE", DebugDevice::SINGLEBYTE },
 	{ "MULTIBYTE",  DebugDevice::MULTIBYTE },

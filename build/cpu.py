@@ -10,9 +10,6 @@ class CPU(object):
 	# we treat them like different CPUs (see MIPS/MIPSel).
 	bigEndian = None
 
-	# Allow unaligned memory accesses?
-	unalignedMemoryAccess = False
-
 	# GCC flags to pass to the compile and link commands.
 	gccFlags = ()
 
@@ -94,6 +91,12 @@ class PPC64LE(CPU):
 	name = 'ppc64le'
 	bigEndian = False
 
+class RISCV64(CPU):
+	'''64-bit RISC-V.
+	'''
+	name = 'riscv64'
+	bigEndian = False
+
 class S390(CPU):
 	'''IBM S/390.
 	'''
@@ -123,7 +126,6 @@ class X86(CPU):
 	'''
 	name = 'x86'
 	bigEndian = False
-	unalignedMemoryAccess = True
 	gccFlags = '-m32',
 
 class X86_64(CPU):
@@ -131,7 +133,6 @@ class X86_64(CPU):
 	'''
 	name = 'x86_64'
 	bigEndian = False
-	unalignedMemoryAccess = True
 	gccFlags = '-m64',
 
 # Build a dictionary of CPUs using introspection.

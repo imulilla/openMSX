@@ -3,6 +3,7 @@
 #include "Reactor.hh"
 #include "CassettePort.hh"
 #include "JoystickPort.hh"
+#include "GlobalSettings.hh"
 #include "serialize.hh"
 
 // Keyboard Matrix
@@ -68,7 +69,7 @@ namespace openmsx {
 SVIPPI::SVIPPI(const DeviceConfig& config)
 	: MSXDevice(config)
 	, cassettePort(getMotherBoard().getCassettePort())
-	, i8255(*this, getCurrentTime(), getCliComm())
+	, i8255(*this, getCurrentTime(), config.getGlobalSettings().getInvalidPpiModeSetting())
 	, click(config)
 	, keyboard(
 		config.getMotherBoard(),
@@ -173,7 +174,7 @@ void SVIPPI::writeC1(nibble value, EmuTime::param time)
 		cassettePort.cassetteOut((value & 2) != 0, time);
 	}
 	//if ((prevBits ^ value) & 4) {
-	//	cassetteDevice.Mute(); // CASAUD, mute case speker (1=enable, 0=disable)
+	//	cassetteDevice.Mute(); // CASAUD, mute case speaker (1=enable, 0=disable)
 	//}
 	if ((prevBits ^ value) & 8) {
 		click.setClick((value & 8) != 0, time);

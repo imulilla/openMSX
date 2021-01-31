@@ -17,6 +17,7 @@
 #include "CliComm.hh"
 #include "sha1.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 
 namespace openmsx {
 
@@ -48,7 +49,7 @@ void RomKonamiSCC::reset(EmuTime::param time)
 {
 	setUnmapped(0);
 	setUnmapped(1);
-	for (int i = 2; i < 6; i++) {
+	for (auto i : xrange(2, 6)) {
 		setRom(i, i - 2);
 	}
 	setUnmapped(6);
@@ -98,12 +99,19 @@ void RomKonamiSCC::writeMem(word address, byte value, EmuTime::param time)
 	}
 	if ((address & 0xF800) == 0x9000) {
 		// SCC enable/disable
-		sccEnabled = ((value & 0x3F) == 0x3F);
-		invalidateMemCache(0x9800, 0x0800);
+		bool newSccEnabled = ((value & 0x3F) == 0x3F);
+		if (newSccEnabled != sccEnabled) {
+			sccEnabled = newSccEnabled;
+			invalidateDeviceRWCache(0x9800, 0x0800);
+		}
 	}
 	if ((address & 0x1800) == 0x1000) {
 		// page selection
-		setRom(address >> 13, value);
+		byte region = address >> 13;
+		setRom(region, value);
+		if ((region == 4) && sccEnabled) {
+			invalidateDeviceRCache(0x9800, 0x0800);
+		}
 	}
 }
 

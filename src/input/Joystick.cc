@@ -13,6 +13,8 @@
 #include "CommandException.hh"
 #include "serialize.hh"
 #include "serialize_meta.hh"
+#include "StringOp.hh"
+#include "one_of.hh"
 #include "xrange.hh"
 #include <memory>
 
@@ -30,13 +32,12 @@ void Joystick::registerAll(MSXEventDistributor& eventDistributor,
 #ifdef SDL_JOYSTICK_DISABLED
 	(void)eventDistributor;
 	(void)stateChangeDistributor;
+	(void)commandController;
+	(void)globalSettings;
 	(void)controller;
 #else
-	unsigned numJoysticks = SDL_NumJoysticks();
-	ad_printf("#joysticks: %d\n", numJoysticks);
-	for (unsigned i = 0; i < numJoysticks; i++) {
-		SDL_Joystick* joystick = SDL_JoystickOpen(i);
-		if (joystick) {
+	for (auto i : xrange(SDL_NumJoysticks())) {
+		if (SDL_Joystick* joystick = SDL_JoystickOpen(i)) {
 			// Avoid devices that have axes but no buttons, like accelerometers.
 			// SDL 1.2.14 in Linux has an issue where it rejects a device from
 			// /dev/input/event* if it has no buttons but does not reject a
@@ -69,9 +70,9 @@ public:
 		assert((press != 0) || (release != 0));
 		assert((press & release) == 0);
 	}
-	unsigned getJoystick() const { return joyNum; }
-	byte     getPress()    const { return press; }
-	byte     getRelease()  const { return release; }
+	[[nodiscard]] unsigned getJoystick() const { return joyNum; }
+	[[nodiscard]] byte     getPress()    const { return press; }
+	[[nodiscard]] byte     getRelease()  const { return release; }
 
 	template<typename Archive> void serialize(Archive& ar, unsigned /*version*/)
 	{
@@ -95,24 +96,22 @@ static void checkJoystickConfig(Interpreter& interp, TclObject& newValue)
 		throw CommandException("Need an even number of elements");
 	}
 	for (unsigned i = 0; i < n; i += 2) {
-		string_view key  = newValue.getListIndex(interp, i + 0).getString();
+		std::string_view key  = newValue.getListIndex(interp, i + 0).getString();
 		TclObject value = newValue.getListIndex(interp, i + 1);
-		if ((key != "A"   ) && (key != "B"    ) &&
-		    (key != "LEFT") && (key != "RIGHT") &&
-		    (key != "UP"  ) && (key != "DOWN" )) {
+		if (key != one_of("A", "B", "LEFT", "RIGHT", "UP", "DOWN")) {
 			throw CommandException(
 				"Invalid MSX joystick action: must be one of "
 				"'A', 'B', 'LEFT', 'RIGHT', 'UP', 'DOWN'.");
 		}
 		for (auto j : xrange(value.getListLength(interp))) {
-			string_view host = value.getListIndex(interp, j).getString();
-			if (!host.starts_with("button") &&
-			    !host.starts_with("+axis") &&
-			    !host.starts_with("-axis") &&
-			    !host.starts_with("L_hat") &&
-			    !host.starts_with("R_hat") &&
-			    !host.starts_with("U_hat") &&
-			    !host.starts_with("D_hat")) {
+			std::string_view host = value.getListIndex(interp, j).getString();
+			if (!StringOp::startsWith(host, "button") &&
+			    !StringOp::startsWith(host, "+axis") &&
+			    !StringOp::startsWith(host, "-axis") &&
+			    !StringOp::startsWith(host, "L_hat") &&
+			    !StringOp::startsWith(host, "R_hat") &&
+			    !StringOp::startsWith(host, "U_hat") &&
+			    !StringOp::startsWith(host, "D_hat")) {
 				throw CommandException(
 					"Invalid host joystick action: must be "
 					"one of 'button<N>', '+axis<N>', '-axis<N>', "
@@ -122,16 +121,17 @@ static void checkJoystickConfig(Interpreter& interp, TclObject& newValue)
 	}
 }
 
-static string getJoystickName(unsigned joyNum)
+[[nodiscard]] static string getJoystickName(unsigned joyNum)
 {
 	return strCat("joystick", char('1' + joyNum));
 }
 
-static TclObject getConfigValue(SDL_Joystick* joystick)
+[[nodiscard]] static TclObject getConfigValue(SDL_Joystick* joystick)
 {
 	TclObject listA, listB;
 	for (auto i : xrange(InputEventGenerator::joystickNumButtons(joystick))) {
-		string button = strCat("button", i);
+		auto button = tmpStrCat("button", i);
+		//std::string_view button = tmp;
 		if (i & 1) {
 			listB.addListElement(button);
 		} else {
@@ -139,10 +139,10 @@ static TclObject getConfigValue(SDL_Joystick* joystick)
 		}
 	}
 	TclObject value;
-	value.addDictKeyValues("LEFT",  "-axis0",
-	                       "RIGHT", "+axis0",
-	                       "UP",    "-axis1",
-	                       "DOWN",  "+axis1",
+	value.addDictKeyValues("LEFT",  makeTclList("-axis0", "L_hat0"),
+	                       "RIGHT", makeTclList("+axis0", "R_hat0"),
+	                       "UP",    makeTclList("-axis1", "U_hat0"),
+	                       "DOWN",  makeTclList("+axis1", "D_hat0"),
 	                       "A",     listA,
 	                       "B",     listB);
 	return value;
@@ -164,7 +164,7 @@ Joystick::Joystick(MSXEventDistributor& eventDistributor_,
 	, deadSetting(globalSettings.getJoyDeadzoneSetting(joyNum))
 	, name(getJoystickName(joyNum))
 	, desc(string(SDL_JoystickName(joystick_)))
-	, configSetting(commandController, name + "_config",
+	, configSetting(commandController, tmpStrCat(name, "_config"),
 		"joystick configuration", getConfigValue(joystick).getString())
 {
 	auto& interp = commandController.getInterpreter();
@@ -190,7 +190,7 @@ const string& Joystick::getName() const
 	return name;
 }
 
-string_view Joystick::getDescription() const
+std::string_view Joystick::getDescription() const
 {
 	return desc;
 }
@@ -235,7 +235,7 @@ byte Joystick::calcState()
 	if (joystick) {
 		int threshold = (deadSetting.getInt() * 32768) / 100;
 		auto& interp = configSetting.getInterpreter();
-		auto& dict   = configSetting.getValue();
+		const auto& dict   = configSetting.getValue();
 		if (getState(interp, dict, "A"    , threshold)) result &= ~JOY_BUTTONA;
 		if (getState(interp, dict, "B"    , threshold)) result &= ~JOY_BUTTONB;
 		if (getState(interp, dict, "UP"   , threshold)) result &= ~JOY_UP;
@@ -247,51 +247,58 @@ byte Joystick::calcState()
 }
 
 bool Joystick::getState(Interpreter& interp, const TclObject& dict,
-                        string_view key, int threshold)
+                        std::string_view key, int threshold)
 {
 	try {
 		const auto& list = dict.getDictValue(interp, key);
 		for (auto i : xrange(list.getListLength(interp))) {
 			const auto& elem = list.getListIndex(interp, i).getString();
-			if (elem.starts_with("button")) {
-				unsigned n = fast_stou(elem.substr(6));
-				if (InputEventGenerator::joystickGetButton(joystick, n)) {
-					return true;
+			if (StringOp::startsWith(elem, "button")) {
+				if (auto n = StringOp::stringToBase<10, unsigned>(elem.substr(6))) {
+					if (InputEventGenerator::joystickGetButton(joystick, *n)) {
+						return true;
+					}
 				}
-			} else if (elem.starts_with("+axis")) {
-				unsigned n = fast_stou(elem.substr(5));
-				if (SDL_JoystickGetAxis(joystick, n) > threshold) {
-					return true;
+			} else if (StringOp::startsWith(elem, "+axis")) {
+				if (auto n = StringOp::stringToBase<10, unsigned>(elem.substr(5))) {
+					if (SDL_JoystickGetAxis(joystick, *n) > threshold) {
+						return true;
+					}
 				}
-			} else if (elem.starts_with("-axis")) {
-				unsigned n = fast_stou(elem.substr(5));
-				if (SDL_JoystickGetAxis(joystick, n) < -threshold) {
-					return true;
+			} else if (StringOp::startsWith(elem, "-axis")) {
+				if (auto n = StringOp::stringToBase<10, unsigned>(elem.substr(5))) {
+					if (SDL_JoystickGetAxis(joystick, *n) < -threshold) {
+						return true;
+					}
 				}
-			} else if (elem. starts_with("L_hat")) {
-				unsigned n = fast_stou(elem.substr(5));
-				if (SDL_JoystickGetHat(joystick, n) & SDL_HAT_LEFT) {
-					return true;
+			} else if (StringOp::startsWith(elem, "L_hat")) {
+				if (auto n = StringOp::stringToBase<10, unsigned>(elem.substr(5))) {
+					if (SDL_JoystickGetHat(joystick, *n) & SDL_HAT_LEFT) {
+						return true;
+					}
 				}
-			} else if (elem.starts_with("R_hat")) {
-				unsigned n = fast_stou(elem.substr(5));
-				if (SDL_JoystickGetHat(joystick, n) & SDL_HAT_RIGHT) {
-					return true;
+			} else if (StringOp::startsWith(elem, "R_hat")) {
+				if (auto n = StringOp::stringToBase<10, unsigned>(elem.substr(5))) {
+					if (SDL_JoystickGetHat(joystick, *n) & SDL_HAT_RIGHT) {
+						return true;
+					}
 				}
-			} else if (elem.starts_with("U_hat")) {
-				unsigned n = fast_stou(elem.substr(5));
-				if (SDL_JoystickGetHat(joystick, n) & SDL_HAT_UP) {
-					return true;
+			} else if (StringOp::startsWith(elem, "U_hat")) {
+				if (auto n = StringOp::stringToBase<10, unsigned>(elem.substr(5))) {
+					if (SDL_JoystickGetHat(joystick, *n) & SDL_HAT_UP) {
+						return true;
+					}
 				}
-			} else if (elem.starts_with("D_hat")) {
-				unsigned n = fast_stou(elem.substr(5));
-				if (SDL_JoystickGetHat(joystick, n) & SDL_HAT_DOWN) {
-					return true;
+			} else if (StringOp::startsWith(elem, "D_hat")) {
+				if (auto n = StringOp::stringToBase<10, unsigned>(elem.substr(5))) {
+					if (SDL_JoystickGetHat(joystick, *n) & SDL_HAT_DOWN) {
+						return true;
+					}
 				}
 			}
 		}
 	} catch (...) {
-		// Error, in getListLength()/getListIndex() or in fast_stou().
+		// Error, in getListLength() or getListIndex().
 		// In either case we can't do anything about it here, so ignore.
 	}
 	return false;
@@ -301,7 +308,7 @@ bool Joystick::getState(Interpreter& interp, const TclObject& dict,
 void Joystick::signalMSXEvent(const shared_ptr<const Event>& event,
                               EmuTime::param time)
 {
-	auto joyEvent = dynamic_cast<const JoystickEvent*>(event.get());
+	const auto* joyEvent = dynamic_cast<const JoystickEvent*>(event.get());
 	if (!joyEvent) return;
 
 	// TODO: It would be more efficient to make a dispatcher instead of
@@ -335,7 +342,7 @@ void Joystick::createEvent(EmuTime::param time, byte newStatus)
 // StateChangeListener
 void Joystick::signalStateChange(const shared_ptr<StateChange>& event)
 {
-	auto js = dynamic_cast<const JoyState*>(event.get());
+	const auto* js = dynamic_cast<const JoyState*>(event.get());
 	if (!js) return;
 
 	// TODO: It would be more efficient to make a dispatcher instead of

@@ -15,7 +15,7 @@ namespace openmsx {
 
 /** Utility class for converting VRAM contents to host pixels.
   */
-template <class Pixel>
+template<typename Pixel>
 class SpriteConverter
 {
 public:
@@ -107,9 +107,9 @@ public:
 				&visibleSprites[visibleIndex];
 			Pixel colIndex = sip->colorAttrib & 0x0F;
 			// Don't draw transparent sprites in sprite mode 1.
-			// TODO: Verify on real V9938 that sprite mode 1 indeed
-			//       ignores the transparency bit.
-			if (colIndex == 0) continue;
+			// Verified on real V9958: TP bit also has effect in
+			// sprite mode 1.
+			if (colIndex == 0 && transparency) continue;
 			Pixel color = palette[colIndex];
 			SpriteChecker::SpritePattern pattern = sip->pattern;
 			int x = sip->x;
@@ -139,7 +139,7 @@ public:
 	  * @param maxX Maximum X coordinate to draw (exclusive).
 	  * @param pixelPtr Pointer to memory to draw to.
 	  */
-	template <unsigned MODE>
+	template<unsigned MODE>
 	void drawMode2(int absLine, int minX, int maxX,
 	               Pixel* __restrict pixelPtr) __restrict
 	{

@@ -15,14 +15,14 @@ class Scheduler;
 // For backwards-compatible savestates
 struct SyncPointBW
 {
-	template <typename Archive>
+	template<typename Archive>
 	void serialize(Archive& ar, unsigned /*version*/) {
 		assert(ar.isLoader());
 		ar.serialize("time", time,
 		             "type", userData);
 	}
 
-	EmuTime time = EmuTime::zero;
+	EmuTime time = EmuTime::zero();
 	int userData = 0;
 };
 
@@ -55,16 +55,16 @@ public:
 	 */
 	virtual void schedulerDeleted();
 
-	Scheduler& getScheduler() const { return scheduler; }
+	[[nodiscard]] Scheduler& getScheduler() const { return scheduler; }
 
 	/** Convenience method:
 	  * This is the same as getScheduler().getCurrentTime(). */
-	EmuTime::param getCurrentTime() const;
+	[[nodiscard]] EmuTime::param getCurrentTime() const;
 
-	template <typename Archive>
+	template<typename Archive>
 	void serialize(Archive& ar, unsigned version);
 
-	template <typename Archive>
+	template<typename Archive>
 	static std::vector<SyncPointBW> serializeBW(Archive& ar) {
 		assert(ar.isLoader());
 		ar.beginTag("Schedulable");
@@ -73,7 +73,7 @@ public:
 		ar.endTag("Schedulable");
 		return result;
 	}
-	template <typename Archive>
+	template<typename Archive>
 	static void restoreOld(Archive& ar, std::vector<Schedulable*> schedulables) {
 		assert(ar.isLoader());
 		for (auto* s : schedulables) {
@@ -94,8 +94,8 @@ protected:
 	void setSyncPoint(EmuTime::param timestamp);
 	bool removeSyncPoint();
 	void removeSyncPoints();
-	bool pendingSyncPoint() const;
-	bool pendingSyncPoint(EmuTime& result) const;
+	[[nodiscard]] bool pendingSyncPoint() const;
+	[[nodiscard]] bool pendingSyncPoint(EmuTime& result) const;
 
 private:
 	Scheduler& scheduler;

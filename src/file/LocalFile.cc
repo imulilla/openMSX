@@ -13,6 +13,7 @@
 #include "FileException.hh"
 #include "FileNotFoundException.hh"
 #include "PreCacheFile.hh"
+#include "one_of.hh"
 #include <cstring> // for strchr, strerror
 #include <cerrno>
 #include <cassert>
@@ -22,8 +23,8 @@ using std::string;
 
 namespace openmsx {
 
-LocalFile::LocalFile(string_view filename_, File::OpenMode mode)
-	: filename(FileOperations::expandTilde(filename_))
+LocalFile::LocalFile(std::string filename_, File::OpenMode mode)
+	: filename(std::move(filename_))
 #if HAVE_MMAP || defined _WIN32
 	, mmem(nullptr)
 #endif
@@ -33,14 +34,13 @@ LocalFile::LocalFile(string_view filename_, File::OpenMode mode)
 	, readOnly(false)
 {
 	if (mode == File::SAVE_PERSISTENT) {
-		auto pos = filename.find_last_of('/');
-		if (pos != string::npos) {
-			FileOperations::mkdirp(string_view(filename).substr(0, pos));
+		if (auto pos = filename.find_last_of('/'); pos != string::npos) {
+			FileOperations::mkdirp(filename.substr(0, pos));
 		}
 	}
 
-	const string name = FileOperations::getNativePath(filename);
-	if ((mode == File::SAVE_PERSISTENT) || (mode == File::TRUNCATE)) {
+	const string& name = FileOperations::getNativePath(filename);
+	if (mode == one_of(File::SAVE_PERSISTENT, File::TRUNCATE)) {
 		// open file read/write truncated
 		file = FileOperations::openFile(name, "wb+");
 	} else if (mode == File::CREATE) {
@@ -70,11 +70,11 @@ LocalFile::LocalFile(string_view filename_, File::OpenMode mode)
 				strerror(err));
 		}
 	}
-	getSize(); // check filesize
+	(void)getSize(); // query filesize, but ignore result
 }
 
-LocalFile::LocalFile(string_view filename_, const char* mode)
-	: filename(FileOperations::expandTilde(filename_))
+LocalFile::LocalFile(std::string filename_, const char* mode)
+	: filename(std::move(filename_))
 #if HAVE_MMAP || defined _WIN32
 	, mmem(nullptr)
 #endif
@@ -89,7 +89,7 @@ LocalFile::LocalFile(string_view filename_, const char* mode)
 	if (!file) {
 		throw FileException("Error opening file \"", filename, '"');
 	}
-	getSize(); // check filesize
+	(void)getSize(); // query filesize, but ignore result
 }
 
 LocalFile::~LocalFile()
@@ -125,7 +125,7 @@ void LocalFile::write(const void* buffer, size_t num)
 }
 
 #if defined _WIN32
-span<uint8_t> LocalFile::mmap()
+span<const uint8_t> LocalFile::mmap()
 {
 	size_t size = getSize();
 	if (size == 0) return {static_cast<uint8_t*>(nullptr), size};
@@ -180,7 +180,7 @@ void LocalFile::munmap()
 }
 
 #elif HAVE_MMAP
-span<uint8_t> LocalFile::mmap()
+span<const uint8_t> LocalFile::mmap()
 {
 	size_t size = getSize();
 	if (size == 0) return {static_cast<uint8_t*>(nullptr), size};
@@ -191,7 +191,7 @@ span<uint8_t> LocalFile::mmap()
 		                 MAP_PRIVATE, fileno(file.get()), 0));
 		// MAP_FAILED is #define'd using an old-style cast, we
 		// have to redefine it ourselves to avoid a warning
-		auto MY_MAP_FAILED = reinterpret_cast<void*>(-1);
+		auto* MY_MAP_FAILED = reinterpret_cast<void*>(-1);
 		if (mmem == MY_MAP_FAILED) {
 			throw FileException("Error mmapping file");
 		}
@@ -268,7 +268,7 @@ void LocalFile::flush()
 	fflush(file.get());
 }
 
-string LocalFile::getURL() const
+const string& LocalFile::getURL() const
 {
 	return filename;
 }

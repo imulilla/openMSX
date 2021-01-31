@@ -5,7 +5,7 @@
 
 namespace openmsx {
 
-static unsigned getAddressHigh(const DeviceConfig& config)
+[[nodiscard]] static unsigned getAddressHigh(const DeviceConfig& config)
 {
 	unsigned prim = config.getChildDataAsInt("ps");
 	unsigned sec  = config.getChildDataAsInt("ss", 0);
@@ -45,6 +45,12 @@ const byte* MSXMirrorDevice::getReadCacheLine(word /*start*/) const
 byte* MSXMirrorDevice::getWriteCacheLine(word /*start*/) const
 {
 	return nullptr;
+}
+
+bool MSXMirrorDevice::allowUnaligned() const
+{
+	// OK, because this device doesn't call any 'fillDeviceXXXCache()'functions.
+	return true;
 }
 
 template<typename Archive>

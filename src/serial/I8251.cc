@@ -7,43 +7,43 @@ using std::string;
 
 namespace openmsx {
 
-static const byte STAT_TXRDY   = 0x01;
-static const byte STAT_RXRDY   = 0x02;
-static const byte STAT_TXEMPTY = 0x04;
-static const byte STAT_PE      = 0x08;
-static const byte STAT_OE      = 0x10;
-static const byte STAT_FE      = 0x20;
-static const byte STAT_SYNBRK  = 0x40;
-static const byte STAT_DSR     = 0x80;
+constexpr byte STAT_TXRDY   = 0x01;
+constexpr byte STAT_RXRDY   = 0x02;
+constexpr byte STAT_TXEMPTY = 0x04;
+constexpr byte STAT_PE      = 0x08;
+constexpr byte STAT_OE      = 0x10;
+constexpr byte STAT_FE      = 0x20;
+constexpr byte STAT_SYNBRK  = 0x40;
+constexpr byte STAT_DSR     = 0x80;
 
-static const byte MODE_BAUDRATE    = 0x03;
-static const byte MODE_SYNCHRONOUS = 0x00;
-static const byte MODE_RATE1       = 0x01;
-static const byte MODE_RATE16      = 0x02;
-static const byte MODE_RATE64      = 0x03;
-static const byte MODE_WORDLENGTH  = 0x0C;
-static const byte MODE_5BIT        = 0x00;
-static const byte MODE_6BIT        = 0x04;
-static const byte MODE_7BIT        = 0x08;
-static const byte MODE_8BIT        = 0x0C;
-static const byte MODE_PARITYEN    = 0x10;
-static const byte MODE_PARITODD    = 0x00;
-static const byte MODE_PARITEVEN   = 0x20;
-static const byte MODE_STOP_BITS   = 0xC0;
-static const byte MODE_STOP_INV    = 0x00;
-static const byte MODE_STOP_1      = 0x40;
-static const byte MODE_STOP_15     = 0x80;
-static const byte MODE_STOP_2      = 0xC0;
-static const byte MODE_SINGLESYNC  = 0x80;
+constexpr byte MODE_BAUDRATE    = 0x03;
+constexpr byte MODE_SYNCHRONOUS = 0x00;
+constexpr byte MODE_RATE1       = 0x01;
+constexpr byte MODE_RATE16      = 0x02;
+constexpr byte MODE_RATE64      = 0x03;
+constexpr byte MODE_WORDLENGTH  = 0x0C;
+constexpr byte MODE_5BIT        = 0x00;
+constexpr byte MODE_6BIT        = 0x04;
+constexpr byte MODE_7BIT        = 0x08;
+constexpr byte MODE_8BIT        = 0x0C;
+constexpr byte MODE_PARITYEN    = 0x10;
+constexpr byte MODE_PARITODD    = 0x00;
+constexpr byte MODE_PARITEVEN   = 0x20;
+constexpr byte MODE_STOP_BITS   = 0xC0;
+constexpr byte MODE_STOP_INV    = 0x00;
+constexpr byte MODE_STOP_1      = 0x40;
+constexpr byte MODE_STOP_15     = 0x80;
+constexpr byte MODE_STOP_2      = 0xC0;
+constexpr byte MODE_SINGLESYNC  = 0x80;
 
-static const byte CMD_TXEN   = 0x01;
-static const byte CMD_DTR    = 0x02;
-static const byte CMD_RXE    = 0x04;
-static const byte CMD_SBRK   = 0x08;
-static const byte CMD_RSTERR = 0x10;
-static const byte CMD_RTS    = 0x20;
-static const byte CMD_RESET  = 0x40;
-static const byte CMD_HUNT   = 0x80;
+constexpr byte CMD_TXEN   = 0x01;
+constexpr byte CMD_DTR    = 0x02;
+constexpr byte CMD_RXE    = 0x04;
+constexpr byte CMD_SBRK   = 0x08;
+constexpr byte CMD_RSTERR = 0x10;
+constexpr byte CMD_RTS    = 0x20;
+constexpr byte CMD_RESET  = 0x40;
+constexpr byte CMD_HUNT   = 0x80;
 
 
 I8251::I8251(Scheduler& scheduler, I8251Interface& interf_, EmuTime::param time)
@@ -78,29 +78,19 @@ void I8251::reset(EmuTime::param time)
 
 byte I8251::readIO(word port, EmuTime::param time)
 {
-	byte result;
 	switch (port & 1) {
-	case 0:
-		result = readTrans(time);
-		break;
-	case 1:
-		result = readStatus(time);
-		break;
-	default:
-		UNREACHABLE; return 0;
+		case 0:  return readTrans(time);
+		case 1:  return readStatus(time);
+		default: UNREACHABLE; return 0;
 	}
-	return result;
 }
 
 byte I8251::peekIO(word port, EmuTime::param /*time*/) const
 {
 	switch (port & 1) {
-	case 0:
-		return recvBuf;
-	case 1:
-		return status; // TODO peekStatus()
-	default:
-		UNREACHABLE; return 0;
+		case 0:  return recvBuf;
+		case 1:  return status; // TODO peekStatus()
+		default: UNREACHABLE; return 0;
 	}
 }
 
@@ -153,44 +143,26 @@ void I8251::setMode(byte newMode)
 {
 	mode = newMode;
 
-	SerialDataInterface::DataBits dataBits;
-	switch (mode & MODE_WORDLENGTH) {
-	case MODE_5BIT:
-		dataBits = SerialDataInterface::DATA_5;
-		break;
-	case MODE_6BIT:
-		dataBits = SerialDataInterface::DATA_6;
-		break;
-	case MODE_7BIT:
-		dataBits = SerialDataInterface::DATA_7;
-		break;
-	case MODE_8BIT:
-		dataBits = SerialDataInterface::DATA_8;
-		break;
-	default:
-		UNREACHABLE;
-		dataBits = SerialDataInterface::DATA_8;
-	}
+	auto dataBits = [&] {
+		switch (mode & MODE_WORDLENGTH) {
+		case MODE_5BIT: return SerialDataInterface::DATA_5;
+		case MODE_6BIT: return SerialDataInterface::DATA_6;
+		case MODE_7BIT: return SerialDataInterface::DATA_7;
+		case MODE_8BIT: return SerialDataInterface::DATA_8;
+		default: UNREACHABLE; return SerialDataInterface::DATA_8;
+		}
+	}();
 	interf.setDataBits(dataBits);
 
-	SerialDataInterface::StopBits stopBits;
-	switch(mode & MODE_STOP_BITS) {
-	case MODE_STOP_INV:
-		stopBits = SerialDataInterface::STOP_INV;
-		break;
-	case MODE_STOP_1:
-		stopBits = SerialDataInterface::STOP_1;
-		break;
-	case MODE_STOP_15:
-		stopBits = SerialDataInterface::STOP_15;
-		break;
-	case MODE_STOP_2:
-		stopBits = SerialDataInterface::STOP_2;
-		break;
-	default:
-		UNREACHABLE;
-		stopBits = SerialDataInterface::STOP_2;
-	}
+	auto stopBits = [&] {
+		switch(mode & MODE_STOP_BITS) {
+		case MODE_STOP_INV: return SerialDataInterface::STOP_INV;
+		case MODE_STOP_1:   return SerialDataInterface::STOP_1;
+		case MODE_STOP_15:  return SerialDataInterface::STOP_15;
+		case MODE_STOP_2:   return SerialDataInterface::STOP_2;
+		default: UNREACHABLE; return SerialDataInterface::STOP_2;
+		}
+	}();
 	interf.setStopBits(stopBits);
 
 	bool parityEnable = (mode & MODE_PARITYEN) != 0;
@@ -198,24 +170,15 @@ void I8251::setMode(byte newMode)
 		SerialDataInterface::EVEN : SerialDataInterface::ODD;
 	interf.setParityBit(parityEnable, parity);
 
-	unsigned baudrate;
-	switch (mode & MODE_BAUDRATE) {
-	case MODE_SYNCHRONOUS:
-		baudrate = 1;
-		break;
-	case MODE_RATE1:
-		baudrate = 1;
-		break;
-	case MODE_RATE16:
-		baudrate = 16;
-		break;
-	case MODE_RATE64:
-		baudrate = 64;
-		break;
-	default:
-		UNREACHABLE;
-		baudrate = 1;
-	}
+	unsigned baudrate = [&] {
+		switch (mode & MODE_BAUDRATE) {
+		case MODE_SYNCHRONOUS: return 1;
+		case MODE_RATE1:       return 1;
+		case MODE_RATE16:      return 16;
+		case MODE_RATE64:      return 64;
+		default: UNREACHABLE;  return 1;
+		}
+	}();
 
 	charLength = (((2 * (1 + unsigned(dataBits) + (parityEnable ? 1 : 0))) +
 	               unsigned(stopBits)) * baudrate) / 2;
@@ -315,7 +278,7 @@ void I8251::recvByte(byte value, EmuTime::param time)
 	}
 }
 
-bool I8251::isRecvEnabled()
+bool I8251::isRecvEnabled() const
 {
 	return (command & CMD_RXE) != 0;
 }
@@ -351,7 +314,7 @@ void I8251::execTrans(EmuTime::param time)
 }
 
 
-static std::initializer_list<enum_string<SerialDataInterface::DataBits>> dataBitsInfo = {
+static constexpr std::initializer_list<enum_string<SerialDataInterface::DataBits>> dataBitsInfo = {
 		{ "5", SerialDataInterface::DATA_5 },
 		{ "6", SerialDataInterface::DATA_6 },
 		{ "7", SerialDataInterface::DATA_7 },
@@ -359,7 +322,7 @@ static std::initializer_list<enum_string<SerialDataInterface::DataBits>> dataBit
 };
 SERIALIZE_ENUM(SerialDataInterface::DataBits, dataBitsInfo);
 
-static std::initializer_list<enum_string<SerialDataInterface::StopBits>> stopBitsInfo = {
+static constexpr std::initializer_list<enum_string<SerialDataInterface::StopBits>> stopBitsInfo = {
 	{ "INVALID", SerialDataInterface::STOP_INV },
 	{ "1",       SerialDataInterface::STOP_1   },
 	{ "1.5",     SerialDataInterface::STOP_15  },
@@ -367,13 +330,13 @@ static std::initializer_list<enum_string<SerialDataInterface::StopBits>> stopBit
 };
 SERIALIZE_ENUM(SerialDataInterface::StopBits, stopBitsInfo);
 
-static std::initializer_list<enum_string<SerialDataInterface::ParityBit>> parityBitInfo = {
+static constexpr std::initializer_list<enum_string<SerialDataInterface::ParityBit>> parityBitInfo = {
 	{ "EVEN", SerialDataInterface::EVEN },
 	{ "ODD",  SerialDataInterface::ODD  }
 };
 SERIALIZE_ENUM(SerialDataInterface::ParityBit, parityBitInfo);
 
-static std::initializer_list<enum_string<I8251::CmdFaze>> cmdFazeInfo = {
+static constexpr std::initializer_list<enum_string<I8251::CmdFaze>> cmdFazeInfo = {
 	{ "MODE",  I8251::FAZE_MODE  },
 	{ "SYNC1", I8251::FAZE_SYNC1 },
 	{ "SYNC2", I8251::FAZE_SYNC2 },

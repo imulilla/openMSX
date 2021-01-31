@@ -33,16 +33,16 @@ RS232Tester::~RS232Tester()
 void RS232Tester::plugHelper(Connector& connector_, EmuTime::param /*time*/)
 {
 	// output
-	string_view outName = rs232OutputFilenameSetting.getString();
-	FileOperations::openofstream(outFile, outName.str());
+	auto outName = rs232OutputFilenameSetting.getString();
+	FileOperations::openofstream(outFile, outName);
 	if (outFile.fail()) {
 		outFile.clear();
 		throw PlugException("Error opening output file: ", outName);
 	}
 
 	// input
-	string_view inName = rs232InputFilenameSetting.getString();
-	inFile = FileOperations::openFile(inName.str(), "rb");
+	auto inName = rs232InputFilenameSetting.getString();
+	inFile = FileOperations::openFile(inName, "rb");
 	if (!inFile) {
 		outFile.close();
 		throw PlugException("Error opening input file: ", inName);
@@ -75,7 +75,7 @@ const std::string& RS232Tester::getName() const
 	return name;
 }
 
-string_view RS232Tester::getDescription() const
+std::string_view RS232Tester::getDescription() const
 {
 	return	"RS232 tester pluggable. Reads all data from file specified "
 		"with the 'rs-232-inputfilename' setting. Writes all data "
@@ -85,7 +85,6 @@ string_view RS232Tester::getDescription() const
 
 void RS232Tester::run()
 {
-	byte buf;
 	if (!inFile) return;
 	while (!feof(inFile.get())) {
 #ifndef _WIN32
@@ -93,6 +92,7 @@ void RS232Tester::run()
 			break;
 		}
 #endif
+		byte buf;
 		size_t num = fread(&buf, 1, 1, inFile.get());
 		if (poller.aborted()) {
 			break;

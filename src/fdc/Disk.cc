@@ -1,5 +1,6 @@
 #include "Disk.hh"
 #include "DiskExceptions.hh"
+#include "one_of.hh"
 
 using std::string;
 
@@ -43,20 +44,21 @@ size_t Disk::physToLog(byte track, byte side, byte sector)
 	}
 	return sectorsPerTrack * (side + nbSides * track) + (sector - 1);
 }
-void Disk::logToPhys(size_t log, byte& track, byte& side, byte& sector)
+Disk::TSS Disk::logToPhys(size_t log)
 {
 	if (log <= 1) {
-		track = 0;
-		side = 0;
-		sector = byte(log + 1);
-		return;
+		byte track = 0;
+		byte side = 0;
+		byte sector = byte(log + 1);
+		return {track, side, sector};
 	}
 	if (!nbSides) {
 		detectGeometry();
 	}
-	track  = byte(log / (nbSides * sectorsPerTrack)); // TODO check for overflow
-	side   = byte((log / sectorsPerTrack) % nbSides);
-	sector = byte((log % sectorsPerTrack) + 1);
+	byte track  = byte(log / (nbSides * sectorsPerTrack)); // TODO check for overflow
+	byte side   = byte((log / sectorsPerTrack) % nbSides);
+	byte sector = byte((log % sectorsPerTrack) + 1);
+	return {track, side, sector};
 }
 
 unsigned Disk::getSectorsPerTrack()
@@ -94,7 +96,7 @@ void Disk::detectGeometry()
 	//     If step c) fails, then this disk cannot be read.
 	//
 	//  d) If step b) succeeds, read bytes # 0B to # 1D. This is the
-	//     DPB for MS-DOS, Version 2.0 and above. The DPB for MSXDOS can
+	//     DPB for MS-DOS, Version 2.0 and above. The DPB for MSX-DOS can
 	//     be obtained as follows.
 	//
 	//     ....
@@ -104,7 +106,7 @@ void Disk::detectGeometry()
 
 	//
 	//     Media Descriptor  0F8H  0F9H  0FAh  0FBH  0FCH  0FDH  0FEH  0FFH
-	//       byte (FATID)
+	//       byte (FAT-ID)
 	//     Sectors/track        9     9     8     8     9     9     8     8
 	//     No. of sides         1     2     1     2     1     2     1     2
 	//     Tracks/side         80    80    80    80    40    40    40    40
@@ -113,7 +115,7 @@ void Disk::detectGeometry()
 	try {
 		SectorBuffer buf;
 		readSector(0, buf); // bootsector
-		if ((buf.raw[0] == 0xE9) || (buf.raw[0] == 0xEB)) {
+		if (buf.raw[0] == one_of(0xE9, 0xEB)) {
 			// use values from bootsector
 			sectorsPerTrack = buf.bootSector.sectorsTrack;
 			nbSides         = buf.bootSector.nrSides;

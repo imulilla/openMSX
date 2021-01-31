@@ -17,11 +17,12 @@
 #include <memory>
 #include <sstream>
 
+using std::move;
 using std::ostringstream;
 using std::string;
+using std::string_view;
 using std::vector;
 using std::unique_ptr;
-using std::move;
 
 namespace openmsx {
 
@@ -29,30 +30,30 @@ class AfterCmd
 {
 public:
 	virtual ~AfterCmd() = default;
-	string_view getCommand() const;
-	const string& getId() const;
-	virtual string getType() const = 0;
+	[[nodiscard]] string_view getCommand() const;
+	[[nodiscard]] const string& getId() const;
+	[[nodiscard]] virtual string getType() const = 0;
 	void execute();
 protected:
 	AfterCmd(AfterCommand& afterCommand,
-		 const TclObject& command);
+		 TclObject command);
 	unique_ptr<AfterCmd> removeSelf();
 
 	AfterCommand& afterCommand;
 	TclObject command;
 	string id;
-	static unsigned lastAfterId;
+	static inline unsigned lastAfterId = 0;
 };
 
 class AfterTimedCmd : public AfterCmd, private Schedulable
 {
 public:
-	double getTime() const;
+	[[nodiscard]] double getTime() const;
 	void reschedule();
 protected:
 	AfterTimedCmd(Scheduler& scheduler,
 		      AfterCommand& afterCommand,
-		      const TclObject& command, double time);
+		      TclObject command, double time);
 private:
 	void executeUntil(EmuTime::param time) override;
 	void schedulerDeleted() override;
@@ -66,8 +67,8 @@ class AfterTimeCmd final : public AfterTimedCmd
 public:
 	AfterTimeCmd(Scheduler& scheduler,
 		     AfterCommand& afterCommand,
-		     const TclObject& command, double time);
-	string getType() const override;
+		     TclObject command, double time);
+	[[nodiscard]] string getType() const override;
 };
 
 class AfterIdleCmd final : public AfterTimedCmd
@@ -75,8 +76,8 @@ class AfterIdleCmd final : public AfterTimedCmd
 public:
 	AfterIdleCmd(Scheduler& scheduler,
 		     AfterCommand& afterCommand,
-		     const TclObject& command, double time);
-	string getType() const override;
+		     TclObject command, double time);
+	[[nodiscard]] string getType() const override;
 };
 
 template<EventType T>
@@ -85,8 +86,8 @@ class AfterEventCmd final : public AfterCmd
 public:
 	AfterEventCmd(AfterCommand& afterCommand,
 		      const TclObject& type,
-		      const TclObject& command);
-	string getType() const override;
+		      TclObject command);
+	[[nodiscard]] string getType() const override;
 private:
 	const string type;
 };
@@ -96,9 +97,9 @@ class AfterInputEventCmd final : public AfterCmd
 public:
 	AfterInputEventCmd(AfterCommand& afterCommand,
 	                   AfterCommand::EventPtr event,
-	                   const TclObject& command);
-	string getType() const override;
-	AfterCommand::EventPtr getEvent() const { return event; }
+	                   TclObject command);
+	[[nodiscard]] string getType() const override;
+	[[nodiscard]] AfterCommand::EventPtr getEvent() const { return event; }
 private:
 	AfterCommand::EventPtr event;
 };
@@ -107,8 +108,8 @@ class AfterRealTimeCmd final : public AfterCmd, private RTSchedulable
 {
 public:
 	AfterRealTimeCmd(RTScheduler& rtScheduler, AfterCommand& afterCommand,
-	                 const TclObject& command, double time);
-	string getType() const override;
+	                 TclObject command, double time);
+	[[nodiscard]] string getType() const override;
 
 private:
 	void executeRT() override;
@@ -221,13 +222,12 @@ void AfterCommand::execute(span<const TclObject> tokens, TclObject& result)
 	} else if (subCmd == "cancel") {
 		afterCancel(tokens, result);
 	} else {
-		try {
-			// A valid integer?
-			int time = tokens[1].getInt(getInterpreter());
-			afterTclTime(time, tokens, result);
-		} catch (CommandException&) {
+		// A valid integer?
+		if (auto time = tokens[1].getOptionalInt()) {
+			afterTclTime(*time, tokens, result);
+		} else {
+			// A valid event name?
 			try {
-				// A valid event name?
 				afterInputEvent(
 					InputEventFactory::createInputEvent(
 						tokens[1], getInterpreter()),
@@ -317,7 +317,7 @@ void AfterCommand::afterInfo(span<const TclObject> /*tokens*/, TclObject& result
 	for (auto& cmd : afterCmds) {
 		str << cmd->getId() << ": ";
 		str << cmd->getType() << ' ';
-		if (auto cmd2 = dynamic_cast<const AfterTimedCmd*>(cmd.get())) {
+		if (const auto* cmd2 = dynamic_cast<const AfterTimedCmd*>(cmd.get())) {
 			str.precision(3);
 			str << std::fixed << std::showpoint << cmd2->getTime() << ' ';
 		}
@@ -332,9 +332,9 @@ void AfterCommand::afterCancel(span<const TclObject> tokens, TclObject& /*result
 	checkNumArgs(tokens, AtLeast{3}, "id|command");
 	if (tokens.size() == 3) {
 		auto id = tokens[2].getString();
-		auto it = ranges::find_if(afterCmds,
-		                          [&](auto& e) { return e->getId() == id; });
-		if (it != end(afterCmds)) {
+		if (auto it = ranges::find_if(afterCmds,
+		                              [&](auto& e) { return e->getId() == id; });
+		    it != end(afterCmds)) {
 			afterCmds.erase(it);
 			return;
 		}
@@ -342,12 +342,12 @@ void AfterCommand::afterCancel(span<const TclObject> tokens, TclObject& /*result
 	TclObject command;
 	command.addListElements(view::drop(tokens, 2));
 	string_view cmdStr = command.getString();
-	auto it = ranges::find_if(afterCmds,
-	                          [&](auto& e) { return e->getCommand() == cmdStr; });
-	if (it != end(afterCmds)) {
+	if (auto it = ranges::find_if(afterCmds,
+	                              [&](auto& e) { return e->getCommand() == cmdStr; });
+	    it != end(afterCmds)) {
 		afterCmds.erase(it);
 		// Tcl manual is not clear about this, but it seems
-		// there's only occurence of this command canceled.
+		// there's only occurrences of this command canceled.
 		// It's also not clear which of the (possibly) several
 		// matches is canceled.
 		return;
@@ -371,7 +371,7 @@ string AfterCommand::help(const vector<string>& /*tokens*/) const
 void AfterCommand::tabCompletion(vector<string>& tokens) const
 {
 	if (tokens.size() == 2) {
-		static const char* const cmds[] = {
+		static constexpr const char* const cmds[] = {
 			"time", "realtime", "idle", "frame", "break", "boot",
 			"machine_switch", "info", "cancel",
 		};
@@ -454,10 +454,8 @@ int AfterCommand::signalEvent(const std::shared_ptr<const Event>& event)
 
 // class AfterCmd
 
-unsigned AfterCmd::lastAfterId = 0;
-
-AfterCmd::AfterCmd(AfterCommand& afterCommand_, const TclObject& command_)
-	: afterCommand(afterCommand_), command(command_)
+AfterCmd::AfterCmd(AfterCommand& afterCommand_, TclObject command_)
+	: afterCommand(afterCommand_), command(std::move(command_))
 {
 	ostringstream str;
 	str << "after#" << ++lastAfterId;
@@ -499,8 +497,8 @@ unique_ptr<AfterCmd> AfterCmd::removeSelf()
 AfterTimedCmd::AfterTimedCmd(
 		Scheduler& scheduler_,
 		AfterCommand& afterCommand_,
-		const TclObject& command_, double time_)
-	: AfterCmd(afterCommand_, command_)
+		TclObject command_, double time_)
+	: AfterCmd(afterCommand_, std::move(command_))
 	, Schedulable(scheduler_)
 	, time(time_)
 {
@@ -536,8 +534,8 @@ void AfterTimedCmd::schedulerDeleted()
 AfterTimeCmd::AfterTimeCmd(
 		Scheduler& scheduler_,
 		AfterCommand& afterCommand_,
-		const TclObject& command_, double time_)
-	: AfterTimedCmd(scheduler_, afterCommand_, command_, time_)
+		TclObject command_, double time_)
+	: AfterTimedCmd(scheduler_, afterCommand_, std::move(command_), time_)
 {
 }
 
@@ -552,8 +550,8 @@ string AfterTimeCmd::getType() const
 AfterIdleCmd::AfterIdleCmd(
 		Scheduler& scheduler_,
 		AfterCommand& afterCommand_,
-		const TclObject& command_, double time_)
-	: AfterTimedCmd(scheduler_, afterCommand_, command_, time_)
+		TclObject command_, double time_)
+	: AfterTimedCmd(scheduler_, afterCommand_, std::move(command_), time_)
 {
 }
 
@@ -568,8 +566,8 @@ string AfterIdleCmd::getType() const
 template<EventType T>
 AfterEventCmd<T>::AfterEventCmd(
 		AfterCommand& afterCommand_, const TclObject& type_,
-		const TclObject& command_)
-	: AfterCmd(afterCommand_, command_), type(type_.getString().str())
+		TclObject command_)
+	: AfterCmd(afterCommand_, std::move(command_)), type(type_.getString())
 {
 }
 
@@ -585,8 +583,8 @@ string AfterEventCmd<T>::getType() const
 AfterInputEventCmd::AfterInputEventCmd(
 		AfterCommand& afterCommand_,
 		AfterCommand::EventPtr event_,
-		const TclObject& command_)
-	: AfterCmd(afterCommand_, command_)
+		TclObject command_)
+	: AfterCmd(afterCommand_, std::move(command_))
 	, event(std::move(event_))
 {
 }
@@ -600,8 +598,8 @@ string AfterInputEventCmd::getType() const
 
 AfterRealTimeCmd::AfterRealTimeCmd(
 		RTScheduler& rtScheduler, AfterCommand& afterCommand_,
-		const TclObject& command_, double time)
-	: AfterCmd(afterCommand_, command_)
+		TclObject command_, double time)
+	: AfterCmd(afterCommand_, std::move(command_))
 	, RTSchedulable(rtScheduler)
 {
 	scheduleRT(uint64_t(time * 1e6)); // micro seconds

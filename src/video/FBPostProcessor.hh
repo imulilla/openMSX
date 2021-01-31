@@ -4,6 +4,7 @@
 #include "PostProcessor.hh"
 #include "RenderSettings.hh"
 #include "PixelOperations.hh"
+#include "ScalerOutput.hh"
 #include <vector>
 
 namespace openmsx {
@@ -14,7 +15,7 @@ template<typename Pixel> class Scaler;
 
 /** Rasterizer using SDL.
   */
-template <class Pixel>
+template<typename Pixel>
 class FBPostProcessor final : public PostProcessor
 {
 public:
@@ -23,11 +24,13 @@ public:
 		OutputSurface& screen, const std::string& videoSource,
 		unsigned maxWidth, unsigned height, bool canDoInterlace);
 	~FBPostProcessor() override;
+	FBPostProcessor(const FBPostProcessor&) = delete;
+	FBPostProcessor& operator=(const FBPostProcessor&) = delete;
 
 	// Layer interface:
 	void paint(OutputSurface& output) override;
 
-	std::unique_ptr<RawFrame> rotateFrames(
+	[[nodiscard]] std::unique_ptr<RawFrame> rotateFrames(
 		std::unique_ptr<RawFrame> finishedFrame, EmuTime::param time) override;
 
 private:
@@ -39,9 +42,14 @@ private:
 	// Observer<Setting>
 	void update(const Setting& setting) override;
 
+private:
 	/** The currently active scaler.
 	  */
 	std::unique_ptr<Scaler<Pixel>> currScaler;
+
+	/** The currently active stretch-scaler (horizontal stretch setting).
+	 */
+	std::unique_ptr<ScalerOutput<Pixel>> stretchScaler;
 
 	/** Currently active scale algorithm, used to detect scaler changes.
 	  */
@@ -50,6 +58,14 @@ private:
 	/** Currently active scale factor, used to detect scaler changes.
 	  */
 	unsigned scaleFactor;
+
+	/** Currently active stretch factor, used to detect setting changes.
+	  */
+	unsigned stretchWidth;
+
+	/** Last used output, need to recreate 'stretchScaler' when this changes.
+	  */
+	OutputSurface* lastOutput = nullptr;
 
 	/** Remember the noise values to get a stable image when paused.
 	 */

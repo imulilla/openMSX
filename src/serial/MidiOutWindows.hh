@@ -20,11 +20,11 @@ public:
 	// Pluggable
 	void plugHelper(Connector& connector, EmuTime::param time) override;
 	void unplugHelper(EmuTime::param time) override;
-	const std::string& getName() const override;
-	string_view getDescription() const override;
+	[[nodiscard]] const std::string& getName() const override;
+	[[nodiscard]] std::string_view getDescription() const override;
 
 	// SerialDataInterface (part)
-	void recvByte(byte value, EmuTime::param time) override;
+	void recvMessage(const std::vector<uint8_t>& message, EmuTime::param time) override;
 
 	template<typename Archive>
 	void serialize(Archive& ar, unsigned version);

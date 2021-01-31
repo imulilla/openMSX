@@ -4,29 +4,30 @@
 #include "FileContext.hh"
 #include "MSXException.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <cassert>
 
 namespace openmsx {
 
-static const unsigned DUMMY_INPUT_RATE = 44100; // actual rate depends on .wav files
+constexpr unsigned DUMMY_INPUT_RATE = 44100; // actual rate depends on .wav files
 
-SamplePlayer::SamplePlayer(const std::string& name_, const std::string& desc,
+SamplePlayer::SamplePlayer(const std::string& name_, static_string_view desc,
                            const DeviceConfig& config,
                            const std::string& samplesBaseName, unsigned numSamples,
                            const std::string& alternativeName)
 	: ResampledSoundDevice(config.getMotherBoard(), name_, desc, 1, DUMMY_INPUT_RATE, false)
 {
 	bool alreadyWarned = false;
-	samples.resize(numSamples); // initialize with empty wavs
+	samples.resize(numSamples); // initialize with empty WAVs
 	auto context = systemFileContext();
-	for (unsigned i = 0; i < numSamples; ++i) {
+	for (auto i : xrange(numSamples)) {
 		try {
-			std::string filename = strCat(samplesBaseName, i, ".wav");
+			auto filename = tmpStrCat(samplesBaseName, i, ".wav");
 			samples[i] = WavData(context.resolve(filename));
 		} catch (MSXException& e1) {
 			try {
 				if (alternativeName.empty()) throw;
-				std::string filename = strCat(
+				auto filename = tmpStrCat(
 					alternativeName, i, ".wav");
 				samples[i] = WavData(context.resolve(filename));
 			} catch (MSXException& /*e2*/) {
@@ -106,7 +107,7 @@ void SamplePlayer::generateChannels(float** bufs, unsigned num)
 	}
 
 	auto& wav = samples[currentSampleNum];
-	for (unsigned i = 0; i < num; ++i) {
+	for (auto i : xrange(num)) {
 		if (index >= bufferSize) {
 			if (nextSampleNum != unsigned(-1)) {
 				doRepeat();

@@ -36,7 +36,7 @@ silent  :   ---  :  ---   :   ---  :   ---  :   ---  :0000SS01:
 speech  :11111122:22233334:44455566:67778889:99AAAEEE:EEPPPPP0:
 
 EEEEE  : energy : volume 0=off,0x1f=max
-PPPPP  : pitch  : 0=noize , 1=fast,0x1f=slow
+PPPPP  : pitch  : 0=noise , 1=fast,0x1f=slow
 111111 : K1     : 48=off
 22222  : K2     : 0=off,1=+min,0x0f=+max,0x10=off,0x11=+max,0x1f=-min
                 : 16 == special function??
@@ -60,9 +60,9 @@ chirp  2   : volume  6- 4 : with filter
 chirp  3   : volume   4   : no filter ??
 chirp  4- 5: volume  4- 2 : with filter
 chirp  6-11: volume  2- 0 : with filter
-chirp 12-..: vokume   0   : silent
+chirp 12-..: volume   0   : silent
 
- ---------- digial output information ----------
+ ---------- digital output information ----------
  when ME pin = high , some status output to A0..15 pins
 
   A0..8   : DAC output value (abs)
@@ -78,11 +78,13 @@ chirp 12-..: vokume   0   : silent
 #include "DeviceConfig.hh"
 #include "XMLElement.hh"
 #include "FileOperations.hh"
-#include "Math.hh"
 #include "cstd.hh"
-#include "serialize.hh"
+#include "one_of.hh"
 #include "random.hh"
 #include "ranges.hh"
+#include "serialize.hh"
+#include "xrange.hh"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -90,13 +92,13 @@ namespace openmsx {
 
 
 // interpolator per frame
-static const int FR_SIZE = 4;
+constexpr int FR_SIZE = 4;
 // samples per interpolator
-static const int IP_SIZE_SLOWER = 240 / FR_SIZE;
-static const int IP_SIZE_SLOW   = 200 / FR_SIZE;
-static const int IP_SIZE_NORMAL = 160 / FR_SIZE;
-static const int IP_SIZE_FAST   = 120 / FR_SIZE;
-static const int IP_SIZE_FASTER =  80 / FR_SIZE;
+constexpr int IP_SIZE_SLOWER = 240 / FR_SIZE;
+constexpr int IP_SIZE_SLOW   = 200 / FR_SIZE;
+constexpr int IP_SIZE_NORMAL = 160 / FR_SIZE;
+constexpr int IP_SIZE_FAST   = 120 / FR_SIZE;
+constexpr int IP_SIZE_FASTER =  80 / FR_SIZE;
 
 // phase value
 enum {
@@ -113,10 +115,10 @@ enum {
 // SPC SPB SPA
 //  1   0   1  more slow (05h)     : 42ms   (150%) : 60sample
 //  1   1   x  slow      (06h,07h) : 34ms   (125%) : 50sample
-//  x   0   0  normal    (00h,04h) : 25.6ms (100%) : 40samplme
+//  x   0   0  normal    (00h,04h) : 25.6ms (100%) : 40sample
 //  0   0   1  fast      (01h)     : 20.2ms  (75%) : 30sample
 //  0   1   x  more fast (02h,03h) : 12.2ms  (50%) : 20sample
-static const int VLM5030_speed_table[8] =
+constexpr int VLM5030_speed_table[8] =
 {
 	IP_SIZE_NORMAL,
 	IP_SIZE_FAST,
@@ -133,7 +135,7 @@ static const int VLM5030_speed_table[8] =
 // This is the energy lookup table
 
 // sampled from real chip
-static word energytable[0x20] =
+static constexpr word energytable[0x20] =
 {
 	  0,  2,  4,  6, 10, 12, 14, 18, //  0-7
 	 22, 26, 30, 34, 38, 44, 48, 54, //  8-15
@@ -142,7 +144,7 @@ static word energytable[0x20] =
 };
 
 // This is the pitch lookup table
-static const byte pitchtable [0x20] =
+constexpr byte pitchtable [0x20] =
 {
 	1,                               // 0     : random mode
 	22,                              // 1     : start=22
@@ -152,7 +154,7 @@ static const byte pitchtable [0x20] =
 	86, 94, 102,110,118,126          // 26-31 : 8step
 };
 
-static const int16_t K1_table[] = {
+constexpr int16_t K1_table[] = {
 	-24898,  -25672,  -26446,  -27091,  -27736,  -28252,  -28768,  -29155,
 	-29542,  -29929,  -30316,  -30574,  -30832,  -30961,  -31219,  -31348,
 	-31606,  -31735,  -31864,  -31864,  -31993,  -32122,  -32122,  -32251,
@@ -162,26 +164,26 @@ static const int16_t K1_table[] = {
 	     0,   -1935,   -3999,   -6063,   -7998,   -9804,  -11610,  -13416,
 	-15093,  -16642,  -18061,  -19480,  -20770,  -21931,  -22963,  -23995
 };
-static const int16_t K2_table[] = {
+constexpr int16_t K2_table[] = {
 	     0,   -3096,   -6321,   -9417,  -12513,  -15351,  -18061,  -20770,
 	-23092,  -25285,  -27220,  -28897,  -30187,  -31348,  -32122,  -32638,
 	     0,   32638,   32122,   31348,   30187,   28897,   27220,   25285,
 	 23092,   20770,   18061,   15351,   12513,    9417,    6321,    3096
 };
-static const int16_t K3_table[] = {
+constexpr int16_t K3_table[] = {
 	    0,   -3999,   -8127,  -12255,  -16384,  -20383,  -24511,  -28639,
 	32638,   28639,   24511,   20383,   16254,   12255,    8127,    3999
 };
-static const int16_t K5_table[] = {
+constexpr int16_t K5_table[] = {
 	0,   -8127,  -16384,  -24511,   32638,   24511,   16254,    8127
 };
 
-int VLM5030::getBits(unsigned sbit, unsigned bits)
+int VLM5030::getBits(unsigned sBit, unsigned bits)
 {
-	unsigned offset = address + (sbit / 8);
+	unsigned offset = address + (sBit / 8);
 	unsigned data = rom[(offset + 0) & address_mask] +
 	                rom[(offset + 1) & address_mask] * 256;
-	data >>= (sbit & 7);
+	data >>= (sBit & 7);
 	data &= (0xFF >> (8 - bits));
 	return data;
 }
@@ -192,9 +194,7 @@ int VLM5030::parseFrame()
 	// remember previous frame
 	old_energy = new_energy;
 	old_pitch = new_pitch;
-	for (int i = 0; i <= 9; ++i) {
-		old_k[i] = new_k[i];
-	}
+	ranges::copy(new_k, old_k);
 	// command byte check
 	byte cmd = rom[address & address_mask];
 	if (cmd & 0x01) {
@@ -244,7 +244,7 @@ void VLM5030::generateChannels(float** bufs, unsigned num)
 	int buf_count = 0;
 
 	// running
-	if (phase == PH_RUN || phase == PH_STOP) {
+	if (phase == one_of(PH_RUN, PH_STOP)) {
 		// playing speech
 		while (num > 0) {
 			int current_val;
@@ -260,7 +260,7 @@ void VLM5030::generateChannels(float** bufs, unsigned num)
 				if (interp_count == 0) {
 					// change to new frame
 					interp_count = parseFrame(); // with change phase
-					if (interp_count == 0 ) {
+					if (interp_count == 0) {
 						// end mark found
 						interp_count = FR_SIZE;
 						sample_count = frame_size; // end -> stop time
@@ -269,23 +269,17 @@ void VLM5030::generateChannels(float** bufs, unsigned num)
 					// Set old target as new start of frame
 					current_energy = old_energy;
 					current_pitch = old_pitch;
-					for (int i = 0; i <= 9; ++i) {
-						current_k[i] = old_k[i];
-					}
+					ranges::copy(old_k, current_k);
 					// is this a zero energy frame?
 					if (current_energy == 0) {
 						target_energy = 0;
 						target_pitch = current_pitch;
-						for (int i = 0; i <= 9; ++i) {
-							target_k[i] = current_k[i];
-						}
+						ranges::copy(current_k, target_k);
 					} else {
 						// normal frame
 						target_energy = new_energy;
 						target_pitch = new_pitch;
-						for (int i = 0; i <= 9; ++i) {
-							target_k[i] = new_k[i];
-						}
+						ranges::copy(new_k, target_k);
 					}
 				}
 				// next interpolator
@@ -297,7 +291,7 @@ void VLM5030::generateChannels(float** bufs, unsigned num)
 				if (old_pitch > 1) {
 					current_pitch = old_pitch + (target_pitch - old_pitch) * interp_effect / FR_SIZE;
 				}
-				for (int i = 0; i <= 9; ++i)
+				for (auto i : xrange(10))
 					current_k[i] = old_k[i] + (target_k[i] - old_k[i]) * interp_effect / FR_SIZE;
 			}
 			// calcrate digital filter
@@ -325,7 +319,7 @@ void VLM5030::generateChannels(float** bufs, unsigned num)
 			x[0] = u[0];
 
 			// clipping, buffering
-			bufs[0][buf_count] = Math::clip<-511, 511>(u[0]);
+			bufs[0][buf_count] = std::clamp(u[0], -511, 511);
 			++buf_count;
 			--sample_count;
 			++pitch_count;
@@ -374,13 +368,13 @@ void VLM5030::setupParameter(byte param)
 	// latch parameter value
 	parameter = param;
 
-	// bit 0,1 : 4800bps / 9600bps , interporator step
+	// bit 0,1 : 4800bps / 9600bps , interpolator step
 	if (param & 2) {          // bit 1 = 1 , 9600bps
-		interp_step = 4;  // 9600bps : no interporator
+		interp_step = 4;  // 9600bps : no interpolator
 	} else if (param & 1) {   // bit1 = 0 & bit0 = 1 , 4800bps
-		interp_step = 2;  // 4800bps : 2 interporator
+		interp_step = 2;  // 4800bps : 2 interpolator
 	} else {                  // bit1 = bit0 = 0 : 2400bps
-		interp_step = 1;  // 2400bps : 4 interporator
+		interp_step = 1;  // 2400bps : 4 interpolator
 	}
 
 	// bit 3,4,5 : speed (frame size)
@@ -520,9 +514,9 @@ static XMLElement getRomConfig(const std::string& name, const std::string& romFi
 	return voiceROMconfig;
 }
 
-static constexpr auto INPUT_RATE = unsigned(cstd::round(3579545 / 440.0));
+constexpr auto INPUT_RATE = unsigned(cstd::round(3579545 / 440.0));
 
-VLM5030::VLM5030(const std::string& name_, const std::string& desc,
+VLM5030::VLM5030(const std::string& name_, static_string_view desc,
                  const std::string& romFilename, const DeviceConfig& config)
 	: ResampledSoundDevice(config.getMotherBoard(), name_, desc, 1, INPUT_RATE, false)
 	, rom(name_ + " ROM", "rom", DeviceConfig(config, getRomConfig(name_, romFilename)))

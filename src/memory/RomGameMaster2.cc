@@ -39,6 +39,7 @@
 #include "RomGameMaster2.hh"
 #include "SRAM.hh"
 #include "serialize.hh"
+#include "xrange.hh"
 #include <memory>
 
 namespace openmsx {
@@ -52,13 +53,13 @@ RomGameMaster2::RomGameMaster2(const DeviceConfig& config, Rom&& rom_)
 
 void RomGameMaster2::reset(EmuTime::param /*time*/)
 {
-	for (int i = 0; i < 4; i++) {
+	for (auto i : xrange(4)) {
 		setUnmapped(i);
 	}
-	for (int i = 4; i < 12; i++) {
+	for (auto i : xrange(4, 12)) {
 		setRom(i, i - 4);
 	}
-	for (int i = 12; i < 16; i++) {
+	for (auto i : xrange(12, 16)) {
 		setUnmapped(i);
 	}
 	sramOffset = 0;
@@ -72,6 +73,7 @@ void RomGameMaster2::writeMem(word address, byte value, EmuTime::param /*time*/)
 			byte region = address >> 12; // 0x6, 0x8 or 0xA
 			if (region == 0x0A) {
 				sramEnabled = (value & 0x10) != 0;
+				invalidateDeviceWCache(0xB000, 0x1000); // 'R' is handled below
 			}
 			if (value & 0x10) {
 				// switch SRAM

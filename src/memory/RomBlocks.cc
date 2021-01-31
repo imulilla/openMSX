@@ -4,13 +4,14 @@
 #include "Math.hh"
 #include "serialize.hh"
 #include "unreachable.hh"
+#include "xrange.hh"
 
 namespace openmsx {
 
 // minimal attempt to avoid seeing this warning too often
 static Sha1Sum alreadyWarnedForSha1Sum;
 
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
 RomBlocks<BANK_SIZE>::RomBlocks(
 		const DeviceConfig& config, Rom&& rom_,
 		unsigned debugBankSizeShift)
@@ -41,33 +42,39 @@ RomBlocks<BANK_SIZE>::RomBlocks(
 
 	// Default mask: wraps at end of ROM image.
 	blockMask = nrBlocks - 1;
-	for (unsigned i = 0; i < NUM_BANKS; i++) {
+	for (auto i : xrange(NUM_BANKS)) {
 		setRom(i, 0);
 	}
 }
 
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
 RomBlocks<BANK_SIZE>::~RomBlocks() = default;
 
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
+unsigned RomBlocks<BANK_SIZE>::getBaseSizeAlignment() const
+{
+	return BANK_SIZE;
+}
+
+template<unsigned BANK_SIZE>
 byte RomBlocks<BANK_SIZE>::peekMem(word address, EmuTime::param /*time*/) const
 {
 	return bankPtr[address / BANK_SIZE][address & BANK_MASK];
 }
 
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
 byte RomBlocks<BANK_SIZE>::readMem(word address, EmuTime::param time)
 {
 	return RomBlocks<BANK_SIZE>::peekMem(address, time);
 }
 
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
 const byte* RomBlocks<BANK_SIZE>::getReadCacheLine(word address) const
 {
 	return &bankPtr[address / BANK_SIZE][address & BANK_MASK];
 }
 
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
 void RomBlocks<BANK_SIZE>::setBank(byte region, const byte* adr, int block)
 {
 	assert("address passed to setBank() is not serializable" &&
@@ -78,23 +85,23 @@ void RomBlocks<BANK_SIZE>::setBank(byte region, const byte* adr, int block)
 	        ((extraMem <= adr) && (adr <= &extraMem[extraSize - 1]))));
 	bankPtr[region] = adr;
 	blockNr[region] = block; // only for debuggable
-	invalidateMemCache(region * BANK_SIZE, BANK_SIZE);
+	fillDeviceRCache(region * BANK_SIZE, BANK_SIZE, adr);
 }
 
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
 void RomBlocks<BANK_SIZE>::setUnmapped(byte region)
 {
 	setBank(region, unmappedRead, 255);
 }
 
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
 void RomBlocks<BANK_SIZE>::setExtraMemory(const byte* mem, unsigned size)
 {
 	extraMem = mem;
 	extraSize = size;
 }
 
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
 void RomBlocks<BANK_SIZE>::setRom(byte region, unsigned block)
 {
 	// Note: Some cartridges have a number of blocks that is not a power of 2,
@@ -109,7 +116,7 @@ void RomBlocks<BANK_SIZE>::setRom(byte region, unsigned block)
 
 // version 1: initial version
 // version 2: added blockNr
-template <unsigned BANK_SIZE>
+template<unsigned BANK_SIZE>
 template<typename Archive>
 void RomBlocks<BANK_SIZE>::serialize(Archive& ar, unsigned /*version*/)
 {
@@ -123,7 +130,7 @@ void RomBlocks<BANK_SIZE>::serialize(Archive& ar, unsigned /*version*/)
 	unsigned sramSize = sram ? sram->getSize() : 0;
 	if (ar.isLoader()) {
 		ar.serialize("banks", offsets);
-		for (unsigned i = 0; i < NUM_BANKS; ++i) {
+		for (auto i : xrange(NUM_BANKS)) {
 			if (offsets[i] == unsigned(-1)) {
 				bankPtr[i] = unmappedRead;
 			} else if (offsets[i] < romSize) {
@@ -139,7 +146,7 @@ void RomBlocks<BANK_SIZE>::serialize(Archive& ar, unsigned /*version*/)
 			}
 		}
 	} else {
-		for (unsigned i = 0; i < NUM_BANKS; ++i) {
+		for (auto i : xrange(NUM_BANKS)) {
 			if (bankPtr[i] == unmappedRead) {
 				offsets[i] = unsigned(-1);
 			} else if ((&rom[0] <= bankPtr[i]) &&
@@ -165,9 +172,7 @@ void RomBlocks<BANK_SIZE>::serialize(Archive& ar, unsigned /*version*/)
 	} else {
 		assert(ar.isLoader());
 		// set dummy value, anyway only used for debuggable
-		for (unsigned i = 0; i < NUM_BANKS; ++i) {
-			blockNr[i] = 255;
-		}
+		ranges::fill(blockNr, 255);
 	}*/
 }
 

@@ -6,6 +6,7 @@
 #include "BooleanSetting.hh"
 #include "MSXException.hh"
 #include "serialize.hh"
+#include "one_of.hh"
 #include "outer.hh"
 #include "unreachable.hh"
 #include <cassert>
@@ -40,7 +41,7 @@ MSXRS232::MSXRS232(const DeviceConfig& config)
 		"toshiba_rs232c_switch", "status of the RS-232C enable switch",
 		true) : nullptr)
 {
-	if (rom && rom->getSize() != 0x2000 && rom->getSize() != 0x4000) {
+	if (rom && (rom->getSize() != one_of(0x2000u, 0x4000u))) {
 		throw MSXException("RS232C only supports 8kB or 16kB ROMs.");
 	}
 
@@ -90,9 +91,9 @@ byte MSXRS232::readMem(word address, EmuTime::param time)
 
 const byte* MSXRS232::getReadCacheLine(word start) const
 {
-        if (hasMemoryBasedIo && (start == (0xBFF8 & CacheLine::HIGH))) {
-                return nullptr;
-        }
+	if (hasMemoryBasedIo && (start == (0xBFF8 & CacheLine::HIGH))) {
+		return nullptr;
+	}
 	word addr = start & 0x3FFF;
 	if (ram && ((RAM_OFFSET <= addr) && (addr < (RAM_OFFSET + RAM_SIZE)))) {
 		return &(*ram)[addr - RAM_OFFSET];
@@ -125,15 +126,21 @@ void MSXRS232::writeMem(word address, byte value, EmuTime::param time)
 
 byte* MSXRS232::getWriteCacheLine(word start) const
 {
-        if (hasMemoryBasedIo && (start == (0xBFF8 & CacheLine::HIGH))) {
-                return nullptr;
-        }
+	if (hasMemoryBasedIo && (start == (0xBFF8 & CacheLine::HIGH))) {
+		return nullptr;
+	}
 	word addr = start & 0x3FFF;
 	if (ram && ((RAM_OFFSET <= addr) && (addr < (RAM_OFFSET + RAM_SIZE)))) {
 		return &(*ram)[addr - RAM_OFFSET];
 	} else {
 		return unmappedWrite;
 	}
+}
+
+bool MSXRS232::allowUnaligned() const
+{
+	// OK, because this device doesn't call any 'fillDeviceXXXCache()'functions.
+	return true;
 }
 
 byte MSXRS232::readIO(word port, EmuTime::param time)
@@ -146,56 +153,44 @@ byte MSXRS232::readIO(word port, EmuTime::param time)
 
 byte MSXRS232::readIOImpl(word port, EmuTime::param time)
 {
-	byte result;
 	switch (port) {
 		case 0: // UART data register
 		case 1: // UART status register
-			result = i8251.readIO(port, time);
-			break;
+			return i8251.readIO(port, time);
 		case 2: // Status sense port
-			result = readStatus(time);
-			break;
+			return readStatus(time);
 		case 3: // no function
-			result = 0xFF;
-			break;
+			return 0xFF;
 		case 4: // counter 0 data port
 		case 5: // counter 1 data port
 		case 6: // counter 2 data port
 		case 7: // timer command register
-			result = i8254.readIO(port - 4, time);
-			break;
+			return i8254.readIO(port - 4, time);
 		default:
 			UNREACHABLE; return 0;
 	}
-	return result;
 }
 
 byte MSXRS232::peekIO(word port, EmuTime::param time) const
 {
 	if (hasMemoryBasedIo && !ioAccessEnabled) return 0xFF;
-	byte result;
 	port &= 0x07;
 	switch (port) {
 		case 0: // UART data register
 		case 1: // UART status register
-			result = i8251.peekIO(port, time);
-			break;
+			return i8251.peekIO(port, time);
 		case 2: // Status sense port
-			result = 0; // TODO not implemented
-			break;
+			return 0; // TODO not implemented
 		case 3: // no function
-			result = 0xFF;
-			break;
+			return 0xFF;
 		case 4: // counter 0 data port
 		case 5: // counter 1 data port
 		case 6: // counter 2 data port
 		case 7: // timer command register
-			result = i8254.peekIO(port - 4, time);
-			break;
+			return i8254.peekIO(port - 4, time);
 		default:
 			UNREACHABLE; return 0;
 	}
-	return result;
 }
 
 void MSXRS232::writeIO(word port, byte value, EmuTime::param time)

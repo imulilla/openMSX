@@ -9,6 +9,7 @@
 #include <utility>
 
 using std::string;
+using std::string_view;
 using std::vector;
 
 namespace openmsx {
@@ -19,16 +20,16 @@ const string USER_DATA    = "{{USER_DATA}}";
 const string SYSTEM_DATA  = "{{SYSTEM_DATA}}";
 
 
-static string subst(string_view path, string_view before, string_view after)
+[[nodiscard]] static string subst(string_view path, string_view before, string_view after)
 {
-	assert(path.starts_with(before));
+	assert(StringOp::startsWith(path, before));
 	return strCat(after, path.substr(before.size()));
 }
 
-static vector<string> getPathsHelper(const vector<string>& input)
+[[nodiscard]] static vector<string> getPathsHelper(const vector<string>& input)
 {
 	vector<string> result;
-	for (auto& s : input) {
+	for (const auto& s : input) {
 		if (StringOp::startsWith(s, USER_OPENMSX)) {
 			result.push_back(subst(s, USER_OPENMSX,
 			                       FileOperations::getUserOpenMSXDir()));
@@ -44,22 +45,25 @@ static vector<string> getPathsHelper(const vector<string>& input)
 			result.push_back(s);
 		}
 	}
+	for (const auto& s : result) {
+		assert(!FileOperations::needsTildeExpansion(s)); (void)s;
+	}
 	return result;
 }
 
-static string resolveHelper(const vector<string>& pathList,
+[[nodiscard]] static string resolveHelper(const vector<string>& pathList,
                             string_view filename)
 {
-	string filepath = FileOperations::expandCurrentDirFromDrive(filename);
-	filepath = FileOperations::expandTilde(filepath);
+	string filepath = FileOperations::expandTilde(
+	                      FileOperations::expandCurrentDirFromDrive(string(filename)));
 	if (FileOperations::isAbsolutePath(filepath)) {
 		// absolute path, don't resolve
 		return filepath;
 	}
 
-	for (auto& p : pathList) {
+	for (const auto& p : pathList) {
 		string name = FileOperations::join(p, filename);
-		name = FileOperations::expandTilde(name);
+		assert(!FileOperations::needsTildeExpansion(name));
 		if (FileOperations::exists(name)) {
 			return name;
 		}
@@ -75,20 +79,22 @@ FileContext::FileContext(vector<string>&& paths_, vector<string>&& savePaths_)
 
 string FileContext::resolve(string_view filename) const
 {
-	vector<string> pathList = getPathsHelper(paths);
-	string result = resolveHelper(pathList, filename);
-	assert(FileOperations::expandTilde(result) == result);
+	string result = resolveHelper(getPaths(), filename);
+	assert(!FileOperations::needsTildeExpansion(result));
 	return result;
 }
 
 string FileContext::resolveCreate(string_view filename) const
 {
+	if (savePaths2.empty()) {
+		savePaths2 = getPathsHelper(savePaths);
+	}
+
 	string result;
-	vector<string> pathList = getPathsHelper(savePaths);
 	try {
-		result = resolveHelper(pathList, filename);
+		result = resolveHelper(savePaths2, filename);
 	} catch (FileException&) {
-		string path = pathList.front();
+		const string& path = savePaths2.front();
 		try {
 			FileOperations::mkdirp(path);
 		} catch (FileException&) {
@@ -96,13 +102,16 @@ string FileContext::resolveCreate(string_view filename) const
 		}
 		result = FileOperations::join(path, filename);
 	}
-	assert(FileOperations::expandTilde(result) == result);
+	assert(!FileOperations::needsTildeExpansion(result));
 	return result;
 }
 
-vector<string> FileContext::getPaths() const
+const vector<string>& FileContext::getPaths() const
 {
-	return getPathsHelper(paths);
+	if (paths2.empty()) {
+		paths2 = getPathsHelper(paths);
+	}
+	return paths2;
 }
 
 bool FileContext::isUserContext() const
@@ -120,51 +129,56 @@ INSTANTIATE_SERIALIZE_METHODS(FileContext);
 
 ///
 
-static string backSubstSymbols(const string& path)
+static string backSubstSymbols(string_view path)
 {
 	const string& systemData = FileOperations::getSystemDataDir();
 	if (StringOp::startsWith(path, systemData)) {
 		return subst(path, systemData, SYSTEM_DATA);
 	}
-	const string& userData = FileOperations::getSystemDataDir();
+	const string& userData = FileOperations::getUserDataDir();
 	if (StringOp::startsWith(path, userData)) {
-		return subst(path, userData, SYSTEM_DATA);
+		return subst(path, userData, USER_DATA);
 	}
 	const string& userDir = FileOperations::getUserOpenMSXDir();
 	if (StringOp::startsWith(path, userDir)) {
 		return subst(path, userDir, USER_OPENMSX);
 	}
 	// TODO USER_DIRS (not needed ATM)
-	return path;
+	return string(path);
 }
 
 FileContext configFileContext(string_view path, string_view hwDescr, string_view userName)
 {
-	return { { backSubstSymbols(FileOperations::expandTilde(path)) },
-	         { FileOperations::join(
-	               USER_OPENMSX, "persistent", hwDescr, userName) } };
+	return { { backSubstSymbols(path) },
+	         { strCat(USER_OPENMSX, "/persistent/", hwDescr, '/', userName) } };
 }
 
-FileContext systemFileContext()
+const FileContext& systemFileContext()
 {
-	return { { USER_DATA, SYSTEM_DATA },
-	         { USER_DATA } };
+	static const FileContext result{
+		{ USER_DATA, SYSTEM_DATA },
+		{ USER_DATA } };
+	return result;
 }
 
-FileContext preferSystemFileContext()
+const FileContext& preferSystemFileContext()
 {
-	return { { SYSTEM_DATA, USER_DATA },  // first system dir
-	         {} };
+	static const FileContext result{
+		{ SYSTEM_DATA, USER_DATA },  // first system dir
+		{} };
+	return result;
 }
 
 FileContext userFileContext(string_view savePath)
 {
-	vector<string> savePaths;
-	if (!savePath.empty()) {
-		savePaths = { FileOperations::join(
-		                 USER_OPENMSX, "persistent", savePath) };
-	}
-	return { { string{}, USER_DIRS }, std::move(savePaths) };
+	return { { string{}, USER_DIRS },
+	         { strCat(USER_OPENMSX, "/persistent/", savePath) } };
+}
+
+const FileContext& userFileContext()
+{
+	static const FileContext result{ { string{}, USER_DIRS }, {} };
+	return result;
 }
 
 FileContext userDataFileContext(string_view subDir)
@@ -173,9 +187,10 @@ FileContext userDataFileContext(string_view subDir)
 	         {} };
 }
 
-FileContext currentDirFileContext()
+const FileContext& currentDirFileContext()
 {
-	return {{string{}}, {string{}}};
+	static const FileContext result{{string{}}, {string{}}};
+	return result;
 }
 
 } // namespace openmsx
